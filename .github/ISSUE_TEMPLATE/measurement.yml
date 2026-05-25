@@ -1,0 +1,64 @@
+name: 📏 Measured memory report
+description: Report real measured memory usage to help calibrate FitLLM (estimated vs measured).
+title: "[measured] <model> @ <RAM>GB <bits>-bit"
+labels: ["measurement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping calibrate FitLLM! Fill in what you measured on your own machine.
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      placeholder: e.g. Qwen/Qwen3-32B, Gemma 4 31B
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware (chip + RAM)
+      placeholder: e.g. M5 Max 64GB
+    validations:
+      required: true
+  - type: dropdown
+    id: quant
+    attributes:
+      label: Quantization
+      options:
+        - "4-bit"
+        - "8-bit"
+        - "16-bit (bf16)"
+        - other
+    validations:
+      required: true
+  - type: input
+    id: context
+    attributes:
+      label: Context length (tokens)
+      placeholder: e.g. 32768
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - MLX
+        - Ollama / llama.cpp
+        - vLLM
+        - other
+  - type: input
+    id: measured
+    attributes:
+      label: Measured peak memory (GB)
+      placeholder: e.g. 53.2
+    validations:
+      required: true
+  - type: input
+    id: estimate
+    attributes:
+      label: FitLLM estimate (GB) — optional
+      placeholder: what FitLLM showed
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes (optional)

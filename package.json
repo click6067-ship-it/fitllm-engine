@@ -1,0 +1,13 @@
+{
+  "name": "fitllm-engine",
+  "version": "1.0.0",
+  "description": "Accurate local-LLM memory & speed estimation engine for Apple Silicon — models sliding-window, hybrid/linear and MoE attention that naive VRAM calculators get wrong.",
+  "type": "module",
+  "main": "engine.js",
+  "exports": { ".": "./engine.js" },
+  "files": ["engine.js"],
+  "keywords": ["llm", "memory-calculator", "vram", "kv-cache", "apple-silicon", "quantization", "mlx", "gemma", "qwen", "moe"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/click6067-ship-it/fitllm-engine" },
+  "homepage": "https://fitllm-v2.vercel.app"
+}
