@@ -73,6 +73,10 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama), O
 
 Ran a model and measured real peak memory? **[Report a measurement](../../issues/new?labels=measurement)** — it improves the estimates for everyone.
 
+## Built by
+
+[yongha](https://yonghakim.com) — [GitHub](https://github.com/click6067-ship-it). Powers [fitllm.run](https://fitllm.run).
+
 ## License
 
 MIT © click6067-ship-it
