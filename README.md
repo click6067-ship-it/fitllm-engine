@@ -3,7 +3,7 @@
 > **The memory & speed math behind [fitllm.run](https://fitllm.run) — accurate on modern LLM architectures, where most calculators (and LLMs) are wrong.**
 > Zero dependencies. One readable file: [`engine.js`](engine.js). MIT.
 
-This is the open calculation core of FitLLM. The UI/design lives in a separate private repo; **the math is open so you can audit it.**
+This is the open calculation core of FitLLM.  **the math is open so you can audit it.**
 
 Ask an LLM "does Qwen 3.6 fit my GPU?" and it pattern-matches to an architecture from its training cutoff — and usually says *no*. Catalog-based calculators lag new releases. FitLLM reads each model's **official `config.json` live**, so it's right on **day-one releases** and on the hybrid / sliding-window / MoE architectures that naive formulas get wrong.
 
