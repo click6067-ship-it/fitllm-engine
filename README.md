@@ -7,6 +7,8 @@ This is the open calculation core of FitLLM. The UI/design lives in a separate p
 
 Ask an LLM "does Qwen 3.6 fit my GPU?" and it pattern-matches to an architecture from its training cutoff — and usually says *no*. Catalog-based calculators lag new releases. FitLLM reads each model's **official `config.json` live**, so it's right on **day-one releases** and on the hybrid / sliding-window / MoE architectures that naive formulas get wrong.
 
+Covers both **Apple Silicon unified memory** and **NVIDIA consumer RTX (30/40/50 series)** single-GPU VRAM fit + tok/s, with GGUF Q-tier quantization (weight bpw kept separate from F16 KV cache). All GPU VRAM/bandwidth numbers are cross-verified by ≥2 independent sources.
+
 ---
 
 ## Why most LLM memory calculators are wrong

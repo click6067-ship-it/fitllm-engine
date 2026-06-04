@@ -156,6 +156,76 @@ export const QUANT_OPTIONS = [
   { bits: 16, label: '16bit', sub: 'BF16 — 원본 정밀도' },
 ];
 
+// ============================================================================
+//  NVIDIA GPU 모드 (로드맵 #7) — 컨슈머 단일 RTX 카드 fit + 온-GPU tok/s
+//  ⚠️ 정확도 규율: 모든 수치엔 출처 ≥2 (CLAUDE.md). 데이터 무결성 테스트(engine.gpu.test.js)가
+//     출처<2 / CONFLICT 행을 fail시킨다. 아래는 이중트랙(Claude hw-crawler ∥ Codex) 검증 데이터.
+// ============================================================================
+
+// GPU 레지스트리 — vramGB(공식), bandwidthGBs(메모리 대역폭, 속도 추정용).
+// VRAM은 NVIDIA 공식, 대역폭은 NVIDIA 백서/Wikipedia 스펙표/리뷰 교차검증(전부 ≥2 출처 일치 VERIFIED).
+// 출처 = Track A(Claude hw-crawler) 1개 + Track B(Codex 독립) 1개 — 두 독립 트랙이 값 일치 확인(2026-06-04 리콘실, CONFLICT 0).
+const NV_BLACKWELL = 'https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf'; // Track B 1차
+const WIKI40 = 'https://en.wikipedia.org/wiki/GeForce_RTX_40_series';
+const WIKI30 = 'https://en.wikipedia.org/wiki/GeForce_30_series';
+// 모든 행 2026-06-04 이중트랙(Claude hw-crawler ∥ Codex 독립) 리콘실 검증, CONFLICT 0.
+const GPU_VERIFIED_AT = '2026-06-04';
+const GPU_TRACKS = ['claude-hw-crawler', 'codex-independent']; // 독립 검증 트랙 2종
+const _GPUS = [
+  { name: 'RTX 5090', series: '50', vramGB: 32, bandwidthGBs: 1792, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/', NV_BLACKWELL], bandwidthGBs: ['https://www.notebookcheck.net/NVIDIA-GeForce-RTX-5090-Benchmarks-and-Specs.935680.0.html', NV_BLACKWELL] } },
+  { name: 'RTX 5080', series: '50', vramGB: 16, bandwidthGBs: 960, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5080/', 'https://www.techspot.com/specs/gpu/303555-nvidia-geforce-rtx-5080.html'], bandwidthGBs: ['https://www.tomshardware.com/pc-components/gpus/nvidia-rtx-5080-allegedly-adopts-faster-30-gbps-gddr7-modules-delivering-960-gb-s-of-bandwidth-the-remaining-blackwell-lineup-is-expected-to-stick-with-slower-28-gbps-memory', 'https://www.techspot.com/specs/gpu/303555-nvidia-geforce-rtx-5080.html'] } },
+  { name: 'RTX 5070 Ti', series: '50', vramGB: 16, bandwidthGBs: 896, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5070-family/', 'https://www.notebookcheck.net/NVIDIA-GeForce-RTX-5070-Ti-Benchmarks-and-Specs.935685.0.html'], bandwidthGBs: ['https://www.notebookcheck.net/NVIDIA-GeForce-RTX-5070-Ti-Benchmarks-and-Specs.935685.0.html', 'https://www.guru3d.com/story/nvidia-rtx-5070-ti-specs-include-256bit-memory-bus-and-350w-tbp/'] } },
+  { name: 'RTX 5070', series: '50', vramGB: 12, bandwidthGBs: 672, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5070-family/', 'https://www.pcgamesn.com/nvidia/geforce-rtx-5070-review'], bandwidthGBs: ['https://www.notebookcheck.net/NVIDIA-GeForce-RTX-5070-Benchmarks-and-Specs.935682.0.html', 'https://www.pcgamesn.com/nvidia/geforce-rtx-5070-review'] } },
+  { name: 'RTX 4090', series: '40', vramGB: 24, bandwidthGBs: 1008, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/', 'https://www.techspot.com/products/graphics-cards/nvidia-geforce-rtx-4090.252744/'], bandwidthGBs: [WIKI40, 'https://www.techspot.com/products/graphics-cards/nvidia-geforce-rtx-4090.252744/'] } },
+  { name: 'RTX 4080 SUPER', series: '40', vramGB: 16, bandwidthGBs: 736, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4080-family/', 'https://www.techpowerup.com/gpu-specs/geforce-rtx-4080-super.c4182'], bandwidthGBs: ['https://www.notebookcheck.net/NVIDIA-GeForce-RTX-4080-Super-Benchmarks-and-Specs.799497.0.html', 'https://www.techpowerup.com/gpu-specs/geforce-rtx-4080-super.c4182'] } },
+  { name: 'RTX 4070 Ti SUPER', series: '40', vramGB: 16, bandwidthGBs: 672, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4070-family/', 'https://www.techspot.com/specs/gpu/290250-nvidia-geforce-rtx-4070-ti-super.html'], bandwidthGBs: [WIKI40, 'https://www.tomshardware.com/pc-components/gpus/nvidia-geforce-rtx-4070-ti-super-review'] } },
+  { name: 'RTX 4070', series: '40', vramGB: 12, bandwidthGBs: 504, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4070-family/', 'https://www.techspot.com/specs/gpu/254404-nvidia-geforce-rtx-4070.html'], bandwidthGBs: [WIKI40, 'https://www.techspot.com/specs/gpu/254404-nvidia-geforce-rtx-4070.html'] } },
+  { name: 'RTX 4060 Ti 16GB', series: '40', vramGB: 16, bandwidthGBs: 288, status: 'VERIFIED', sources: { vramGB: [WIKI40, 'https://www.tomshardware.com/reviews/nvidia-geforce-rtx-4060-ti-16gb-review'], bandwidthGBs: [WIKI40, 'https://www.tomshardware.com/reviews/nvidia-geforce-rtx-4060-ti-16gb-review'] } },
+  { name: 'RTX 3090', series: '30', vramGB: 24, bandwidthGBs: 936, status: 'VERIFIED', sources: { vramGB: [WIKI30, 'https://www.techspot.com/specs/gpu/224809-nvidia-geforce-rtx-3090.html'], bandwidthGBs: [WIKI30, 'https://www.techspot.com/specs/gpu/224809-nvidia-geforce-rtx-3090.html'] } },
+  { name: 'RTX 3090 Ti', series: '30', vramGB: 24, bandwidthGBs: 1008, status: 'VERIFIED', sources: { vramGB: [WIKI30, 'https://www.guru3d.com/review/asus-geforce-rtx-3090-ti-tuf-gaming-review/page-4/'], bandwidthGBs: [WIKI30, 'https://www.guru3d.com/review/msi-geforce-rtx-3090-ti-suprim-x-review/page-4/'] } },
+  { name: 'RTX 3080 10GB', series: '30', vramGB: 10, bandwidthGBs: 760, status: 'VERIFIED', sources: { vramGB: [WIKI30, 'https://www.techspot.com/specs/gpu/223293-nvidia-geforce-rtx-3080.html'], bandwidthGBs: [WIKI30, 'https://www.techspot.com/specs/gpu/223293-nvidia-geforce-rtx-3080.html'] } },
+  { name: 'RTX 3080 12GB', series: '30', vramGB: 12, bandwidthGBs: 912, status: 'VERIFIED', sources: { vramGB: [WIKI30, 'https://www.notebookcheck.net/NVIDIA-GeForce-RTX-3080-12-GB-GPU-Benchmarks-and-Specs.635433.0.html'], bandwidthGBs: ['https://www.techspot.com/specs/gpu/247309-nvidia-geforce-rtx-3080-12gb.html', 'https://www.notebookcheck.net/NVIDIA-GeForce-RTX-3080-12-GB-GPU-Benchmarks-and-Specs.635433.0.html'] } },
+  { name: 'RTX 3060 12GB', series: '30', vramGB: 12, bandwidthGBs: 360, status: 'VERIFIED', sources: { vramGB: [WIKI30, 'https://www.asus.com/motherboards-components/graphics-cards/dual/dual-rtx3060-12g/techspec/'], bandwidthGBs: [WIKI30, 'https://www.techpowerup.com/gpu-specs/geforce-rtx-3060-12-gb.c3682'] } },
+];
+// 검증 메타(이중트랙·검증일)를 전 행에 주입 — 데이터 무결성 테스트가 강제.
+export const GPUS = _GPUS.map((g) => ({ verifiedAt: GPU_VERIFIED_AT, tracks: GPU_TRACKS, ...g }));
+
+// GGUF Q-tier 유효 bits-per-weight — llama.cpp 공식 README(참조모델 Llama-3.1-8B 실측).
+// 출처: https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md
+// ⚠️ weight 양자화 전용(파라미터 메모리). KV 캐시는 별도 kvBits(기본 F16=16) — 혼동 시 KV 3.27× 과소.
+export const GPU_QUANTS = [
+  { tier: 'Q4_K_M', bpw: 4.8944, label: 'Q4_K_M', sub: '4-bit — 가장 인기(가성비)' },
+  { tier: 'Q5_K_M', bpw: 5.7036, label: 'Q5_K_M', sub: '5-bit — 품질↑' },
+  { tier: 'Q6_K', bpw: 6.5633, label: 'Q6_K', sub: '6-bit — 고품질' },
+  { tier: 'Q8_0', bpw: 8.5008, label: 'Q8_0', sub: '8-bit — 거의 무손실' },
+  { tier: 'FP16', bpw: 16.0005, label: 'FP16', sub: '원본 정밀도' },
+];
+export const GGUF_BPW_SOURCE = 'https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md';
+
+// 환경(OS) 프리셋 — usable VRAM 차감용 reserve(OS+디스플레이+CUDA 컨텍스트 통합).
+// ⚠️ reserve는 측정 분포의 대표값(추정) — 앵커 케이스로 캘리브레이션 예정(spec §5).
+// 단일 셀렉터로 차원 폭발 방지. headless < linux+display < windows+display.
+export const ENV_PRESETS = {
+  'linux-headless': { key: 'linux-headless', label: ['Linux 헤드리스(세컨드 카드)', 'Linux headless (2nd card)'], reserveGB: 0.6, note: ['CUDA 컨텍스트만, 디스플레이 0', 'CUDA context only, no display'] },
+  'linux-display': { key: 'linux-display', label: ['Linux + 디스플레이', 'Linux + display'], reserveGB: 1.2, note: ['컴포지터 경량', 'lightweight compositor'] },
+  'windows-display': { key: 'windows-display', label: ['Windows + 디스플레이', 'Windows + display'], reserveGB: 2.0, note: ['WDDM + 디스플레이 (보수적·기본)', 'WDDM + display (conservative, default)'] },
+};
+export const DEFAULT_ENV = 'windows-display';
+export const GPU_HEADROOM_RATIO = 0.05; // GPU는 전용 메모리 — 통합메모리 20%보다 훨씬 작음(전용이라 풀에 가깝게 사용)
+
+// ===== 디바이스 추상화 — simulate/calcMaxContext/estimateSpeed가 받는 공통 descriptor =====
+// Apple 경로 보존: reserveGB = getOsOverhead(ram) + 2.0 (기존 os + fixed 2.0 = 단일 reserve).
+export function appleDevice(ram) {
+  return { type: 'apple', memoryGB: ram, reserveGB: getOsOverhead(ram) + 2.0, headroomRatio: HEADROOM_RATIO, _os: getOsOverhead(ram) };
+}
+export function gpuDevice(gpu, envKey = DEFAULT_ENV) {
+  const env = ENV_PRESETS[envKey] || ENV_PRESETS[DEFAULT_ENV];
+  return { type: 'gpu', gpu, env: env.key, memoryGB: gpu.vramGB, bandwidthGBs: gpu.bandwidthGBs, reserveGB: env.reserveGB, headroomRatio: GPU_HEADROOM_RATIO, _os: 0 };
+}
+// 인자 정규화: device(number=ram→appleDevice / object=그대로), quant(number=weight·kv동일 / {weightBpw,kvBits})
+function toDevice(d) { return typeof d === 'number' ? appleDevice(d) : d; }
+function toQuant(q) { return typeof q === 'number' ? { weightBpw: q, kvBits: q } : { weightBpw: q.weightBpw, kvBits: q.kvBits ?? 16 }; }
+
 // ===== macOS 기본 메모리(통합 메모리, Apple Silicon) =====
 // macOS + 기본 프로세스 + 로컬 LLM 데몬 ≈ 6~7GB. RAM이 적을수록 비중↑.
 export function getOsOverhead(ram) {
@@ -229,19 +299,25 @@ export function calcParamMemory(model, bits) {
   const bpe = bits / 8;
   const baseTotalGB = (model.totalParams * 1e9 * bpe) / 1024 ** 3;
   const baseActiveGB = model.activeParams ? (model.activeParams * 1e9 * bpe) / 1024 ** 3 : null;
+  // quantAdjust는 정수 bits(Apple NVFP4/MXFP8 4/8/16) 보정용. GGUF는 weightBpw가 소수(4.8944 등)라
+  // 매치 안 돼 multiplier=1.0 — 이는 *의도*다: GGUF bpw는 블록 스케일 등 실측 오버헤드를 이미 포함하므로
+  // Apple 보정을 또 곱하면 이중계상. ⚠️ 단 기준 bpw는 Llama-3.1-8B 실측이라 소형모델은 임베딩 비중↑로
+  // 약간 과소추정될 수 있음(v1 근사 — 모델별 .gguf 실크기 보정은 v2, spec §6).
   const multiplier = (quantAdjust[model.name] && quantAdjust[model.name][bits]) || 1.0;
   return { totalGB: baseTotalGB * multiplier, activeGB: baseActiveGB ? baseActiveGB * multiplier : null };
 }
 
 // 런타임 오버헤드: 양자화 메타(12%) + KV 블록 padding(15%) + 활성화 버퍼 + 고정 2GB
 // 검증: Qwen3.6 35B @130K @8bit → 이론 43GB, 실제 ~54GB (오버헤드 ~11GB)
-export function calcRuntimeOverhead(model, ctx, bits) {
-  const paramMem = calcParamMemory(model, bits).totalGB;
-  const kvMem = calcKVCache(model, ctx, bits).totalGB;
+export function calcRuntimeOverhead(model, ctx, bitsOrQuant, device) {
+  const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight↔KV 분리(GGUF: KV padding이 weight bpw 오염 금지)
+  const paramMem = calcParamMemory(model, weightBpw).totalGB;
+  const kvMem = calcKVCache(model, ctx, kvBits).totalGB;
   const paramOverhead = paramMem * 0.12;
   const kvOverhead = kvMem * 0.15;
   const activationOverhead = ctx * 0.00003;
-  const fixedOverhead = 2.0;
+  // GPU는 고정 reserve가 device.envReserveGB로 분리됨 → 런타임 fixed=0 (simulate의 rtDyn과 일치, 이중차감 금지)
+  const fixedOverhead = device && device.type === 'gpu' ? 0 : 2.0;
   return {
     paramOverheadGB: paramOverhead,
     kvOverheadGB: kvOverhead,
@@ -251,34 +327,37 @@ export function calcRuntimeOverhead(model, ctx, bits) {
   };
 }
 
-export function calcMaxContext(model, ram, bits) {
+export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
   if (!model.kvHeads || !model.kvHeadDim || !model.layerCount || !model.totalParams) return 0;
+  const device = toDevice(deviceOrRam);        // number(ram)→appleDevice / device 객체→그대로
+  const { weightBpw, kvBits } = toQuant(bitsOrQuant);
   const attnLayers = model.fullAttnLayers || model.layerCount; // 하이브리드: 풀어텐션 레이어만 KV
-  const os = getOsOverhead(ram);
-  const bpe = bits / 8;
-  const quantMultiplier = (quantAdjust[model.name] && quantAdjust[model.name][bits]) || 1.0;
-  const paramBytes = model.totalParams * 1e9 * bpe * quantMultiplier;
+  const wbpe = weightBpw / 8; // 파라미터(weight) 바이트
+  const kbpe = kvBits / 8;    // KV 원소 바이트(GPU 기본 F16=16)
+  const quantMultiplier = (quantAdjust[model.name] && quantAdjust[model.name][weightBpw]) || 1.0;
+  const paramBytes = model.totalParams * 1e9 * wbpe * quantMultiplier;
   const budget =
-    ram * 1024 ** 3 * 0.8 - paramBytes - paramBytes * 0.12 - os * 1024 ** 3 - 2.0 * 1024 ** 3;
+    device.memoryGB * 1024 ** 3 * (1 - device.headroomRatio) - paramBytes - paramBytes * 0.12 - device.reserveGB * 1024 ** 3;
   if (budget <= 0) return 0;
   const overhead = 1.15; // KV 블록 할당 padding
-  const perLocal = 2 * model.kvHeads * model.kvHeadDim * bpe * overhead;
-  const perGlobal = 2 * (model.globalKvHeads || model.kvHeads) * (model.globalHeadDim || model.kvHeadDim) * bpe * overhead;
+  const perLocal = 2 * model.kvHeads * model.kvHeadDim * kbpe * overhead;
+  const perGlobal = 2 * (model.globalKvHeads || model.kvHeads) * (model.globalHeadDim || model.kvHeadDim) * kbpe * overhead;
   if (perLocal <= 0) return 0;
+  const actPerTok = 0.00003 * 1024 ** 3; // 활성화 버퍼(simulate와 동일) — ctx 비례라 토큰당 비용에 포함
 
   if ((model.slidingWindow || 0) > 0) {
     const { globalLayers, localLayers } = slidingSplit(model);
     const w = model.slidingWindow;
     const perTokWithin = perLocal * localLayers + perGlobal * globalLayers; // ctx ≤ window: 전 레이어 증가
-    const baseKV = perTokWithin * w;
-    if (budget <= baseKV) {
-      return Math.min(Math.floor(budget / perTokWithin), model.maxContext);
+    const baseWithAct = (perTokWithin + actPerTok) * w; // 윈도우 내 KV + 활성화
+    if (budget <= baseWithAct) {
+      return Math.min(Math.floor(budget / (perTokWithin + actPerTok)), model.maxContext);
     }
-    // window 초과: 글로벌 레이어만 증가
-    const ctx = w + Math.floor((budget - baseKV) / (perGlobal * globalLayers));
+    // window 초과: 글로벌 레이어 KV + 활성화만 증가
+    const ctx = w + Math.floor((budget - baseWithAct) / (perGlobal * globalLayers + actPerTok));
     return Math.min(ctx, model.maxContext);
   }
-  return Math.min(Math.floor(budget / (perLocal * attnLayers)), model.maxContext);
+  return Math.min(Math.floor(budget / (perLocal * attnLayers + actPerTok)), model.maxContext);
 }
 
 // ============================================================================
@@ -288,38 +367,50 @@ export function calcMaxContext(model, ram, bits) {
 export const HEADROOM_RATIO = 0.2; // RAM의 20%는 앱/스파이크용 여유로 남겨두는 게 안전
 
 // verdict: 'yes'(넉넉) | 'tight'(빠듯) | 'no'(초과)
-export function simulate(model, ram, ctx, bits) {
-  const os = getOsOverhead(ram);
-  const param = calcParamMemory(model, bits).totalGB;
-  const kv = calcKVCache(model, ctx, bits).totalGB;
-  const rt = calcRuntimeOverhead(model, ctx, bits).totalGB;
+export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
+  const device = toDevice(deviceOrRam);              // number(ram)→appleDevice / device 객체→그대로
+  const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight(파라미터) ↔ KV 비트 분리
+  const param = calcParamMemory(model, weightBpw).totalGB;
+  const kv = calcKVCache(model, ctx, kvBits).totalGB;
 
-  const system = os + rt; // 비전공자용 묶음: 'macOS + 실행 엔진'
-  const used = system + param + kv;
-  const free = ram - used;
-  const headroom = ram * HEADROOM_RATIO;
+  // 단일 reserve 방정식(Codex council): used = param + kv + rtDyn + reserve. reserve는 1회만.
+  const rtDyn = param * 0.12 + kv * 0.15 + ctx * 0.00003; // 동적 런타임(고정 reserve 미포함)
+  const reserve = device.reserveGB;                       // OS/CUDA/디스플레이 통합 reserve
+  const used = param + kv + rtDyn + reserve;
+  const free = device.memoryGB - used;
+  const headroom = device.memoryGB * device.headroomRatio;
 
   let verdict;
   if (free < 0) verdict = 'no';
   else if (free < headroom) verdict = 'tight';
   else verdict = 'yes';
 
+  const os = device._os ?? 0; // Apple 표시 호환
+  const rt = rtDyn + (device.type === 'apple' ? 2.0 : 0); // 기존 rt = 동적 + 고정2.0 (Apple 분해 보존)
+
   return {
     model,
-    ram,
+    device,
+    ram: device.memoryGB, // 하위호환 별칭
+    memoryGB: device.memoryGB,
     ctx,
-    bits,
+    weightBpw,
+    kvBits,
+    quant: { weightBpw, kvBits }, // 컴포넌트가 재시뮬레이트 시 그대로 전달(Apple/GPU 공통)
+    bits: weightBpw, // 하위호환
     os,
     param,
     kv,
     rt,
-    system,
+    rtDyn,
+    reserve,
+    system: os + rt, // 비전공자용 묶음
     used,
     free,
     headroom,
     verdict,
-    pct: used / ram,
-    maxContext: calcMaxContext(model, ram, bits),
+    pct: used / device.memoryGB,
+    maxContext: calcMaxContext(model, device, { weightBpw, kvBits }),
   };
 }
 
@@ -409,13 +500,17 @@ export function chipBandwidth(chip, gpuCores = 40) {
 
 // 예상 토큰 생성 속도(tok/s): 디코드 1토큰마다 활성 파라미터를 메모리에서 읽음
 // → tok/s ≈ 대역폭 ÷ (활성파라미터 × 바이트) × 실현효율
-export function estimateSpeed(model, chip, bits, gpuCores = 40) {
+export function estimateSpeed(model, chipOrDevice, bitsOrWeightBpw, gpuCores = 40) {
   if (model.isCloud || !model.totalParams) return null;
-  const bw = chipBandwidth(chip, gpuCores) * 1e9; // bytes/s
+  // chip 문자열(Apple) → chipBandwidth / device 객체(GPU) → device.bandwidthGBs
+  const bwGBs = (chipOrDevice && typeof chipOrDevice === 'object' && chipOrDevice.bandwidthGBs != null)
+    ? chipOrDevice.bandwidthGBs
+    : chipBandwidth(chipOrDevice, gpuCores);
+  const bw = bwGBs * 1e9; // bytes/s
   const activeB = (model.activeParams || model.totalParams) * 1e9; // 활성 파라미터 수
-  const bytesPerToken = activeB * (bits / 8);
+  const bytesPerToken = activeB * (bitsOrWeightBpw / 8); // 디코드: weight를 메모리에서 1회 read
   if (bytesPerToken <= 0) return null;
-  return (bw / bytesPerToken) * 0.75; // 0.75 = KV·오버헤드 감안한 실현 효율
+  return (bw / bytesPerToken) * 0.75; // 0.75 = KV·오버헤드 감안한 실현 효율(GPU 재앵커링 대상)
 }
 
 // ============================================================================
