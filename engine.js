@@ -332,6 +332,22 @@ export function gpuDevice(gpu, envKey = DEFAULT_ENV) {
   const count = gpu.count || 1; // 멀티GPU: reserve는 카드당 발생(OS/CUDA 컨텍스트 ×count). vramGB는 이미 합산값.
   return { type: 'gpu', gpu, env: env.key, memoryGB: gpu.vramGB, bandwidthGBs: gpu.bandwidthGBs, reserveGB: env.reserveGB * count, headroomRatio: GPU_HEADROOM_RATIO, _os: 0, gpuCount: count };
 }
+
+// 임의 멀티GPU 조합 — 이종 포함 (예: RTX 5090 + RTX 3090 = 56GB 풀). llama.cpp 레이어 분할 기준의 풀링 근사:
+// VRAM=합산 · reserve=카드당 env reserve 합(드라이버/CUDA 컨텍스트는 카드마다 발생) · 대역폭=최소 카드(디코드는 느린 구간 바운드 — dormant).
+// 한계(Methodology 고지와 동일): 단일 레이어는 한 카드에 들어가야 하며, 분할 오버헤드·PCIe 통신은 미반영(낙관적 근사).
+export function combineGpus(gpus, envKey = DEFAULT_ENV) {
+  if (!Array.isArray(gpus) || gpus.length === 0) return null;
+  if (gpus.length === 1) return gpuDevice(gpus[0], envKey);
+  const env = ENV_PRESETS[envKey] || ENV_PRESETS[DEFAULT_ENV];
+  const combo = {
+    name: gpus.map((g) => g.name).join(' + '),
+    vramGB: gpus.reduce((s, g) => s + g.vramGB, 0),
+    bandwidthGBs: Math.min(...gpus.map((g) => g.bandwidthGBs)),
+    series: 'multi',
+  };
+  return { type: 'gpu', gpu: combo, env: env.key, memoryGB: combo.vramGB, bandwidthGBs: combo.bandwidthGBs, reserveGB: env.reserveGB * gpus.length, headroomRatio: GPU_HEADROOM_RATIO, _os: 0, gpuCount: gpus.length };
+}
 // 인자 정규화: device(number=ram→appleDevice / object=그대로), quant(number=weight·kv동일 / {weightBpw,kvBits})
 function toDevice(d) { return typeof d === 'number' ? appleDevice(d) : d; }
 function toQuant(q) { return typeof q === 'number' ? { weightBpw: q, kvBits: q } : { weightBpw: q.weightBpw, kvBits: q.kvBits ?? 16 }; }

@@ -38,3 +38,24 @@ test('unknown model exits 2', () => {
   const { code } = run(['definitely-not-a-model', '--mac', '64']);
   assert.equal(code, 2);
 });
+
+test('multi-GPU combo "5090 + 3090" pools VRAM (56GB)', () => {
+  const { out, code } = run(['Qwen 3.6 35B-A3B', '--gpu', 'RTX 5090 + RTX 3090', '--json']);
+  assert.equal(code, 0);
+  const j = JSON.parse(out);
+  assert.equal(j.memoryGB, 56);                       // 32 + 24 풀링
+  assert.match(j.hardware, /RTX 5090 \+ RTX 3090.*pooled/);
+});
+
+test('--count 2 equals the 2× preset verdict', () => {
+  const a = JSON.parse(run(['Qwen 3.6 35B-A3B', '--gpu', 'RTX 3090', '--count', '2', '--json']).out);
+  const b = JSON.parse(run(['Qwen 3.6 35B-A3B', '--gpu', '2× RTX 3090', '--json']).out);
+  assert.equal(a.memoryGB, b.memoryGB);               // 48 = 48
+  assert.equal(a.verdict, b.verdict);
+});
+
+test('combo with unknown part exits 2 naming the part', () => {
+  const { out, code } = run(['gpt-oss-20b', '--gpu', 'RTX 4090 + notacard']);
+  assert.equal(code, 2);
+  assert.match(out, /notacard/);
+});

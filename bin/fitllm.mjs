@@ -3,19 +3,21 @@
 import { execFileSync } from 'node:child_process';
 import {
   LOCAL_MODELS, GPUS, GPU_QUANTS, MACBOOK_RAM_GROUPS,
-  gpuDevice, simulate, calcMaxContext, suggestFix, suggestFixGpu, formatTokens, fmtGB,
+  gpuDevice, combineGpus, simulate, calcMaxContext, suggestFix, suggestFixGpu, formatTokens, fmtGB,
 } from '../engine.js';
 
 const argv = process.argv.slice(2);
 const flag = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
 const has = (name) => argv.includes(name);
-const FLAGS_WITH_VALUE = ['--gpu', '--mac', '--quant', '--ctx', '--kv'];
+const FLAGS_WITH_VALUE = ['--gpu', '--mac', '--quant', '--ctx', '--kv', '--count'];
 const positional = argv.filter((a, i) => !a.startsWith('--') && !FLAGS_WITH_VALUE.includes(argv[i - 1]));
 
 const HELP = `fitllm — will this LLM fit your hardware? (open engine: github.com/click6067-ship-it/fitllm-engine)
 
 usage:
   npx fitllm <model> --gpu "RTX 4090"        GPU fit (Q4_K_M, 8K ctx defaults)
+  npx fitllm <model> --gpu "5090 + 3090"     multi-GPU rig — VRAM pools across cards
+  npx fitllm <model> --gpu 3090 --count 2    N identical cards (2× RTX 3090)
   npx fitllm <model> --mac 64                Apple Silicon fit (8-bit default)
   npx fitllm <model> --detect                read this machine's real hardware (best-effort)
   npx fitllm --list                          list built-in models & hardware
@@ -23,6 +25,7 @@ options:
   --quant Q4_K_M|Q5_K_M|Q6_K|Q8_0|FP16 | 4|8|16    weight quant (GPU tiers | Mac bits)
   --ctx N          context tokens (default 8192)
   --kv 16|8|4      KV-cache quant (default 16 = F16)
+  --count N        copies of --gpu (1-8, default 1)
   --json           machine-readable output
 exit codes: 0 fits · 1 won't fit · 2 error (guard-friendly: run before you download)`;
 
@@ -47,10 +50,20 @@ let device, isGpu, hwLabel;
 const gpuName = flag('--gpu');
 const macRam = flag('--mac');
 if (gpuName) {
-  const gq = gpuName.toLowerCase();
-  const g = GPUS.find((x) => x.name.toLowerCase() === gq) || GPUS.find((x) => x.name.toLowerCase().includes(gq));
-  if (!g) { console.error(`unknown GPU: "${gpuName}" — try: npx fitllm --list`); process.exit(2); }
-  device = gpuDevice(g, 'windows-display'); isGpu = true; hwLabel = `${g.name} (${g.vramGB}GB)`;
+  // "5090 + 3090" 조합(이종 허용) + --count N 복제 → VRAM 풀링 (combineGpus)
+  const parts = gpuName.split(/[+,&]/).map((s) => s.trim()).filter(Boolean);
+  const found = [];
+  for (const p of parts) {
+    const pq = p.toLowerCase();
+    const g = GPUS.find((x) => x.name.toLowerCase() === pq) || GPUS.find((x) => x.name.toLowerCase().includes(pq));
+    if (!g) { console.error(`unknown GPU: "${p}" — try: npx fitllm --list`); process.exit(2); }
+    found.push(g);
+  }
+  const count = Math.min(Math.max(parseInt(flag('--count'), 10) || 1, 1), 8);
+  const list = [];
+  for (let i = 0; i < count; i++) list.push(...found);
+  device = combineGpus(list, 'windows-display'); isGpu = true;
+  hwLabel = `${device.gpu.name} (${device.memoryGB}GB${list.length > 1 ? ' pooled' : ''})`;
 } else if (macRam) {
   const ram = parseInt(macRam, 10);
   if (!Number.isFinite(ram) || ram < 8) { console.error('--mac needs RAM in GB (e.g. --mac 64)'); process.exit(2); }
