@@ -611,6 +611,7 @@ export function tokensToPages(tokens) {
 }
 export function formatTokens(t, L) {
   const unit = L ? L('토큰', 'tokens') : '토큰';
+  if (t >= 1000000) return `${Math.round(t / 100000) / 10}M ${unit}`; // 1,048,576 → "1M" (1049K 방지)
   if (t >= 1000) return `${Math.round(t / 1000)}K ${unit}`;
   return `${t} ${unit}`;
 }
