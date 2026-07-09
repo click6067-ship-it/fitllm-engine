@@ -136,7 +136,20 @@ The engine runs as a public **MCP server** at `https://fitllm.run/api/mcp` — c
 - **Cursor / Windsurf**: add to `mcp.json` → `{ "mcpServers": { "fitllm": { "url": "https://fitllm.run/api/mcp" } } }`
 - **ChatGPT**: Settings → Apps → Advanced → Developer mode → add MCP server (Plus/Pro)
 
-Tools: `check_llm_fit` (verdict + full memory breakdown + fix suggestion — supports multi-GPU rigs like `"RTX 5090 + RTX 3090"`), `what_fits_on_hardware` (ranked list for your machine), `list_supported`. **Intentionally open**: read-only, stateless, no auth, no secrets — every call is a pure function of public data.
+Tools: `check_llm_fit` (verdict + full memory breakdown + fix suggestion — supports multi-GPU rigs like `"RTX 5090 + RTX 3090"`), `what_fits_on_hardware` (ranked list for your machine), `list_supported`. Resources: `fitllm://models`, `fitllm://hardware`, `fitllm://census`, `fitllm://engine`. **Intentionally open**: read-only, stateless, no auth, no secrets — every call is a pure function of public data.
+
+Listed on: [official MCP registry](https://registry.modelcontextprotocol.io) (`run.fitllm/fitllm`) · [Glama](https://glama.ai/mcp/connectors/run.fitllm/fitllm) · [mcp.so](https://mcp.so/servers/fitllm) · [Smithery](https://smithery.ai/server/click6067/fitllm)
+
+## For agents & scripts — plain HTTP API
+
+No MCP client? One GET, no auth, no key — JSON by default, plain text for curl:
+
+```bash
+curl 'https://fitllm.run/api/check?model=gemma%204%2031b&gpu=4090'
+# multi-GPU rigs: gpu=5090%2B3090 · Mac: ram=64 · usage: curl https://fitllm.run/api/check
+```
+
+Open data: the full **Fit Census** (6,000+ verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
 
 ## Principles
 

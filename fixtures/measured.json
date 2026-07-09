@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "model": "Gemma 4 26b A4B",
+    "device": "24GB GPU (reported; body says 16GB — conflicting)",
+    "quant": "4bit",
+    "ctx": 32768,
+    "kvBits": 16,
+    "measuredPeakGB": 15.1,
+    "runtime": "unreported",
+    "source": "https://github.com/click6067-ship-it/fitllm-engine/issues/1",
+    "date": "2026-05-28",
+    "notes": "FitLLM predicted 26.7GB (won't fit) vs measured 15.1GB — over-prediction ~1.8x. Model not in built-in catalog; likely loaded via HF paste. Hypothesis under investigation: parseHfConfig does not parse Gemma layer_types/sliding-window from config, so KV is computed as full-attention on all layers at 32K. Follow-up: parse sliding_window/layer_types in parseHfConfig."
+  }
+]
