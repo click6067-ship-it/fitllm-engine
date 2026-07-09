@@ -100,6 +100,18 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 [`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **14 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived from official `config.json` values. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`. Port the engine, keep the vectors.
 
+## Embed a fit badge
+
+Show whether a model runs on given hardware — live from the engine, one line in any README or model card:
+
+```markdown
+![fits](https://img.shields.io/endpoint?url=https%3A%2F%2Ffitllm.run%2Fapi%2Fbadge%3Fmodel%3DGLM-4.7-Flash%26gpu%3D4090)
+```
+
+![fits](https://img.shields.io/endpoint?url=https%3A%2F%2Ffitllm.run%2Fapi%2Fbadge%3Fmodel%3DGLM-4.7-Flash%26gpu%3D4090)
+
+Params: `model` (name, fuzzy), `gpu` (name, fuzzy) **or** `ram` (GB, Apple unified memory), optional `quant` (GGUF tier / 4|8|16), `ctx`, `kv`. Verdict color: green fits · yellow tight · red won't fit.
+
 ## Principles
 
 **No ads. No login. No affiliate links. Output is never for sale.** Fit is a *winnable*, verifiable claim; raw tok/s is not — so this engine refuses speed predictions rather than dress a guess as precision.
