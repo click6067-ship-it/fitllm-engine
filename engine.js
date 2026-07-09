@@ -78,6 +78,26 @@ export const MODELS = [
     benchmarks: { GPQA: 0.586, 'MMLU-Pro': 0.694, 'SWE-Bench': null },
     desc: 'Dense+PLE · 8B raw / 4.5B 유효 · 슬라이딩윈도우 512(5:1) · 최대 128K',
   },
+  // === Gemma 4 12B Unified (dense) — https://huggingface.co/google/gemma-4-12B-it/blob/main/config.json ===
+  {
+    name: 'Gemma 4 12b',
+    group: 'Gemma 4',
+    tags: ['dense'],
+    totalParams: 11.95, // 모델카드 "Total Parameters: 11.95B" (encoder-free Unified, 별도 비전/오디오 인코더 없음)
+    activeParams: 11.95,
+    layerCount: 48,
+    kvHeads: 8, // 슬라이딩 40레이어: KV헤드 8 × head_dim 256 (config num_key_value_heads/head_dim)
+    kvHeadDim: 256,
+    globalKvHeads: 1, // 글로벌(풀어텐션) 8레이어: KV헤드 1 × head_dim 512 (config num_global_key_value_heads/global_head_dim — 이종)
+    globalHeadDim: 512,
+    attnHeads: 16,
+    hiddenSize: 3840,
+    maxContext: 262144,
+    slidingWindow: 1024,
+    slidingPattern: '5:1', // layer_types 실측 카운트: sliding_attention 40 : full_attention 8 (full @ 5,11,…,47)
+    benchmarks: { GPQA: 0.788, 'MMLU-Pro': 0.772, 'SWE-Bench': null }, // README 공식 벤치표(GPQA Diamond·MMLU Pro)
+    desc: 'Dense · 11.95B · 48레이어 · 슬라이딩윈도우 1024(5:1, 글로벌 8레이어 head_dim 512×1KV) · Unified 멀티모달 · 최대 256K',
+  },
   // === Gemma 4 26B A4B (true MoE) — HF config.json ===
   {
     name: 'Gemma 4 26b A4B',
@@ -138,15 +158,104 @@ export const MODELS = [
     contextLimit: '1M',
     desc: 'Cloud 모델 — 벤치마크 기준점 (로컬 설치 불가, 비교용)',
   },
+
+  // ==========================================================================
+  //  2026 인기 로컬 모델 확장 — Track A(Claude hw-crawler) ∥ Track B(Codex) 블라인드
+  //  이중검증(2026-07-09 리콘실, CONFLICT=0). 구조=공식 HF config.json,
+  //  파라미터=safetensors index. 배열 끝 append로 기존 LOCAL_MODELS 인덱스 보존(?m= 링크 유지).
+  //  벤치마크는 미검증이라 null(정확도 규율: '아마' 금지).
+  // ==========================================================================
+
+  // --- Qwen3 (표준 GQA) — https://huggingface.co/Qwen ---
+  { name: 'Qwen3-8B', group: 'Qwen3', tags: ['dense'],
+    totalParams: 8.2, activeParams: 8.2, layerCount: 36, kvHeads: 8, kvHeadDim: 128, attnHeads: 32, hiddenSize: 4096,
+    maxContext: 40960, benchmarks: null,
+    desc: 'Dense · 8.2B · 36레이어 · GQA(32/8) · 최대 40K' }, // config.json: Qwen/Qwen3-8B
+  { name: 'Qwen3-14B', group: 'Qwen3', tags: ['dense'],
+    totalParams: 14.8, activeParams: 14.8, layerCount: 40, kvHeads: 8, kvHeadDim: 128, attnHeads: 40, hiddenSize: 5120,
+    maxContext: 40960, benchmarks: null,
+    desc: 'Dense · 14.8B · 40레이어 · GQA(40/8) · 최대 40K' }, // config.json: Qwen/Qwen3-14B
+  { name: 'Qwen3-32B', group: 'Qwen3', tags: ['dense'],
+    totalParams: 32.8, activeParams: 32.8, layerCount: 64, kvHeads: 8, kvHeadDim: 128, attnHeads: 64, hiddenSize: 5120,
+    maxContext: 40960, benchmarks: null,
+    desc: 'Dense · 32.8B · 64레이어 · GQA(64/8) · 최대 40K' }, // config.json: Qwen/Qwen3-32B
+  { name: 'Qwen3-30B-A3B', group: 'Qwen3', tags: ['moe'],
+    totalParams: 30.5, activeParams: 3.3, layerCount: 48, kvHeads: 4, kvHeadDim: 128, attnHeads: 32, hiddenSize: 2048,
+    numExperts: 128, expertsPerToken: 8, maxContext: 40960, benchmarks: null,
+    desc: 'MoE · 30.5B / ~3.3B active · 128 experts(top-8) · GQA(32/4) · 최대 40K' }, // config.json+index: Qwen/Qwen3-30B-A3B
+
+  // --- Qwen2.5 (dense) — sliding_window 설정돼 있으나 use_sliding_window=false → 풀어텐션 ---
+  { name: 'Qwen2.5-7B-Instruct', group: 'Qwen2.5', tags: ['dense'],
+    totalParams: 7.6, activeParams: 7.6, layerCount: 28, kvHeads: 4, kvHeadDim: 128, attnHeads: 28, hiddenSize: 3584,
+    maxContext: 32768, benchmarks: null,
+    desc: 'Dense · 7.6B · 28레이어 · GQA(28/4) · 최대 32K(슬라이딩 비활성)' }, // config.json: Qwen/Qwen2.5-7B-Instruct
+  { name: 'Qwen2.5-32B-Instruct', group: 'Qwen2.5', tags: ['dense'],
+    totalParams: 32.8, activeParams: 32.8, layerCount: 64, kvHeads: 8, kvHeadDim: 128, attnHeads: 40, hiddenSize: 5120,
+    maxContext: 32768, benchmarks: null,
+    desc: 'Dense · 32.8B · 64레이어 · GQA(40/8) · 최대 32K' }, // config.json: Qwen/Qwen2.5-32B-Instruct
+
+  // --- Llama (Meta) — 공식 config gated(401), unsloth·NousResearch 미러 교차검증(동일) ---
+  { name: 'Llama-3.1-8B-Instruct', group: 'Llama', tags: ['dense'],
+    totalParams: 8.0, activeParams: 8.0, layerCount: 32, kvHeads: 8, kvHeadDim: 128, attnHeads: 32, hiddenSize: 4096,
+    maxContext: 131072, benchmarks: null,
+    desc: 'Dense · 8.0B · 32레이어 · GQA(32/8) · 최대 128K' }, // meta-llama/Llama-3.1-8B-Instruct (gated) ↔ unsloth/Meta-Llama-3.1-8B-Instruct 미러
+  { name: 'Llama-3.2-3B-Instruct', group: 'Llama', tags: ['dense'],
+    totalParams: 3.2, activeParams: 3.2, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 24, hiddenSize: 3072,
+    maxContext: 131072, benchmarks: null,
+    desc: 'Dense · 3.2B · 28레이어 · GQA(24/8) · 최대 128K' }, // meta-llama/Llama-3.2-3B-Instruct (gated) ↔ unsloth 미러
+
+  // --- gpt-oss (OpenAI, MoE + 슬라이딩 128, 절반이 full-attn) — MXFP4 네이티브(파라미터 카운트는 카드 기준) ---
+  { name: 'gpt-oss-20b', group: 'gpt-oss', tags: ['moe'],
+    totalParams: 21, activeParams: 3.6, layerCount: 24, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
+    numExperts: 32, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 12, benchmarks: null,
+    desc: 'MoE · 21B / 3.6B active · 32 experts(top-4) · 슬라이딩128(full 12/24) · 최대 128K' }, // config.json: openai/gpt-oss-20b
+  { name: 'gpt-oss-120b', group: 'gpt-oss', tags: ['moe'],
+    totalParams: 117, activeParams: 5.1, layerCount: 36, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
+    numExperts: 128, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 18, benchmarks: null,
+    desc: 'MoE · 117B / 5.1B active · 128 experts(top-4) · 슬라이딩128(full 18/36) · 최대 128K' }, // config.json: openai/gpt-oss-120b
+
+  // --- Qwen3.5 하이브리드 linear (AgentWorld) — 40레이어 중 full 10 + linear 30(DeltaNet), KV는 full 10만 ---
+  { name: 'Qwen-AgentWorld-35B-A3B', group: 'Qwen3.5', tags: ['moe'],
+    totalParams: 34.7, activeParams: 3.0, layerCount: 40, fullAttnLayers: 10, kvHeads: 2, kvHeadDim: 256, attnHeads: 16, hiddenSize: 2048,
+    numExperts: 256, expertsPerToken: 8, maxContext: 262144, benchmarks: null,
+    desc: 'MoE · ~34.7B / ~3B active · 하이브리드(full 10 + linear 30) · KV는 10레이어만 · 최대 256K' }, // config.json+index: Qwen/Qwen-AgentWorld-35B-A3B
+
+  // --- GLM (zAI, MLA) — 압축 KV(kv_lora_rank 512 + qk_rope 64 = 576 elem/tok/layer, ×1) ---
+  { name: 'GLM-4.7-Flash', group: 'GLM', tags: ['moe', 'mla'],
+    totalParams: 30, activeParams: 3, layerCount: 47, kvHeads: 20, kvHeadDim: 256, attnHeads: 20, hiddenSize: 2048,
+    numExperts: 64, expertsPerToken: 4, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 202752, benchmarks: null,
+    desc: 'MoE · MLA · ~30B / ~3B active · 64 experts(top-4) · 압축 KV(576/tok/layer) · 최대 202K' }, // config.json: zai-org/GLM-4.7-Flash (fp8 체크포인트)
+  { name: 'GLM-5.2', group: 'GLM', tags: ['moe', 'mla'],
+    totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
+    numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
+    desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit)' }, // config.json+index(1.5TB÷2 bf16): zai-org/GLM-5.2
 ];
 
 // 로컬에서 돌릴 수 있는(시뮬 대상) 모델만
 export const LOCAL_MODELS = MODELS.filter((m) => !m.isCloud);
 
-// ===== 맥북 RAM 옵션 =====
+// ===== 맥북/맥 RAM 옵션 (통합메모리 GB) =====
+// M1–M4 전세대 + Ultra/Studio. fit엔 통합메모리 GB만 영향(대역폭은 chipBandwidth = dormant speed용).
+// Track A(Apple newsroom+Wikipedia) ∥ Track B(Codex) 이중검증(2026-07-09, 일치). M4 Ultra 미존재(M3 Ultra가 최신).
+// 출처: Apple Newsroom 각 세대 발표 + support.apple.com 스펙 + Wikipedia Apple_M1..M4.
 export const MACBOOK_RAM_GROUPS = {
   'M5 Pro': [24, 48, 64],
   'M5 Max': [36, 48, 64, 128],
+  'M4': [16, 24, 32],
+  'M4 Pro': [24, 48, 64],
+  'M4 Max': [36, 48, 64, 128],
+  'M3': [8, 16, 24],
+  'M3 Pro': [18, 36],
+  'M3 Max': [36, 48, 64, 96, 128],
+  'M3 Ultra': [96, 256, 512], // Mac Studio — 최대 512GB(개인용 최대)
+  'M2': [8, 16, 24],
+  'M2 Pro': [16, 32],
+  'M2 Max': [32, 64, 96],
+  'M2 Ultra': [64, 128, 192], // Mac Studio/Pro — 최대 192GB
+  'M1': [8, 16],
+  'M1 Pro': [16, 32],
+  'M1 Max': [32, 64],
+  'M1 Ultra': [64, 128],
 };
 
 // ===== 정밀도(양자화) 옵션 =====
@@ -186,6 +295,35 @@ const _GPUS = [
   { name: 'RTX 3080 10GB', series: '30', vramGB: 10, bandwidthGBs: 760, status: 'VERIFIED', sources: { vramGB: [WIKI30, 'https://www.techspot.com/specs/gpu/223293-nvidia-geforce-rtx-3080.html'], bandwidthGBs: [WIKI30, 'https://www.techspot.com/specs/gpu/223293-nvidia-geforce-rtx-3080.html'] } },
   { name: 'RTX 3080 12GB', series: '30', vramGB: 12, bandwidthGBs: 912, status: 'VERIFIED', sources: { vramGB: [WIKI30, 'https://www.notebookcheck.net/NVIDIA-GeForce-RTX-3080-12-GB-GPU-Benchmarks-and-Specs.635433.0.html'], bandwidthGBs: ['https://www.techspot.com/specs/gpu/247309-nvidia-geforce-rtx-3080-12gb.html', 'https://www.notebookcheck.net/NVIDIA-GeForce-RTX-3080-12-GB-GPU-Benchmarks-and-Specs.635433.0.html'] } },
   { name: 'RTX 3060 12GB', series: '30', vramGB: 12, bandwidthGBs: 360, status: 'VERIFIED', sources: { vramGB: [WIKI30, 'https://www.asus.com/motherboards-components/graphics-cards/dual/dual-rtx3060-12g/techspec/'], bandwidthGBs: [WIKI30, 'https://www.techpowerup.com/gpu-specs/geforce-rtx-3060-12-gb.c3682'] } },
+
+  // ===== 확장 (2026-07-09, Track A[claude hw-crawler] ∥ Track B[codex] 블라인드 리콘실, CONFLICT=0) =====
+  // NVIDIA consumer 추가
+  { name: 'RTX 5060 Ti 16GB', series: '50', vramGB: 16, bandwidthGBs: 448, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5060-family/', 'https://www.asus.com/us/motherboards-components/graphics-cards/prime/prime-rtx5060ti-16g/techspec/'], bandwidthGBs: ['https://www.tomshardware.com/pc-components/gpus/nvidia-geforce-rtx-5060-ti-16gb-review', 'https://www.techpowerup.com/gpu-specs/geforce-rtx-5060-ti.c4246'] } },
+  { name: 'RTX 4070 Ti', series: '40', vramGB: 12, bandwidthGBs: 504, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.techspot.com/specs/gpu/258458-nvidia-geforce-rtx-4070-ti.html', 'https://www.thefpsreview.com/gpu-family/nvidia-geforce-rtx-4070-ti-gpu-family-specifications/'], bandwidthGBs: ['https://www.pcworld.com/article/1444726/nvidia-geforce-rtx-4070-ti-review.html', 'https://www.thefpsreview.com/gpu-family/nvidia-geforce-rtx-4070-ti-gpu-family-specifications/'] } }, // 504 (NOT Wiki 554.4 아웃라이어): 192b×21Gbps÷8
+  { name: 'RTX 4080', series: '40', vramGB: 16, bandwidthGBs: 717, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.custompc.com/nvidia-geforce-rtx-4080-review', 'https://www.notebookcheck.net/NVIDIA-GeForce-RTX-4080-GPU-Benchmarks-and-Specs.674575.0.html'], bandwidthGBs: [WIKI40, 'https://www.custompc.com/nvidia-geforce-rtx-4080-review'] } },
+  { name: 'RTX 4060 Ti 8GB', series: '40', vramGB: 8, bandwidthGBs: 288, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.tomshardware.com/reviews/nvidia-geforce-rtx-4060-ti-review', 'https://us.msi.com/Graphics-Card/GeForce-RTX-4060-Ti-GAMING-X-8G/Specification'], bandwidthGBs: ['https://www.tomshardware.com/reviews/nvidia-geforce-rtx-4060-ti-review', 'https://www.techspot.com/specs/gpu/280961-nvidia-geforce-rtx-4060-ti-16gb.html'] } },
+  { name: 'RTX 3060 8GB', series: '30', vramGB: 8, bandwidthGBs: 240, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.tomshardware.com/news/nvidia-geforce-rtx-3060-8gb-with-128-bit-memory-bus', 'https://videocardz.com/newz/nvidia-geforce-rtx-3060-with-8gb-memory-released-features-128-bit-memory-bus'], bandwidthGBs: ['https://www.tomshardware.com/news/nvidia-geforce-rtx-3060-8gb-with-128-bit-memory-bus', 'https://www.guru3d.com/story/geforce-rtx-3060-with-8gb-128-bit-memory-bus-memory-released'] } }, // 12GB(360)과 별개 128-bit SKU
+  { name: 'RTX 2080 Ti', series: '20', vramGB: 11, bandwidthGBs: 616, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/rtx-2080-ti/', 'https://www.techpowerup.com/gpu-specs/geforce-rtx-2080-ti.c3305'], bandwidthGBs: ['https://www.techpowerup.com/gpu-specs/geforce-rtx-2080-ti.c3305', 'https://videocardz.net/nvidia-geforce-rtx-2080ti'] } },
+  // NVIDIA workstation
+  { name: 'RTX 6000 Ada', series: 'workstation', vramGB: 48, bandwidthGBs: 960, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/products/workstations/rtx-6000/', 'https://www.leadtek.com/eng/products/workstation_graphics(2)/NVIDIA_RTX_6000_Ada_Generation(40949)/detail'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/rtx-6000/proviz-print-rtx6000-datasheet-web-2504660.pdf', 'https://www.techpowerup.com/gpu-specs/rtx-6000-ada-generation.c3933'] } },
+  { name: 'RTX PRO 6000 Blackwell', series: 'workstation', vramGB: 96, bandwidthGBs: 1792, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-6000/', 'https://www.storagereview.com/review/nvidia-rtx-pro-6000-workstation-gpu-review-blackwell-architecture-and-96-gb-for-pro-workflows'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/data-center/rtx-pro-6000-blackwell-workstation-edition/workstation-blackwell-rtx-pro-6000-workstation-edition-nvidia-us-3519208-web.pdf', 'https://www.techpowerup.com/gpu-specs/rtx-pro-6000-blackwell.c4272'] } }, // Workstation Edition
+  // AMD Radeon (GDDR 대역폭 — Infinity Cache effective 제외)
+  { name: 'RX 7900 XTX', series: 'amd', vramGB: 24, bandwidthGBs: 960, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xtx.html', 'https://www.techpowerup.com/gpu-specs/radeon-rx-7900-xtx.c3941'], bandwidthGBs: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xtx.html', 'https://www.notebookcheck.net/AMD-Radeon-RX-7900-XTX-GPU-Benchmarks-and-Specs.674159.0.html'] } },
+  { name: 'RX 7900 XT', series: 'amd', vramGB: 20, bandwidthGBs: 800, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xt.html', 'https://www.techpowerup.com/gpu-specs/radeon-rx-7900-xt.c3912'], bandwidthGBs: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xt.html', 'https://www.notebookcheck.net/AMD-Radeon-RX-7900-XT-GPU-Benchmarks-and-Specs.674155.0.html'] } },
+  { name: 'RX 7800 XT', series: 'amd', vramGB: 16, bandwidthGBs: 624, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7800-xt.html', 'https://www.techpowerup.com/gpu-specs/radeon-rx-7800-xt.c3839'], bandwidthGBs: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7800-xt.html', 'https://videocardz.com/amd/radeon-rx-7000/radeon-rx-7800-xt'] } },
+  { name: 'RX 9070 XT', series: 'amd', vramGB: 16, bandwidthGBs: 640, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9070xt.html', 'https://www.techpowerup.com/gpu-specs/radeon-rx-9070-xt.c4229'], bandwidthGBs: ['https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9070xt.html', 'https://www.tomshardware.com/pc-components/gpus/amd-radeon-rx-9070-xt-review'] } },
+  { name: 'RX 9070', series: 'amd', vramGB: 16, bandwidthGBs: 640, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9070.html', 'https://www.techpowerup.com/gpu-specs/radeon-rx-9070.c4227'], bandwidthGBs: ['https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9070.html', 'https://www.tomshardware.com/pc-components/gpus/amd-radeon-rx-9070-xt-review'] } },
+  { name: 'Radeon PRO W7900', series: 'amd', vramGB: 48, bandwidthGBs: 864, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.amd.com/en/products/graphics/workstations/radeon-pro/w7900.html', 'https://www.techpowerup.com/gpu-specs/radeon-pro-w7900.c4147'], bandwidthGBs: ['https://www.amd.com/content/dam/amd/en/documents/products/graphics/workstation/radeon-pro-w7900-datasheet.pdf', 'https://www.techpowerup.com/gpu-specs/radeon-pro-w7900.c4147'] } },
+  // 멀티GPU 프리셋 — vramGB=합산, bandwidthGBs=per-card(합산 금지, PCIe/NVLink 바운드). count/perCardVramGB로 표기.
+  { name: '2× RTX 3090', series: 'multi', vramGB: 48, bandwidthGBs: 936, count: 2, perCardVramGB: 24, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: [WIKI30, 'https://www.techspot.com/specs/gpu/224809-nvidia-geforce-rtx-3090.html'], bandwidthGBs: [WIKI30, 'https://www.techspot.com/specs/gpu/224809-nvidia-geforce-rtx-3090.html'] } },
+  { name: '2× RTX 4090', series: 'multi', vramGB: 48, bandwidthGBs: 1008, count: 2, perCardVramGB: 24, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/', 'https://www.techspot.com/products/graphics-cards/nvidia-geforce-rtx-4090.252744/'], bandwidthGBs: [WIKI40, 'https://www.techspot.com/products/graphics-cards/nvidia-geforce-rtx-4090.252744/'] } },
+  { name: '4× RTX 3090', series: 'multi', vramGB: 96, bandwidthGBs: 936, count: 4, perCardVramGB: 24, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: [WIKI30, 'https://www.techspot.com/specs/gpu/224809-nvidia-geforce-rtx-3090.html'], bandwidthGBs: [WIKI30, 'https://www.techspot.com/specs/gpu/224809-nvidia-geforce-rtx-3090.html'] } },
+  // 데이터센터 GPU (A100/H100/H200/B200) — 셀프호스트·클라우드 렌탈 대상. VRAM=fit 핵심, 대역폭=dormant.
+  { name: 'A100 40GB', series: 'datacenter', vramGB: 40, bandwidthGBs: 1555, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf', 'https://en.wikipedia.org/wiki/Ampere_(microarchitecture)'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf', 'https://en.wikipedia.org/wiki/Ampere_(microarchitecture)'] } }, // HBM2 1.55TB/s
+  { name: 'A100 80GB', series: 'datacenter', vramGB: 80, bandwidthGBs: 1935, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/a100-80gb-datasheet-update-nvidia-us-1521051-r2-web.pdf', 'https://en.wikipedia.org/wiki/Ampere_(microarchitecture)'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/a100-80gb-datasheet-update-nvidia-us-1521051-r2-web.pdf', 'https://www.techpowerup.com/gpu-specs/a100-pcie-80-gb.c3821'] } }, // PCIe HBM2e 1.94TB/s
+  { name: 'H100 80GB', series: 'datacenter', vramGB: 80, bandwidthGBs: 3350, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/h100/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'], bandwidthGBs: ['https://www.nvidia.com/en-us/data-center/h100/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'] } }, // SXM5 HBM3 3.35TB/s
+  { name: 'H200 141GB', series: 'datacenter', vramGB: 141, bandwidthGBs: 4800, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/h200/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'], bandwidthGBs: ['https://www.nvidia.com/en-us/data-center/h200/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'] } }, // HBM3e 4.8TB/s
+  { name: 'B200', series: 'datacenter', vramGB: 192, bandwidthGBs: 8000, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/dgx-b200/', 'https://jarvislabs.ai/gpu/nvidia-b200'], bandwidthGBs: ['https://www.nvidia.com/en-us/data-center/dgx-b200/', 'https://jarvislabs.ai/gpu/nvidia-b200'] } }, // Blackwell HBM3e 8.0TB/s
 ];
 // 검증 메타(이중트랙·검증일)를 전 행에 주입 — 데이터 무결성 테스트가 강제.
 export const GPUS = _GPUS.map((g) => ({ verifiedAt: GPU_VERIFIED_AT, tracks: GPU_TRACKS, ...g }));
@@ -220,7 +358,8 @@ export function appleDevice(ram) {
 }
 export function gpuDevice(gpu, envKey = DEFAULT_ENV) {
   const env = ENV_PRESETS[envKey] || ENV_PRESETS[DEFAULT_ENV];
-  return { type: 'gpu', gpu, env: env.key, memoryGB: gpu.vramGB, bandwidthGBs: gpu.bandwidthGBs, reserveGB: env.reserveGB, headroomRatio: GPU_HEADROOM_RATIO, _os: 0 };
+  const count = gpu.count || 1; // 멀티GPU: reserve는 카드당 발생(OS/CUDA 컨텍스트 ×count). vramGB는 이미 합산값.
+  return { type: 'gpu', gpu, env: env.key, memoryGB: gpu.vramGB, bandwidthGBs: gpu.bandwidthGBs, reserveGB: env.reserveGB * count, headroomRatio: GPU_HEADROOM_RATIO, _os: 0, gpuCount: count };
 }
 // 인자 정규화: device(number=ram→appleDevice / object=그대로), quant(number=weight·kv동일 / {weightBpw,kvBits})
 function toDevice(d) { return typeof d === 'number' ? appleDevice(d) : d; }
@@ -252,6 +391,25 @@ export function calcKVCache(model, ctx, bits) {
     return { totalGB: 0, perTokenKB: 0, kvPerToken: 0, totalBytes: 0, effectiveCtx: 0 };
   }
   const bpe = bits / 8;
+
+  // MLA(Multi-head Latent Attention) — GLM-5.2/GLM-4.7-Flash 등: K/V를 저차원 latent로 압축.
+  // 캐시 = 압축 latent(dim=kv_lora_rank) + decoupled RoPE key(dim=qk_rope_head_dim), 전 헤드 공유(×1, K/V 분리 없음).
+  // 출처: DeepSeek-V2 논문 arXiv:2405.04434 §2.1 "cache (d_c + d_h^R)·l elements" + 공식 DeepSeek-V3 추론코드
+  //       (github.com/deepseek-ai/DeepSeek-V3 inference/model.py: kv_cache[dim=kv_lora_rank] + pe_cache[dim=qk_rope_head_dim]).
+  //       absorb 모드(vLLM/SGLang 실사용)가 ×1 — 표준 GQA 대비 ~5× 작음.
+  if (model.mlaKvLoraRank) {
+    const perLayer = (model.mlaKvLoraRank + (model.mlaRopeDim || 0)) * bpe; // ×1, 전 레이어 균일
+    const totalBytes = perLayer * model.layerCount * ctx;
+    const marginalPerToken = perLayer * model.layerCount;
+    return {
+      totalGB: totalBytes / 1024 ** 3,
+      perTokenKB: marginalPerToken / 1024,
+      kvPerToken: marginalPerToken,
+      totalBytes,
+      effectiveCtx: ctx,
+    };
+  }
+
   // 레이어·토큰당 바이트. Gemma 4는 슬라이딩 레이어(kvHeads×kvHeadDim)와
   // 글로벌 레이어(globalKvHeads×globalHeadDim)의 헤드 구성이 다름(이종).
   const perLocal = 2 * model.kvHeads * model.kvHeadDim * bpe;
@@ -344,6 +502,12 @@ export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
   const perGlobal = 2 * (model.globalKvHeads || model.kvHeads) * (model.globalHeadDim || model.kvHeadDim) * kbpe * overhead;
   if (perLocal <= 0) return 0;
   const actPerTok = 0.00003 * 1024 ** 3; // 활성화 버퍼(simulate와 동일) — ctx 비례라 토큰당 비용에 포함
+
+  // MLA: 압축 latent+rope, 전 레이어 균일 (calcKVCache MLA 분기와 동일 식)
+  if (model.mlaKvLoraRank) {
+    const perTokMla = (model.mlaKvLoraRank + (model.mlaRopeDim || 0)) * kbpe * overhead * model.layerCount;
+    return Math.min(Math.floor(budget / (perTokMla + actPerTok)), model.maxContext);
+  }
 
   if ((model.slidingWindow || 0) > 0) {
     const { globalLayers, localLayers } = slidingSplit(model);
@@ -491,11 +655,19 @@ export function classifyTier(tokens) {
 //  생성 속도 추정 (Apple Silicon 디코드는 대체로 메모리 대역폭 바운드)
 // ============================================================================
 
-// 칩 메모리 대역폭 (GB/s) — Apple 공식 사양 (M5 Pro/Max, 2026-03 출시).
-// M5 Pro 307, M5 Max는 GPU 코어수별 32코어 460 / 40코어 614.
+// 칩 메모리 대역폭 (GB/s) — Apple 마케팅/풀다이 기준(Track A∥B 이중검증 2026-07-09).
+// ⚠ binned Max는 저GPU코어 변종이 더 낮음(M3 Max 300, M4 Max 410) — 여기선 풀다이 값 저장.
+//   대역폭은 estimateSpeed(dormant)만 사용, fit엔 무관하므로 칩당 단일 대표값으로 충분.
+const CHIP_BANDWIDTH = {
+  'M1': 68, 'M1 Pro': 200, 'M1 Max': 400, 'M1 Ultra': 800,
+  'M2': 100, 'M2 Pro': 200, 'M2 Max': 400, 'M2 Ultra': 800,
+  'M3': 100, 'M3 Pro': 150, 'M3 Max': 400, 'M3 Ultra': 819,
+  'M4': 120, 'M4 Pro': 273, 'M4 Max': 546,
+  'M5 Pro': 307, 'M5 Max': 614,
+};
 export function chipBandwidth(chip, gpuCores = 40) {
-  if (chip === 'M5 Max') return gpuCores === 32 ? 460 : 614;
-  return 307; // M5 Pro (16·20코어 모두 307)
+  if (chip === 'M5 Max') return gpuCores === 32 ? 460 : 614; // M5 Max GPU 코어수별
+  return CHIP_BANDWIDTH[chip] || 307;
 }
 
 // 예상 토큰 생성 속도(tok/s): 디코드 1토큰마다 활성 파라미터를 메모리에서 읽음
@@ -550,9 +722,14 @@ export function parseHfConfig(id, raw, totalSize) {
     }
   }
 
-  const numExperts = c.num_local_experts || c.num_experts;
+  const numExperts = c.num_local_experts || c.num_experts || c.n_routed_experts;
   const expertsPerToken = c.num_experts_per_tok;
   const isMoe = !!numExperts;
+
+  // MLA(Multi-head Latent Attention) 감지 — kv_lora_rank 있으면 압축 KV 경로(GLM-5.2/GLM-4.7-Flash 등).
+  // ⚠ DeepSeek-V4류(kv_lora_rank 부재 + MQA/compressor)는 MLA 아님 → 표준 경로 유지.
+  const mlaKvLoraRank = c.kv_lora_rank || undefined;
+  const mlaRopeDim = mlaKvLoraRank ? (c.qk_rope_head_dim || 0) : undefined;
 
   // 파라미터 수: safetensors total_size(저장 dtype 바이트)에서 역산, 없으면 이름 추정
   let totalParams = null;
@@ -581,9 +758,12 @@ export function parseHfConfig(id, raw, totalSize) {
     hiddenSize: c.hidden_size,
     numExperts,
     expertsPerToken,
+    mlaKvLoraRank,
+    mlaRopeDim,
     maxContext: c.max_position_embeddings || 131072,
-    slidingWindow: sliding || undefined,
-    slidingPattern: sliding ? '5:1' : undefined,
+    // MLA가 우선 경로 → MLA 모델엔 sliding 필드 미설정(계산은 MLA 먼저 타지만 dead data 방지, correct-by-construction)
+    slidingWindow: mlaKvLoraRank ? undefined : sliding || undefined,
+    slidingPattern: mlaKvLoraRank ? undefined : sliding ? '5:1' : undefined,
     benchmarks: null,
     desc: id,
   };
