@@ -5,6 +5,8 @@
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![zero deps](https://img.shields.io/badge/dependencies-0-success)](package.json)
 
+![npx fitllm — one-line fit verdict with the full memory breakdown](assets/demo.gif)
+
 > **The memory math behind [fitllm.run](https://fitllm.run) — accurate on modern LLM architectures, where most calculators (and LLMs) are wrong.**
 > Zero dependencies. One readable file: [`engine.js`](engine.js). Conformance-vector tested. MIT.
 

@@ -601,7 +601,11 @@ export function suggestFixGpu(model, device, ctx, quant, L) {
   const bigger = GPUS.filter((g) => !g.count && g.vramGB > device.memoryGB)
     .sort((a, b) => a.vramGB - b.vramGB)
     .find((g) => simulate(model, gpuDevice(g, device.env), ctx, quant).verdict !== 'no');
-  if (bigger) return { kind: 'gpu', gpu: bigger.name, text: t(`${bigger.name}(${bigger.vramGB}GB)급 카드면 들어가요.`, `A ${bigger.name} (${bigger.vramGB}GB) would fit.`) };
+  if (bigger) {
+    // 이름에 이미 용량이 있으면(예: 'A100 80GB') 괄호 중복 방지
+    const label = bigger.name.includes('GB') ? bigger.name : `${bigger.name} (${bigger.vramGB}GB)`;
+    return { kind: 'gpu', gpu: bigger.name, text: t(`${label}급 카드면 들어가요.`, `${label} would fit.`) };
+  }
   return { kind: 'none', text: t('더 작은 모델이나 더 강한 양자화가 필요해요.', 'You need a smaller model or stronger quantization.') };
 }
 
