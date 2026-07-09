@@ -1,13 +1,16 @@
 {
   "name": "fitllm-engine",
-  "version": "1.0.0",
-  "description": "Accurate local-LLM memory & speed estimation engine for Apple Silicon — models sliding-window, hybrid/linear and MoE attention that naive VRAM calculators get wrong.",
+  "version": "2.0.0",
+  "description": "Accurate local-LLM memory math — will this model fit your GPU or Mac? Models sliding-window, hybrid/linear, MLA compressed-KV and MoE architectures that naive VRAM calculators get wrong by up to ~18x. Zero deps, single file, conformance-vector tested.",
   "type": "module",
   "main": "engine.js",
   "exports": { ".": "./engine.js" },
-  "files": ["engine.js"],
-  "keywords": ["llm", "memory-calculator", "vram", "kv-cache", "apple-silicon", "quantization", "mlx", "gemma", "qwen", "moe"],
+  "bin": { "fitllm": "bin/fitllm.mjs" },
+  "files": ["engine.js", "bin", "vectors"],
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test test/ && node vectors/run.mjs" },
+  "keywords": ["llm", "vram", "memory-calculator", "kv-cache", "will-it-run", "apple-silicon", "nvidia", "amd", "mla", "moe", "quantization", "gguf", "llama-cpp", "mlx", "ollama"],
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/click6067-ship-it/fitllm-engine" },
-  "homepage": "https://fitllm-v2.vercel.app"
+  "repository": { "type": "git", "url": "git+https://github.com/click6067-ship-it/fitllm-engine.git" },
+  "homepage": "https://fitllm.run"
 }
