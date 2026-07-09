@@ -180,6 +180,27 @@ export const MODELS = [
     maxContext: 131072, benchmarks: null,
     desc: 'Dense · 8.0B · 32레이어 · GQA(32/8) · 최대 128K' }, // meta-llama/Llama-3.1-8B-Instruct (gated) ↔ unsloth/Meta-Llama-3.1-8B-Instruct 미러
 
+  // --- Draft 소형모델 — Stack 탭(speculative decoding draft+target · IDE 자동완성) 페어용. 플래그십 아님(카탈로그 최신순 정리와 별개 기능군) ---
+  // ⚠️ Qwen3 2종 totalParams = GGUF/디스크 기준(임베딩 1회): safetensors 카운트(751.6M/2031.7M)는 tied lm_head 중복 저장 포함 — 사용 금지.
+  //    검증(2026-07-09 verifier): Qwen3-0.6B-Q8_0.gguf 실측 639,446,688B = 596.0M×Q8_0+메타 ✓ / 1.7B GGUF 1,834,426,016B ✓ (2출처+GGUF 실측)
+  { name: 'Qwen3-0.6B', group: 'Draft', tags: ['dense', 'draft'],
+    totalParams: 0.596, activeParams: 0.596, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 16, hiddenSize: 1024,
+    maxContext: 40960, benchmarks: null, // config max_position_embeddings 40960 (모델카드 공표 native 32K — config 기준 원칙)
+    desc: 'Dense · 0.6B · vLLM 표준 draft — Qwen 계열 타깃 페어 (vocab 151936 호환)' }, // Qwen/Qwen3-0.6B config.json + HF API + GGUF 실측
+  { name: 'Qwen3-1.7B', group: 'Draft', tags: ['dense', 'draft'],
+    totalParams: 1.721, activeParams: 1.721, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 16, hiddenSize: 2048,
+    maxContext: 40960, benchmarks: null,
+    desc: 'Dense · 1.7B · 30B급 타깃엔 0.6B보다 스루풋 우위(vLLM 벤치) — Qwen 계열 draft' }, // Qwen/Qwen3-1.7B config.json + HF API + GGUF 실측
+  { name: 'Llama-3.2-1B-Instruct', group: 'Draft', tags: ['dense', 'draft'],
+    totalParams: 1.236, activeParams: 1.236, layerCount: 16, kvHeads: 8, kvHeadDim: 64, attnHeads: 32, hiddenSize: 2048,
+    maxContext: 131072, benchmarks: null, // params 1,235,814,400 = 분석 카운트 바이트단위 일치(tied·lm_head 미저장 — 그대로 디스크 기준)
+    desc: 'Dense · 1.2B · Llama 3.x 타깃 표준 draft (vocab 128256 호환) · 최대 128K' }, // meta-llama(gated) ↔ unsloth·NousResearch 미러 2종 일치
+  { name: 'Gemma-3-1B-it', group: 'Draft', tags: ['dense', 'draft'],
+    totalParams: 1.0, activeParams: 1.0, layerCount: 26, kvHeads: 1, kvHeadDim: 256, attnHeads: 4, hiddenSize: 1152,
+    maxContext: 32768, slidingWindow: 512, globalAttnLayers: 4, // transformers gemma3 + google/gemma_pytorch 2출처: 26층 중 full-attention 4(레이어 6·12·18·24), 나머지 22층 window 512
+    benchmarks: null,
+    desc: 'Dense · 1.0B · MQA(4/1) · 슬라이딩 512(글로벌 4레이어) — Gemma 계열 draft · 최대 32K' }, // google/gemma-3-1b-it(gated) ↔ unsloth·mlx 미러 + gemma_pytorch
+
   // === Claude Opus 4.7 — Cloud (벤치마크 기준점, 메모리 시뮬 제외) ===
   {
     name: 'Claude Opus 4.7',
