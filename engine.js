@@ -239,6 +239,7 @@ export const LOCAL_MODELS = MODELS.filter((m) => !m.isCloud);
 // Track A(Apple newsroom+Wikipedia) ∥ Track B(Codex) 이중검증(2026-07-09, 일치). M4 Ultra 미존재(M3 Ultra가 최신).
 // 출처: Apple Newsroom 각 세대 발표 + support.apple.com 스펙 + Wikipedia Apple_M1..M4.
 export const MACBOOK_RAM_GROUPS = {
+  'M5': [16, 24, 32], // MacBook Air/Pro 14" (Wikipedia Apple_M5 ∥ Codex 트랙 교차확인 2026-07-09)
   'M5 Pro': [24, 48, 64],
   'M5 Max': [36, 48, 64, 128],
   'M4': [16, 24, 32],
@@ -538,7 +539,9 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   const kv = calcKVCache(model, ctx, kvBits).totalGB;
 
   // 단일 reserve 방정식(Codex council): used = param + kv + rtDyn + reserve. reserve는 1회만.
-  const rtDyn = param * 0.12 + kv * 0.15 + ctx * 0.00003; // 동적 런타임(고정 reserve 미포함)
+  // 오버헤드 공식의 단일 진실원 = calcRuntimeOverhead (KvDeepDive와 같은 소스 — 인라인 중복 금지, 드리프트 방지)
+  const ov = calcRuntimeOverhead(model, ctx, { weightBpw, kvBits }, device);
+  const rtDyn = ov.paramOverheadGB + ov.kvOverheadGB + ov.activationOverheadGB; // 동적 런타임(고정 reserve 미포함)
   const reserve = device.reserveGB;                       // OS/CUDA/디스플레이 통합 reserve
   const used = param + kv + rtDyn + reserve;
   const free = device.memoryGB - used;
@@ -550,7 +553,7 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   else verdict = 'yes';
 
   const os = device._os ?? 0; // Apple 표시 호환
-  const rt = rtDyn + (device.type === 'apple' ? 2.0 : 0); // 기존 rt = 동적 + 고정2.0 (Apple 분해 보존)
+  const rt = rtDyn + ov.fixedOverheadGB; // 기존 rt = 동적 + 고정(Apple 2.0 / GPU 0 — calcRuntimeOverhead가 결정)
 
   return {
     model,
@@ -586,7 +589,7 @@ export function suggestFix(model, ram, ctx, bits, L) {
   const lowerBits = [8, 4].filter((b) => b < bits);
   for (const b of lowerBits) {
     if (simulate(model, ram, ctx, b).verdict !== 'no') {
-      return { kind: 'bits', bits: b, text: t(`${b}bit로 양자화하면 들어가요.`, `Quantize to ${b}-bit and it fits.`) };
+      return { kind: 'bits', bits: b, text: t(`${b}bit로 양자화하면 들어가요 (품질 소폭 손실).`, `Quantize to ${b}-bit and it fits (small quality cost).`) };
     }
   }
   // 2) 현재 정밀도에서 들어가는 최대 대화 길이
@@ -598,6 +601,37 @@ export function suggestFix(model, ram, ctx, bits, L) {
   const allRam = [...new Set(Object.values(MACBOOK_RAM_GROUPS).flat())].sort((a, b) => a - b);
   const bigger = allRam.find((r) => r > ram && simulate(model, r, ctx, bits).verdict !== 'no');
   if (bigger) return { kind: 'ram', ram: bigger, text: t(`${bigger}GB 이상 맥이면 들어가요.`, `A ${bigger}GB+ Mac would fit.`) };
+  return { kind: 'none', text: t('더 작은 모델이나 더 강한 양자화가 필요해요.', 'You need a smaller model or stronger quantization.') };
+}
+
+// GPU 탭용 suggestFix — Apple과 대칭인 "계산된" 제안 (하드코딩 문구 대체).
+// 우선순위: 낮은 GGUF 티어(최소 변화부터) → KV 캐시 양자화 → 컨텍스트 축소 → 더 큰 VRAM 단일 카드.
+export function suggestFixGpu(model, device, ctx, quant, L) {
+  const t = L || ((ko) => ko);
+  const kvBits = quant.kvBits ?? 16;
+  // 1) 더 낮은 GGUF weight 티어 — bpw 내림차순(품질 손실 최소인 것부터)
+  const lower = GPU_QUANTS.filter((q) => q.bpw < quant.weightBpw).sort((a, b) => b.bpw - a.bpw);
+  for (const q of lower) {
+    if (simulate(model, device, ctx, { weightBpw: q.bpw, kvBits }).verdict !== 'no') {
+      return { kind: 'gguf', tier: q.tier, text: t(`${q.label}로 양자화하면 들어가요 (품질 소폭 손실).`, `Quantize to ${q.label} and it fits (small quality cost).`) };
+    }
+  }
+  // 2) KV 캐시 양자화 (F16 → Q8 → Q4, llama.cpp -ctk/-ctv)
+  for (const kb of [8, 4].filter((b) => b < kvBits)) {
+    if (simulate(model, device, ctx, { weightBpw: quant.weightBpw, kvBits: kb }).verdict !== 'no') {
+      return { kind: 'kv', kvBits: kb, text: t(`KV 캐시를 Q${kb}로 낮추면 들어가요 (-ctk/-ctv).`, `Drop the KV cache to Q${kb} (-ctk/-ctv) and it fits.`) };
+    }
+  }
+  // 3) 현재 양자화에서 들어가는 최대 컨텍스트
+  const maxCtx = calcMaxContext(model, device, quant);
+  if (maxCtx >= 1024) {
+    return { kind: 'ctx', ctx: maxCtx, text: t(`컨텍스트를 ${formatTokens(maxCtx, L)}까지 줄이면 들어가요.`, `Shorten context to ${formatTokens(maxCtx, L)} and it fits.`) };
+  }
+  // 4) 더 큰 VRAM 단일 카드 (멀티GPU 프리셋 제외 — "카드를 늘려라"는 별개 결정)
+  const bigger = GPUS.filter((g) => !g.count && g.vramGB > device.memoryGB)
+    .sort((a, b) => a.vramGB - b.vramGB)
+    .find((g) => simulate(model, gpuDevice(g, device.env), ctx, quant).verdict !== 'no');
+  if (bigger) return { kind: 'gpu', gpu: bigger.name, text: t(`${bigger.name}(${bigger.vramGB}GB)급 카드면 들어가요.`, `A ${bigger.name} (${bigger.vramGB}GB) would fit.`) };
   return { kind: 'none', text: t('더 작은 모델이나 더 강한 양자화가 필요해요.', 'You need a smaller model or stronger quantization.') };
 }
 
@@ -664,7 +698,7 @@ const CHIP_BANDWIDTH = {
   'M2': 100, 'M2 Pro': 200, 'M2 Max': 400, 'M2 Ultra': 800,
   'M3': 100, 'M3 Pro': 150, 'M3 Max': 400, 'M3 Ultra': 819,
   'M4': 120, 'M4 Pro': 273, 'M4 Max': 546,
-  'M5 Pro': 307, 'M5 Max': 614,
+  'M5': 153, 'M5 Pro': 307, 'M5 Max': 614, // M5 base 153.6 (Wikipedia ∥ Codex 이중확인)
 };
 export function chipBandwidth(chip, gpuCores = 40) {
   if (chip === 'M5 Max') return gpuCores === 32 ? 460 : 614; // M5 Max GPU 코어수별
