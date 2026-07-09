@@ -23,7 +23,7 @@ test("won't-fit case exits 1 and suggests a fix", () => {
 });
 
 test('mac path works', () => {
-  const { code } = run(['Qwen3-30B-A3B', '--mac', '64', '--json']);
+  const { code } = run(['Qwen 3.6 35B-A3B', '--mac', '64', '--json']);
   assert.equal(code, 0);
 });
 
