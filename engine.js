@@ -810,8 +810,12 @@ export function parseHfConfig(id, raw, totalSize) {
   // 파라미터 수: safetensors total_size(저장 dtype 바이트)에서 역산, 없으면 이름 추정
   let totalParams = null;
   if (totalSize) {
+    // 선-양자화 레포(MLX/AWQ/bnb): 저장 비트폭의 진실은 quantization(.bits) — torch_dtype은 원본 정밀도라
+    // ÷2 과소계산 → 거짓 "fits" (issue #2, gilbert-barajas 실측: MLX 8bit Qwen3-Coder-30B 15.1 예측 vs 30.4GiB 실제)
+    const qbits = c.quantization?.bits ?? c.quantization_config?.bits;
     const dt = String(c.torch_dtype || '').toLowerCase();
-    const dtypeBytes = dt.includes('float32') || dt.includes('fp32') ? 4 : dt.includes('fp8') || dt.includes('int8') ? 1 : 2;
+    const dtypeBytes = qbits ? qbits / 8
+      : dt.includes('float32') || dt.includes('fp32') ? 4 : dt.includes('fp8') || dt.includes('int8') ? 1 : 2;
     totalParams = totalSize / dtypeBytes / 1e9;
   }
   if (!totalParams) totalParams = paramsFromName(id);
