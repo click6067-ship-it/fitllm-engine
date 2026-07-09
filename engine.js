@@ -597,7 +597,7 @@ export function suggestFix(model, ram, ctx, bits, L) {
   // 3) 더 큰 RAM이 필요
   const allRam = [...new Set(Object.values(MACBOOK_RAM_GROUPS).flat())].sort((a, b) => a - b);
   const bigger = allRam.find((r) => r > ram && simulate(model, r, ctx, bits).verdict !== 'no');
-  if (bigger) return { kind: 'ram', ram: bigger, text: t(`${bigger}GB 이상 맥북이면 들어가요.`, `A ${bigger}GB+ Mac would fit.`) };
+  if (bigger) return { kind: 'ram', ram: bigger, text: t(`${bigger}GB 이상 맥이면 들어가요.`, `A ${bigger}GB+ Mac would fit.`) };
   return { kind: 'none', text: t('더 작은 모델이나 더 강한 양자화가 필요해요.', 'You need a smaller model or stronger quantization.') };
 }
 
@@ -782,4 +782,4 @@ export function naiveKVCache(model, ctx, bits) {
 }
 
 // 내장 모델 데이터 기준일 (신선도 표시용). HF 붙여넣기는 항상 실시간이라 무관.
-export const DATA_UPDATED = '2026-05';
+export const DATA_UPDATED = '2026-07';
