@@ -111,7 +111,7 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 ## The Fit Census — every model × every device, one truth table
 
-[`census/`](census/README.md) holds **4,700+ verdicts** (15 models × 88 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
+[`census/`](census/README.md) holds **6,000+ verdicts** (19 models incl. draft tier × 88 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
 
 ## Embed a fit badge
 
