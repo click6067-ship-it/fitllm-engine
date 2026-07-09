@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.click6067-ship-it/fitllm",
+  "name": "run.fitllm/fitllm",
   "title": "FitLLM",
-  "description": "Read-only LLM hardware-fit calculator: checks whether a local LLM (GLM, gpt-oss, Qwen, Gemma, Llama...) fits on a given GPU, multi-GPU rig or Apple Silicon Mac — exact VRAM/unified-memory math incl. KV cache, quantization and architecture (MLA/sliding-window/MoE).",
+  "description": "Will this LLM fit on your GPU, multi-GPU rig or Mac? Exact VRAM & KV-cache math. Read-only.",
   "version": "1.0.0",
   "repository": {
     "url": "https://github.com/click6067-ship-it/fitllm-engine",
