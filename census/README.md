@@ -3,6 +3,8 @@
 **6,048 verdicts**: 18 models × 88 devices (36 GPUs + 52 Mac configs) × per-platform quant tiers.
 Every number computed by [fitllm-engine](https://github.com/click6067-ship-it/fitllm-engine) from official `config.json` values — architecture-aware (MLA, sliding-window, hybrid attention, MoE). **Reproduce it yourself: `npm run census`.**
 
+**License: CC0 1.0 (public domain)** — this dataset exists to be taken. Use it, train on it, redistribute it, build on it; no attribution required (a link to [fitllm.run](https://fitllm.run) is appreciated, never required). The engine *code* remains MIT. Mirrors: [fitllm.run/data](https://fitllm.run/data) (CSV/JSON + live agent API).
+
 Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/headroom per engine. Interactive per-combo pages: [fitllm.run/can-i-run](https://fitllm.run/can-i-run).
 
 ## Starter matrix — biggest model that fits comfortably (~4-bit, 8K ctx)
