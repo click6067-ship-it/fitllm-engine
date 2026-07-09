@@ -1,5 +1,10 @@
 # FitLLM Engine
 
+[![npm](https://img.shields.io/npm/v/fitllm-engine?color=cb3837&label=npm)](https://www.npmjs.com/package/fitllm-engine)
+[![conformance](https://img.shields.io/badge/conformance_vectors-14%2F14-brightgreen)](vectors/fit-vectors-v1.json)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![zero deps](https://img.shields.io/badge/dependencies-0-success)](package.json)
+
 > **The memory math behind [fitllm.run](https://fitllm.run) — accurate on modern LLM architectures, where most calculators (and LLMs) are wrong.**
 > Zero dependencies. One readable file: [`engine.js`](engine.js). Conformance-vector tested. MIT.
 
