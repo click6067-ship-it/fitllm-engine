@@ -568,6 +568,35 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   };
 }
 
+// 멀티모델 스택 fit — 여러 모델이 같은 디바이스에 "동시 상주"할 때 (speculative decoding draft+target,
+// IDE 자동완성+챗 등). 모델별 weights+KV+동적오버헤드를 각각 계산해 합산, reserve는 디바이스당 1회.
+// 근거: llama.cpp speculative.md "need enough VRAM to load both models simultaneously" — 합산이 정확한 수학.
+// entries: [{ model, ctx, weightBpw, kvBits }...] · deviceOrRam: gpu device 객체 또는 Mac RAM(GB)
+export function simulateStack(entries, deviceOrRam) {
+  const device = toDevice(deviceOrRam);
+  const parts = entries.map(({ model, ctx, weightBpw, kvBits }) => {
+    const c = Math.min(ctx, model.maxContext);
+    const kb = kvBits ?? 16;
+    const param = calcParamMemory(model, weightBpw).totalGB;
+    const kv = calcKVCache(model, c, kb).totalGB;
+    const ov = calcRuntimeOverhead(model, c, { weightBpw, kvBits: kb }, device);
+    const rtDyn = ov.paramOverheadGB + ov.kvOverheadGB + ov.activationOverheadGB;
+    return { model, ctx: c, weightBpw, kvBits: kb, param, kv, rtDyn, subtotal: param + kv + rtDyn };
+  });
+  const reserve = device.reserveGB;
+  const used = parts.reduce((s, p) => s + p.subtotal, 0) + reserve;
+  const free = device.memoryGB - used;
+  const headroom = device.memoryGB * device.headroomRatio;
+  const verdict = free < 0 ? 'no' : free < headroom ? 'tight' : 'yes';
+  return {
+    parts, device, memoryGB: device.memoryGB, reserve, used, free, headroom, verdict,
+    pct: used / device.memoryGB,
+    param: parts.reduce((s, p) => s + p.param, 0),
+    kv: parts.reduce((s, p) => s + p.kv, 0),
+    rt: parts.reduce((s, p) => s + p.rtDyn, 0),
+  };
+}
+
 // 안 들어갈 때(또는 빠듯할 때) "이렇게 하면 들어가요" 한 가지 제안을 찾는다.
 // 우선순위: 정밀도 낮추기 → 대화 길이 줄이기 → 더 큰 RAM.
 export function suggestFix(model, ram, ctx, bits, L) {
