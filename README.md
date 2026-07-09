@@ -127,6 +127,17 @@ Params: `model` (name, fuzzy), `gpu` (name, fuzzy) **or** `ram` (GB, Apple unifi
 
 **Why embed it?** The #1 question under every model card and local-AI tutorial is *"will it run on my machine?"* The badge answers it **live from the engine** — recomputed when the data updates, not a stale claim frozen into your README. If you publish models or write guides: one line replaces a whole FAQ paragraph and cuts the "it OOM'd on my 8GB card" issues before they're filed.
 
+## Ask your AI assistant (MCP)
+
+The engine runs as a public **MCP server** at `https://fitllm.run/api/mcp` — connect it once and your assistant answers *"can I run X on my Y?"* with this engine's math instead of guessing from stale training data (LLMs routinely get KV-cache math wrong — see the 17.8× table above).
+
+- **Claude** (web / desktop / mobile): Settings → Connectors → **Add custom connector** → paste `https://fitllm.run/api/mcp`
+- **Claude Code**: `claude mcp add --transport http fitllm https://fitllm.run/api/mcp`
+- **Cursor / Windsurf**: add to `mcp.json` → `{ "mcpServers": { "fitllm": { "url": "https://fitllm.run/api/mcp" } } }`
+- **ChatGPT**: Settings → Apps → Advanced → Developer mode → add MCP server (Plus/Pro)
+
+Tools: `check_llm_fit` (verdict + full memory breakdown + fix suggestion — supports multi-GPU rigs like `"RTX 5090 + RTX 3090"`), `what_fits_on_hardware` (ranked list for your machine), `list_supported`. **Intentionally open**: read-only, stateless, no auth, no secrets — every call is a pure function of public data.
+
 ## Principles
 
 **No ads. No login. No affiliate links. Output is never for sale.** Fit is a *winnable*, verifiable claim; raw tok/s is not — so this engine refuses speed predictions rather than dress a guess as precision.
