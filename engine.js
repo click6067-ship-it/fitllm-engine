@@ -6,6 +6,30 @@
 // ============================================================================
 
 export const MODELS = [
+  // 정렬: 최신·화제 순 (GLM → gpt-oss → Qwen 3.6 → Qwen3.5 → Gemma 4 → Llama → Cloud) — 2026-07-09 재정렬·구세대(Qwen3/2.5) 정리.
+  // 확장분은 Track A(Claude) ∥ Track B(Codex) 블라인드 이중검증(CONFLICT=0). 구조=공식 HF config.json, 파라미터=safetensors index.
+  // ⚠️ ?m= 공유링크는 이 배열 인덱스 기준 — 순서 변경 시 기존 링크가 다른 모델을 가리킴(2026-07-09 사용자 승인 하에 변경).
+
+  // --- GLM (zAI, MLA) — 압축 KV(kv_lora_rank 512 + qk_rope 64 = 576 elem/tok/layer, ×1) ---
+  { name: 'GLM-4.7-Flash', group: 'GLM', tags: ['moe', 'mla'],
+    totalParams: 30, activeParams: 3, layerCount: 47, kvHeads: 20, kvHeadDim: 256, attnHeads: 20, hiddenSize: 2048,
+    numExperts: 64, expertsPerToken: 4, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 202752, benchmarks: null,
+    desc: 'MoE · MLA · ~30B / ~3B active · 64 experts(top-4) · 압축 KV(576/tok/layer) · 최대 202K' }, // config.json: zai-org/GLM-4.7-Flash (fp8 체크포인트)
+  { name: 'GLM-5.2', group: 'GLM', tags: ['moe', 'mla'],
+    totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
+    numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
+    desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit)' }, // config.json+index(1.5TB÷2 bf16): zai-org/GLM-5.2
+
+  // --- gpt-oss (OpenAI, MoE + 슬라이딩 128, 절반이 full-attn) — MXFP4 네이티브(파라미터 카운트는 카드 기준) ---
+  { name: 'gpt-oss-20b', group: 'gpt-oss', tags: ['moe'],
+    totalParams: 21, activeParams: 3.6, layerCount: 24, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
+    numExperts: 32, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 12, benchmarks: null,
+    desc: 'MoE · 21B / 3.6B active · 32 experts(top-4) · 슬라이딩128(full 12/24) · 최대 128K' }, // config.json: openai/gpt-oss-20b
+  { name: 'gpt-oss-120b', group: 'gpt-oss', tags: ['moe'],
+    totalParams: 117, activeParams: 5.1, layerCount: 36, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
+    numExperts: 128, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 18, benchmarks: null,
+    desc: 'MoE · 117B / 5.1B active · 128 experts(top-4) · 슬라이딩128(full 18/36) · 최대 128K' }, // config.json: openai/gpt-oss-120b
+
   // === Qwen 3.6 27B (dense, 하이브리드 linear+full attn ~3:1) — HF config.json ===
   {
     name: 'Qwen 3.6 27B',
@@ -42,6 +66,12 @@ export const MODELS = [
     benchmarks: { GPQA: 0.86, 'MMLU-Pro': 0.852, 'SWE-Bench': null },
     desc: 'MoE · ~35B total / ~3B active · 256 experts · 풀어텐션 10/40(linear 30) · 최대 256K',
   },
+  // --- Qwen3.5 하이브리드 linear (AgentWorld) — 40레이어 중 full 10 + linear 30(DeltaNet), KV는 full 10만 ---
+  { name: 'Qwen-AgentWorld-35B-A3B', group: 'Qwen3.5', tags: ['moe'],
+    totalParams: 34.7, activeParams: 3.0, layerCount: 40, fullAttnLayers: 10, kvHeads: 2, kvHeadDim: 256, attnHeads: 16, hiddenSize: 2048,
+    numExperts: 256, expertsPerToken: 8, maxContext: 262144, benchmarks: null,
+    desc: 'MoE · ~34.7B / ~3B active · 하이브리드(full 10 + linear 30) · KV는 10레이어만 · 최대 256K' }, // config.json+index: Qwen/Qwen-AgentWorld-35B-A3B
+
   // === Gemma 4 E2B (Dense + Per-Layer-Embeddings, NOT MoE) — HF config.json ===
   {
     name: 'Gemma 4 e2b',
@@ -140,6 +170,16 @@ export const MODELS = [
     benchmarks: { GPQA: 0.843, 'MMLU-Pro': 0.852, 'SWE-Bench': null },
     desc: 'Dense · 30.7B · 60레이어 · 슬라이딩윈도우 1024(5:1, 글로벌 10레이어 head_dim 512) · 최대 256K',
   },
+  // --- Llama (Meta) — 별개 생태계 기준점(유지). 공식 config gated(401), unsloth·NousResearch 미러 교차검증(동일) ---
+  { name: 'Llama-3.2-3B-Instruct', group: 'Llama', tags: ['dense'],
+    totalParams: 3.2, activeParams: 3.2, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 24, hiddenSize: 3072,
+    maxContext: 131072, benchmarks: null,
+    desc: 'Dense · 3.2B · 28레이어 · GQA(24/8) · 최대 128K' }, // meta-llama/Llama-3.2-3B-Instruct (gated) ↔ unsloth 미러
+  { name: 'Llama-3.1-8B-Instruct', group: 'Llama', tags: ['dense'],
+    totalParams: 8.0, activeParams: 8.0, layerCount: 32, kvHeads: 8, kvHeadDim: 128, attnHeads: 32, hiddenSize: 4096,
+    maxContext: 131072, benchmarks: null,
+    desc: 'Dense · 8.0B · 32레이어 · GQA(32/8) · 최대 128K' }, // meta-llama/Llama-3.1-8B-Instruct (gated) ↔ unsloth/Meta-Llama-3.1-8B-Instruct 미러
+
   // === Claude Opus 4.7 — Cloud (벤치마크 기준점, 메모리 시뮬 제외) ===
   {
     name: 'Claude Opus 4.7',
@@ -159,76 +199,6 @@ export const MODELS = [
     desc: 'Cloud 모델 — 벤치마크 기준점 (로컬 설치 불가, 비교용)',
   },
 
-  // ==========================================================================
-  //  2026 인기 로컬 모델 확장 — Track A(Claude hw-crawler) ∥ Track B(Codex) 블라인드
-  //  이중검증(2026-07-09 리콘실, CONFLICT=0). 구조=공식 HF config.json,
-  //  파라미터=safetensors index. 배열 끝 append로 기존 LOCAL_MODELS 인덱스 보존(?m= 링크 유지).
-  //  벤치마크는 미검증이라 null(정확도 규율: '아마' 금지).
-  // ==========================================================================
-
-  // --- Qwen3 (표준 GQA) — https://huggingface.co/Qwen ---
-  { name: 'Qwen3-8B', group: 'Qwen3', tags: ['dense'],
-    totalParams: 8.2, activeParams: 8.2, layerCount: 36, kvHeads: 8, kvHeadDim: 128, attnHeads: 32, hiddenSize: 4096,
-    maxContext: 40960, benchmarks: null,
-    desc: 'Dense · 8.2B · 36레이어 · GQA(32/8) · 최대 40K' }, // config.json: Qwen/Qwen3-8B
-  { name: 'Qwen3-14B', group: 'Qwen3', tags: ['dense'],
-    totalParams: 14.8, activeParams: 14.8, layerCount: 40, kvHeads: 8, kvHeadDim: 128, attnHeads: 40, hiddenSize: 5120,
-    maxContext: 40960, benchmarks: null,
-    desc: 'Dense · 14.8B · 40레이어 · GQA(40/8) · 최대 40K' }, // config.json: Qwen/Qwen3-14B
-  { name: 'Qwen3-32B', group: 'Qwen3', tags: ['dense'],
-    totalParams: 32.8, activeParams: 32.8, layerCount: 64, kvHeads: 8, kvHeadDim: 128, attnHeads: 64, hiddenSize: 5120,
-    maxContext: 40960, benchmarks: null,
-    desc: 'Dense · 32.8B · 64레이어 · GQA(64/8) · 최대 40K' }, // config.json: Qwen/Qwen3-32B
-  { name: 'Qwen3-30B-A3B', group: 'Qwen3', tags: ['moe'],
-    totalParams: 30.5, activeParams: 3.3, layerCount: 48, kvHeads: 4, kvHeadDim: 128, attnHeads: 32, hiddenSize: 2048,
-    numExperts: 128, expertsPerToken: 8, maxContext: 40960, benchmarks: null,
-    desc: 'MoE · 30.5B / ~3.3B active · 128 experts(top-8) · GQA(32/4) · 최대 40K' }, // config.json+index: Qwen/Qwen3-30B-A3B
-
-  // --- Qwen2.5 (dense) — sliding_window 설정돼 있으나 use_sliding_window=false → 풀어텐션 ---
-  { name: 'Qwen2.5-7B-Instruct', group: 'Qwen2.5', tags: ['dense'],
-    totalParams: 7.6, activeParams: 7.6, layerCount: 28, kvHeads: 4, kvHeadDim: 128, attnHeads: 28, hiddenSize: 3584,
-    maxContext: 32768, benchmarks: null,
-    desc: 'Dense · 7.6B · 28레이어 · GQA(28/4) · 최대 32K(슬라이딩 비활성)' }, // config.json: Qwen/Qwen2.5-7B-Instruct
-  { name: 'Qwen2.5-32B-Instruct', group: 'Qwen2.5', tags: ['dense'],
-    totalParams: 32.8, activeParams: 32.8, layerCount: 64, kvHeads: 8, kvHeadDim: 128, attnHeads: 40, hiddenSize: 5120,
-    maxContext: 32768, benchmarks: null,
-    desc: 'Dense · 32.8B · 64레이어 · GQA(40/8) · 최대 32K' }, // config.json: Qwen/Qwen2.5-32B-Instruct
-
-  // --- Llama (Meta) — 공식 config gated(401), unsloth·NousResearch 미러 교차검증(동일) ---
-  { name: 'Llama-3.1-8B-Instruct', group: 'Llama', tags: ['dense'],
-    totalParams: 8.0, activeParams: 8.0, layerCount: 32, kvHeads: 8, kvHeadDim: 128, attnHeads: 32, hiddenSize: 4096,
-    maxContext: 131072, benchmarks: null,
-    desc: 'Dense · 8.0B · 32레이어 · GQA(32/8) · 최대 128K' }, // meta-llama/Llama-3.1-8B-Instruct (gated) ↔ unsloth/Meta-Llama-3.1-8B-Instruct 미러
-  { name: 'Llama-3.2-3B-Instruct', group: 'Llama', tags: ['dense'],
-    totalParams: 3.2, activeParams: 3.2, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 24, hiddenSize: 3072,
-    maxContext: 131072, benchmarks: null,
-    desc: 'Dense · 3.2B · 28레이어 · GQA(24/8) · 최대 128K' }, // meta-llama/Llama-3.2-3B-Instruct (gated) ↔ unsloth 미러
-
-  // --- gpt-oss (OpenAI, MoE + 슬라이딩 128, 절반이 full-attn) — MXFP4 네이티브(파라미터 카운트는 카드 기준) ---
-  { name: 'gpt-oss-20b', group: 'gpt-oss', tags: ['moe'],
-    totalParams: 21, activeParams: 3.6, layerCount: 24, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
-    numExperts: 32, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 12, benchmarks: null,
-    desc: 'MoE · 21B / 3.6B active · 32 experts(top-4) · 슬라이딩128(full 12/24) · 최대 128K' }, // config.json: openai/gpt-oss-20b
-  { name: 'gpt-oss-120b', group: 'gpt-oss', tags: ['moe'],
-    totalParams: 117, activeParams: 5.1, layerCount: 36, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
-    numExperts: 128, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 18, benchmarks: null,
-    desc: 'MoE · 117B / 5.1B active · 128 experts(top-4) · 슬라이딩128(full 18/36) · 최대 128K' }, // config.json: openai/gpt-oss-120b
-
-  // --- Qwen3.5 하이브리드 linear (AgentWorld) — 40레이어 중 full 10 + linear 30(DeltaNet), KV는 full 10만 ---
-  { name: 'Qwen-AgentWorld-35B-A3B', group: 'Qwen3.5', tags: ['moe'],
-    totalParams: 34.7, activeParams: 3.0, layerCount: 40, fullAttnLayers: 10, kvHeads: 2, kvHeadDim: 256, attnHeads: 16, hiddenSize: 2048,
-    numExperts: 256, expertsPerToken: 8, maxContext: 262144, benchmarks: null,
-    desc: 'MoE · ~34.7B / ~3B active · 하이브리드(full 10 + linear 30) · KV는 10레이어만 · 최대 256K' }, // config.json+index: Qwen/Qwen-AgentWorld-35B-A3B
-
-  // --- GLM (zAI, MLA) — 압축 KV(kv_lora_rank 512 + qk_rope 64 = 576 elem/tok/layer, ×1) ---
-  { name: 'GLM-4.7-Flash', group: 'GLM', tags: ['moe', 'mla'],
-    totalParams: 30, activeParams: 3, layerCount: 47, kvHeads: 20, kvHeadDim: 256, attnHeads: 20, hiddenSize: 2048,
-    numExperts: 64, expertsPerToken: 4, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 202752, benchmarks: null,
-    desc: 'MoE · MLA · ~30B / ~3B active · 64 experts(top-4) · 압축 KV(576/tok/layer) · 최대 202K' }, // config.json: zai-org/GLM-4.7-Flash (fp8 체크포인트)
-  { name: 'GLM-5.2', group: 'GLM', tags: ['moe', 'mla'],
-    totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
-    numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
-    desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit)' }, // config.json+index(1.5TB÷2 bf16): zai-org/GLM-5.2
 ];
 
 // 로컬에서 돌릴 수 있는(시뮬 대상) 모델만
