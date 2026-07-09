@@ -346,7 +346,8 @@ export function combineGpus(gpus, envKey = DEFAULT_ENV) {
     bandwidthGBs: Math.min(...gpus.map((g) => g.bandwidthGBs)),
     series: 'multi',
   };
-  return { type: 'gpu', gpu: combo, env: env.key, memoryGB: combo.vramGB, bandwidthGBs: combo.bandwidthGBs, reserveGB: env.reserveGB * gpus.length, headroomRatio: GPU_HEADROOM_RATIO, _os: 0, gpuCount: gpus.length };
+  const cards = gpus.reduce((s, g) => s + (g.count || 1), 0); // 프리셋(count:2)이 조합에 끼어도 카드 수·reserve 정확히
+  return { type: 'gpu', gpu: combo, env: env.key, memoryGB: combo.vramGB, bandwidthGBs: combo.bandwidthGBs, reserveGB: env.reserveGB * cards, headroomRatio: GPU_HEADROOM_RATIO, _os: 0, gpuCount: cards };
 }
 // 인자 정규화: device(number=ram→appleDevice / object=그대로), quant(number=weight·kv동일 / {weightBpw,kvBits})
 function toDevice(d) { return typeof d === 'number' ? appleDevice(d) : d; }
