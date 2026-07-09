@@ -4,13 +4,45 @@
   "description": "Accurate local-LLM memory math — will this model fit your GPU or Mac? Models sliding-window, hybrid/linear, MLA compressed-KV and MoE architectures that naive VRAM calculators get wrong by up to ~18x. Zero deps, single file, conformance-vector tested.",
   "type": "module",
   "main": "engine.js",
-  "exports": { ".": "./engine.js" },
-  "bin": { "fitllm": "bin/fitllm.mjs" },
-  "files": ["engine.js", "bin", "vectors"],
-  "engines": { "node": ">=18" },
-  "scripts": { "test": "node --test test/ && node vectors/run.mjs" },
-  "keywords": ["llm", "vram", "memory-calculator", "kv-cache", "will-it-run", "apple-silicon", "nvidia", "amd", "mla", "moe", "quantization", "gguf", "llama-cpp", "mlx", "ollama"],
+  "exports": {
+    ".": "./engine.js"
+  },
+  "bin": {
+    "fitllm": "bin/fitllm.mjs"
+  },
+  "files": [
+    "engine.js",
+    "bin",
+    "vectors"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/ && node vectors/run.mjs",
+    "census": "node census/generate.mjs"
+  },
+  "keywords": [
+    "llm",
+    "vram",
+    "memory-calculator",
+    "kv-cache",
+    "will-it-run",
+    "apple-silicon",
+    "nvidia",
+    "amd",
+    "mla",
+    "moe",
+    "quantization",
+    "gguf",
+    "llama-cpp",
+    "mlx",
+    "ollama"
+  ],
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/click6067-ship-it/fitllm-engine.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/click6067-ship-it/fitllm-engine.git"
+  },
   "homepage": "https://fitllm.run"
 }

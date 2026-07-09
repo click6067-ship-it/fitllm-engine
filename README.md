@@ -108,6 +108,10 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 **Why this matters:** the formulas are easy to copy; a verified answer key is not. If you port this engine to Python, Rust or Go, you don't become an untrusted fork — pass the vectors and you're a **conformant implementation of the same standard**. Port the engine, keep the vectors.
 
+## The Fit Census — every model × every device, one truth table
+
+[`census/`](census/README.md) holds **4,700+ verdicts** (15 models × 88 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
+
 ## Embed a fit badge
 
 Show whether a model runs on given hardware — live from the engine, one line in any README or model card:

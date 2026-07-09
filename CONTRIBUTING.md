@@ -18,4 +18,8 @@ npm test        # node --test + conformance vectors — must pass
 If you changed any math (rare): add a vector to `vectors/fit-vectors-v1.json` whose expected value you derived **by hand from the config**, not from the engine's own output.
 
 ## Report a real measurement
-Ran a model and measured actual peak memory? [Open a measurement issue](../../issues/new?labels=measurement) — estimate-vs-measured reports calibrate the overhead constants for everyone.
+Ran a model and measured actual peak memory? Two ways:
+- **PR (preferred)**: add one object to [`fixtures/measured.json`](fixtures/measured.json) per [`fixtures/schema.json`](fixtures/schema.json) — it appears in the public [Fit Census](census/README.md) as a predicted-vs-measured row. Runtime + version required (reproducibility).
+- Or [open a measurement issue](../../issues/new?labels=measurement).
+
+Estimate-vs-measured reports calibrate the overhead constants for everyone — they're the most valuable contribution this repo takes.
