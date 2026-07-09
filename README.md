@@ -15,7 +15,13 @@ npx fitllm "GLM-4.7-Flash" --gpu 4090     # ✓ FITS — 21.9/24 GB, free 2.1 GB
 npx fitllm "gpt-oss-120b" --mac 64        # ✗ WON'T FIT → what to change to make it fit
 npx fitllm --detect                       # reads this machine's real hardware
 ```
-Exit code 0/1 — usable as a **pre-download guard** in scripts: know it won't fit *before* the 40 GB download.
+
+**Why a CLI?** The "will it run?" question is born in the terminal — one line before `ollama pull`. No install, no tab-switching, and it reads your *actual* hardware with `--detect` instead of asking you to know your VRAM. Exit code 0/1 makes it a **pre-download guard**:
+
+```bash
+# in your model-pull script — stop BEFORE the 40 GB download:
+npx fitllm "gpt-oss-120b" --detect || { echo "won't fit — aborting pull"; exit 1; }
+```
 
 This is the open calculation core of FitLLM. **The math is open so you can audit it.**
 
@@ -98,7 +104,9 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 ## Conformance vectors
 
-[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **14 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived from official `config.json` values. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`. Port the engine, keep the vectors.
+[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **14 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
+
+**Why this matters:** the formulas are easy to copy; a verified answer key is not. If you port this engine to Python, Rust or Go, you don't become an untrusted fork — pass the vectors and you're a **conformant implementation of the same standard**. Port the engine, keep the vectors.
 
 ## Embed a fit badge
 
@@ -111,6 +119,8 @@ Show whether a model runs on given hardware — live from the engine, one line i
 ![fits](https://img.shields.io/endpoint?url=https%3A%2F%2Ffitllm.run%2Fapi%2Fbadge%3Fmodel%3DGLM-4.7-Flash%26gpu%3D4090)
 
 Params: `model` (name, fuzzy), `gpu` (name, fuzzy) **or** `ram` (GB, Apple unified memory), optional `quant` (GGUF tier / 4|8|16), `ctx`, `kv`. Verdict color: green fits · yellow tight · red won't fit.
+
+**Why embed it?** The #1 question under every model card and local-AI tutorial is *"will it run on my machine?"* The badge answers it **live from the engine** — recomputed when the data updates, not a stale claim frozen into your README. If you publish models or write guides: one line replaces a whole FAQ paragraph and cuts the "it OOM'd on my 8GB card" issues before they're filed.
 
 ## Principles
 
