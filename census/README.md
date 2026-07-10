@@ -1,9 +1,7 @@
-# Local LLM Fit Census v1 — 2026-07-09
+# Local LLM Fit Census v1 — 2026-07-10
 
 **6,048 verdicts**: 18 models × 88 devices (36 GPUs + 52 Mac configs) × per-platform quant tiers.
 Every number computed by [fitllm-engine](https://github.com/click6067-ship-it/fitllm-engine) from official `config.json` values — architecture-aware (MLA, sliding-window, hybrid attention, MoE). **Reproduce it yourself: `npm run census`.**
-
-**License: CC0 1.0 (public domain)** — this dataset exists to be taken. Use it, train on it, redistribute it, build on it; no attribution required (a link to [fitllm.run](https://fitllm.run) is appreciated, never required). The engine *code* remains MIT. Mirrors: [fitllm.run/data](https://fitllm.run/data) (CSV/JSON + live agent API).
 
 Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/headroom per engine. Interactive per-combo pages: [fitllm.run/can-i-run](https://fitllm.run/can-i-run).
 
@@ -51,7 +49,7 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 
 ## Full data
 
-- [`census-v1.csv`](census-v1.csv) / [`census-v1.json`](census-v1.json) — every model × device × quant verdict with used/free GB and max context. Machine-readable; import it, chart it, cite it.
-- **`measured` column**: real-world measurements from [`fixtures/measured.json`](../fixtures/README.md) — community-submitted via PR. Predicted-vs-measured, in public. _No measurements yet — [be the first](../fixtures/README.md)._
+- [`census-v1.csv`](census-v1.csv) / [`census-v1.json`](census-v1.json) — every model × device × quant verdict with the full predicted breakdown (`predicted_total_to_run_gb` = weights + KV + runtime + reserve — what the verdict uses; `predicted_resident_weights_gb` = weights alone) and max context. Machine-readable; import it, chart it, cite it.
+- **Measurements are typed** (from [`fixtures/measured.json`](../fixtures/README.md), community PRs): `measurement_kind` says what was measured. `idle_resident` readings (e.g. oMLX `actual_size`) are a resident-weights **floor** — compare them to `predicted_resident_weights_gb`, not to the total; only `system_total_peak` is comparable to `predicted_total_to_run_gb`. An idle_resident value below the predicted total is expected, not an over-prediction. 9 measurement(s) so far.
 
 All figures are estimates; real usage varies with runtime, driver and OS state. Verdicts: ✅ fits comfortably · ⚠️ tight · ❌ won't fit.

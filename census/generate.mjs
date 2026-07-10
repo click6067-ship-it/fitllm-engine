@@ -3,7 +3,7 @@
 // 산출: census-v1.json(기계용) + census-v1.csv + README.md(스타터 매트릭스·모델별 최소장비)
 // measured 열은 ../fixtures/measured.json(커뮤니티 실측 PR)에서 교차 참조 — 예측 vs 실측을 공개 원장으로.
 import { writeFileSync, readFileSync } from 'node:fs';
-import { LOCAL_MODELS, GPUS, MACBOOK_RAM_GROUPS, GPU_QUANTS, gpuDevice, simulate, calcMaxContext, DATA_UPDATED } from '../engine.js';
+import { LOCAL_MODELS, GPUS, MACBOOK_RAM_GROUPS, GPU_QUANTS, gpuDevice, simulate, calcMaxContext, calcRuntimeOverhead, DATA_UPDATED } from '../engine.js';
 
 const OUT = new URL('./', import.meta.url).pathname;
 const measured = JSON.parse(readFileSync(new URL('../fixtures/measured.json', import.meta.url), 'utf8'));
@@ -23,17 +23,42 @@ for (const m of LOCAL_MODELS) {
       const s = simulate(m, d.arg, ctx, { weightBpw: q.bpw, kvBits: 16 });
       const maxCtx = calcMaxContext(m, d.arg, { weightBpw: q.bpw, kvBits: 16 });
       const meas = measuredMap.get([m.name, d.name, q.id].join('|'));
+      const ov = calcRuntimeOverhead(m, ctx, { weightBpw: q.bpw, kvBits: 16 }, s.device);
       rows.push({
         model: m.name, params_b: m.totalParams, device: d.name, platform: d.platform, memory_gb: d.memoryGB,
-        quant: q.id, ctx, kv: 'F16', verdict: s.verdict, used_gb: +s.used.toFixed(2), free_gb: +s.free.toFixed(2),
-        max_context: maxCtx, measured_peak_gb: meas ? meas.measuredPeakGB : null, measured_source: meas ? meas.source : null,
+        quant: q.id, ctx, kv: 'F16', verdict: s.verdict,
+        // 예측 분해 — 에이전트가 실측과 "같은 종류끼리" 비교할 수 있게 컬럼명이 의미를 싣는다(one truth, two projections).
+        used_gb: +s.used.toFixed(2),                                        // v1 하위호환 별칭 = predicted_total_to_run_gb
+        predicted_total_to_run_gb: +s.used.toFixed(2),                      // 판정 기준: weights+KV+runtime+reserve
+        predicted_param_gb: +s.param.toFixed(2),                            // 순수 가중치(양자화 bpw 기준)
+        predicted_resident_weights_gb: +(s.param + ov.paramOverheadGB).toFixed(2), // 상주 가중치 예측(비양자 임베딩 등 +12%) — idle_resident 실측과 비교하는 컬럼
+        kv_cache_gb: +s.kv.toFixed(2), runtime_dynamic_gb: +s.rtDyn.toFixed(2), reserve_gb: +s.reserve.toFixed(2),
+        free_gb: +s.free.toFixed(2), max_context: maxCtx,
+        // 실측 — 타입 없이 예측 옆에 붙이지 않는다(resident 바닥값을 total과 직접 비교하면 오독).
+        measured_peak_gb: meas ? meas.measuredPeakGB : null,                // v1 하위호환 — 의미는 measurement_kind가 정의
+        measurement_kind: meas ? (meas.measurementKind || 'unknown') : null,
+        measured_ctx: meas ? meas.ctx : null,
+        measurement_match: meas ? (meas.ctx === ctx ? 'same_ctx' : 'different_ctx') : null,
+        measured_unit: meas ? (meas.unit || null) : null,
+        measured_source: meas ? meas.source : null,
       });
     }
   }
 }
 
 const generated = new Date().toISOString().slice(0, 10);
-const header = { version: 1, generated, engine_data: DATA_UPDATED, verdicts: rows.length, assumptions: 'ctx=min(8192,model max), KV cache F16, engine reserve/headroom per platform', regenerate: 'npm run census', measured_from: 'fixtures/measured.json' };
+const header = {
+  version: 1, schema_version: 2, generated, engine_data: DATA_UPDATED, verdicts: rows.length,
+  assumptions: 'ctx=min(8192,model max), KV cache F16, engine reserve/headroom per platform',
+  definitions: {
+    predicted_total_to_run_gb: 'Total memory required to RUN: weights + KV cache + runtime overhead + OS/GPU reserve. This is what the verdict uses. (used_gb is its v1 alias.)',
+    predicted_resident_weights_gb: 'Predicted resident model weights incl. non-quantized parts — compare against idle_resident measurements.',
+    measurement_kind: 'What the measured number is: idle_resident (resident weights floor, e.g. oMLX actual_size) / load_peak / generation_peak / system_total_peak. Only system_total_peak is directly comparable to predicted_total_to_run_gb; idle_resident readings SHOULD be lower than the total — that is not a prediction error.',
+    measurement_match: 'same_ctx = measured at this row’s ctx; different_ctx = measured under a different context length (KV portion not directly comparable).',
+    units: 'Predicted *_gb columns are GiB-based (1024³), matching nvidia-smi/Activity Monitor style labels; measured_unit records the measurement’s own unit if reported.',
+  },
+  regenerate: 'npm run census', measured_from: 'fixtures/measured.json',
+};
 writeFileSync(OUT + 'census-v1.json', JSON.stringify({ ...header, data: rows }, null, 1));
 
 const cols = Object.keys(rows[0]);
@@ -83,8 +108,8 @@ ${minDevice}
 
 ## Full data
 
-- [\`census-v1.csv\`](census-v1.csv) / [\`census-v1.json\`](census-v1.json) — every model × device × quant verdict with used/free GB and max context. Machine-readable; import it, chart it, cite it.
-- **\`measured\` column**: real-world measurements from [\`fixtures/measured.json\`](../fixtures/README.md) — community-submitted via PR. Predicted-vs-measured, in public. ${measured.length === 0 ? '_No measurements yet — [be the first](../fixtures/README.md)._' : `${measured.length} measurement(s) so far.`}
+- [\`census-v1.csv\`](census-v1.csv) / [\`census-v1.json\`](census-v1.json) — every model × device × quant verdict with the full predicted breakdown (\`predicted_total_to_run_gb\` = weights + KV + runtime + reserve — what the verdict uses; \`predicted_resident_weights_gb\` = weights alone) and max context. Machine-readable; import it, chart it, cite it.
+- **Measurements are typed** (from [\`fixtures/measured.json\`](../fixtures/README.md), community PRs): \`measurement_kind\` says what was measured. \`idle_resident\` readings (e.g. oMLX \`actual_size\`) are a resident-weights **floor** — compare them to \`predicted_resident_weights_gb\`, not to the total; only \`system_total_peak\` is comparable to \`predicted_total_to_run_gb\`. An idle_resident value below the predicted total is expected, not an over-prediction. ${measured.length === 0 ? '_No measurements yet — [be the first](../fixtures/README.md)._' : `${measured.length} measurement(s) so far.`}
 
 All figures are estimates; real usage varies with runtime, driver and OS state. Verdicts: ✅ fits comfortably · ⚠️ tight · ❌ won't fit.
 `;
