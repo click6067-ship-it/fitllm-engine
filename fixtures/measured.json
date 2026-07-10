@@ -10,5 +10,29 @@
     "source": "https://github.com/click6067-ship-it/fitllm-engine/issues/1",
     "date": "2026-05-28",
     "notes": "FitLLM predicted 26.7GB (won't fit) vs measured 15.1GB — over-prediction ~1.8x. Model not in built-in catalog; likely loaded via HF paste. Hypothesis under investigation: parseHfConfig does not parse Gemma layer_types/sliding-window from config, so KV is computed as full-attention on all layers at 32K. Follow-up: parse sliding_window/layer_types in parseHfConfig."
+  },
+  {
+    "model": "Qwen3-Coder-30B-A3B-Instruct-8bit",
+    "device": "M5 Max 128GB",
+    "quant": "8bit",
+    "ctx": 32768,
+    "kvBits": 16,
+    "measuredPeakGB": 30.4,
+    "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
+    "source": "https://github.com/click6067-ship-it/fitllm-engine/issues/2",
+    "date": "2026-07-09",
+    "notes": "Measured on M5 Max 128GB via the oMLX fork's /engine/loaded endpoint (actual resident bytes) — the same metric issue #2 used. Source figure 30.4 GiB is taken from the issue #2 table; not re-measured this session because the model was not resident at measurement time. oMLX reports estimated_size 31.72 GiB for the full 8-bit MoE weights, so 30.4 resident reflects dFlash SSD expert offload (active experts only). ctx=32768 and kvBits=16 are the oMLX defaults (max_context_window global default; unquantized fp16 KV) — the Coder was not loaded this session so its per-model ctx/KV settings were not directly re-read, but the 30.4 figure is weight-residency-dominated and effectively ctx-independent. Issue #2 is closed (parseHfConfig bit-width fix landed)."
+  },
+  {
+    "model": "Qwen3.6-27B-4bit",
+    "device": "M5 Max 128GB",
+    "quant": "4bit",
+    "ctx": 32768,
+    "kvBits": 16,
+    "measuredPeakGB": 15.33,
+    "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
+    "source": "https://github.com/click6067-ship-it/fitllm-engine/issues/2",
+    "date": "2026-07-09",
+    "notes": "Measured live this session from oMLX /admin/api/models -> Qwen3.6-27B-4bit.actual_size = 16,457,805,464 bytes = 15.33 GiB (oMLX's own formatted label). This is oMLX's per-model resident-bytes field — identical to what the fork's /engine/loaded endpoint reports (commit 373d09b: memory_bytes = actual_size). config_model_type=qwen3_5 (Gated-DeltaNet / linear-attention hybrid), so the recurrent state is ctx-independent and resident memory does not scale with context length — the linear-attention calibration datapoint issue #2 asked for. ctx=32768 = oMLX global default max_context_window (per-model setting null -> inherits default, omlx/server.py:244 + model_settings.py:38). kvBits=16 from the loaded engine's settings (turboquant_kv_enabled=false -> unquantized fp16 KV). Idle measurement (no active generation); excludes generation-time activation growth, so treat as floor not peak-during-gen. Reported in GiB to match issue #2's convention (decimal-GB equivalent: 16.46). NOTE: this is the 4-bit variant — the only Qwen3.6-27B resident at measurement time; the oQ8-mtp (8-bit) variant was registered but NOT loaded, so no number is reported for it. The source URL is the fork PR and resolves once opened; repoint to the upstream PR URL if preferred."
   }
 ]
