@@ -1,15 +1,15 @@
 [
   {
     "model": "Gemma 4 26b A4B",
-    "device": "24GB GPU (reported; body says 16GB — conflicting)",
+    "device": "M5 Max 128GB",
     "quant": "4bit",
     "ctx": 32768,
     "kvBits": 16,
     "measuredPeakGB": 15.1,
-    "runtime": "unreported",
+    "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/issues/1",
     "date": "2026-05-28",
-    "notes": "FitLLM predicted 26.7GB (won't fit) vs measured 15.1GB — over-prediction ~1.8x. Model not in built-in catalog; likely loaded via HF paste. Hypothesis under investigation: parseHfConfig does not parse Gemma layer_types/sliding-window from config, so KV is computed as full-attention on all layers at 32K. Follow-up: parse sliding_window/layer_types in parseHfConfig."
+    "notes": "HF repo mlx-community/gemma-4-26B-A4B-it-OptiQ-4bit. Device/runtime corrected 2026-07-10 per issue #1 follow-up: the 24GB (title) / 16GB (body) were both template noise, actual rig was an M5 Max 128GB. Original KV hypothesis refuted — parseHfConfig models the Gemma sliding-window split (kvGB ≈ 0.82 @ 32K). Predicted 26.7 = paramGB 14.72 + kv 0.82 + overhead + 8GB reserve (128GB Apple preset: 6 OS + 2 fixed); measured 15.1 ≈ paramGB 14.72, i.e. the weights prediction was accurate and the gap is definitional: oMLX actual_size reports idle resident weights (floor), fitllm usedGB is total footprint to run incl. reserve. PR #5 confirms the pattern systematically (measured resident lands between paramGB and usedGB)."
   },
   {
     "model": "Qwen3-Coder-30B-A3B-Instruct-8bit",
