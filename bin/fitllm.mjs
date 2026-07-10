@@ -122,7 +122,10 @@ if (has('--json')) {
   if (s.verdict === 'no') {
     const fix = isGpu ? suggestFixGpu(model, s.device, ctx, { weightBpw, kvBits }, EN) : suggestFix(model, device, ctx, weightBpw, EN);
     console.log(`  → ${fix.text}`);
+    console.log(`  (this just saved you a ~${fmtGB(s.param)} GB download that would have OOM'd)`); // 절약 영수증
   }
+  const slug = `${model.name}-${quantLabel}-on-${hwLabel.split(' (')[0].replace(/ \+ /g, '-plus-')}`.toLowerCase().replace(/[^a-z0-9._+-]+/g, '-').replace(/-+/g, '-');
+  console.log(`  receipt: https://fitllm.run/r/${slug}`);
   console.log('  every number from official config.json — audit: github.com/click6067-ship-it/fitllm-engine');
 }
 process.exit(s.verdict === 'no' ? 1 : 0);
