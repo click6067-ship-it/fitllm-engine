@@ -7,7 +7,7 @@
 
 ![npx fitllm — one-line fit verdict with the full memory breakdown](assets/demo.gif)
 
-> **The memory math behind [fitllm.run](https://fitllm.run) — accurate on modern LLM architectures, where most calculators (and LLMs) are wrong.**
+> ** Live: https://fitllm.run · Bilingual  · Free · No ads · No login / Open engine: fitllm-engine (MIT · npm fitllm-engine · npx fitllm).**
 > Zero dependencies. One readable file: [`engine.js`](engine.js). Conformance-vector tested. MIT.
 
 ```bash
