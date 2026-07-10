@@ -7,7 +7,8 @@
 
 ![npx fitllm — one-line fit verdict with the full memory breakdown](assets/demo.gif)
 
-> ** Live: https://fitllm.run · Bilingual  · Free · No ads · No login / Open engine: fitllm-engine (MIT · npm fitllm-engine · npx fitllm).**
+> ** Live: https://fitllm.run · Bilingual  · Free · No ads · No login **
+> ** Open engine:** [fitllm-engine](https://github.com/click6067-ship-it/fitllm-engine) (MIT · npm `fitllm-engine` · `npx fitllm`)
 > Zero dependencies. One readable file: [`engine.js`](engine.js). Conformance-vector tested. MIT.
 
 ```bash
