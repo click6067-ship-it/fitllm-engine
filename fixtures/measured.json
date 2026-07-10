@@ -43,7 +43,7 @@
     "kvBits": 16,
     "measuredPeakGB": 15.34,
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
-    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/PENDING",
+    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
     "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 16,474,582,728 B = 15.34 GiB (16.47 GB decimal), M5 Max 128GB. config_model_type=qwen3_5. qwen3_5 Gated-DeltaNet linear-attention hybrid; recurrent state ctx-independent. Reproduces PR#4's 15.33. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. fitllm predicts usedGB 25.47 (param 12.67 + kv 2 + overhead 4.8 + reserve 8); measured resident sits BETWEEN paramGB and usedGB -- the gap is fitllm's fixed reserve+overhead vs resident-weights, not a KV error."
   },
@@ -55,7 +55,7 @@
     "kvBits": 16,
     "measuredPeakGB": 27.86,
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
-    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/PENDING",
+    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
     "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 29,912,487,056 B = 27.86 GiB (29.91 GB decimal), M5 Max 128GB. config_model_type=qwen3_5. qwen3_5 Gated-DeltaNet; 8-bit (oQ8) with MTP head; NEW quant point. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. fitllm predicts usedGB 39.65 (param 25.33 + kv 2 + overhead 6.32 + reserve 8); measured resident sits BETWEEN paramGB and usedGB -- the gap is fitllm's fixed reserve+overhead vs resident-weights, not a KV error."
   },
@@ -67,7 +67,7 @@
     "kvBits": 16,
     "measuredPeakGB": 18.08,
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
-    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/PENDING",
+    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
     "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 19,408,091,008 B = 18.08 GiB (19.41 GB decimal), M5 Max 128GB. config_model_type=qwen3_5_moe. qwen3_5_moe 35B-A3B (OSU-NLP QUEST-RL); catalog name is nearest match by params. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. fitllm predicts usedGB 27.96 (param 16.3 + kv 0.63 + overhead 5.03 + reserve 8); measured resident sits BETWEEN paramGB and usedGB -- the gap is fitllm's fixed reserve+overhead vs resident-weights, not a KV error."
   },
@@ -79,7 +79,7 @@
     "kvBits": 16,
     "measuredPeakGB": 2.09,
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
-    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/PENDING",
+    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
     "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 2,246,903,416 B = 2.09 GiB (2.25 GB decimal), M5 Max 128GB. config_model_type=qwen3. qwen3 4B dense; not in catalog. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. (not in the built-in catalog -- no fitllm prediction paired here.)"
   },
@@ -91,7 +91,7 @@
     "kvBits": 16,
     "measuredPeakGB": 30.17,
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
-    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/PENDING",
+    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
     "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 32,393,780,000 B = 30.17 GiB (32.39 GB decimal), M5 Max 128GB. config_model_type=qwen3_moe. qwen3_moe 30B-A3B coder; dFlash SSD expert offload (active experts resident). Matches issue #2's 30.4. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. (not in the built-in catalog -- no fitllm prediction paired here.)"
   },
@@ -103,7 +103,7 @@
     "kvBits": 16,
     "measuredPeakGB": 52.58,
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
-    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/PENDING",
+    "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
     "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 56,452,863,080 B = 52.58 GiB (56.45 GB decimal), M5 Max 128GB. config_model_type=qwen3_next. qwen3_next ~80B elastic MoE; oMLX ESTIMATED 82.78 GB but only 52.58 resident -> elastic/SSD offload the engine does not model yet. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. (not in the built-in catalog -- no fitllm prediction paired here.)"
   }
