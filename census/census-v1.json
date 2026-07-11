@@ -1,7 +1,7 @@
 {
  "version": 1,
  "schema_version": 2,
- "generated": "2026-07-10",
+ "generated": "2026-07-11",
  "engine_data": "2026-07",
  "verdicts": 6048,
  "assumptions": "ctx=min(8192,model max), KV cache F16, engine reserve/headroom per platform",
@@ -92776,12 +92776,12 @@
    "reserve_gb": 8,
    "free_gb": 102.86,
    "max_context": 262144,
-   "measured_peak_gb": 15.1,
-   "measurement_kind": "idle_resident",
-   "measured_ctx": 32768,
-   "measurement_match": "different_ctx",
+   "measured_peak_gb": null,
+   "measurement_kind": null,
+   "measured_ctx": null,
+   "measurement_match": null,
    "measured_unit": null,
-   "measured_source": "https://github.com/click6067-ship-it/fitllm-engine/issues/1"
+   "measured_source": null
   },
   {
    "model": "Gemma 4 26b A4B",

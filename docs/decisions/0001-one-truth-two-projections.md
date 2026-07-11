@@ -22,7 +22,9 @@ FitLLM's number that verdicts use is **`predicted_total_to_run_gb` = weights + K
 
 ## Calibration policy
 
-Engine constants change only on accumulated, typed, multi-runtime evidence — never on a single batch. Current evidence (9 oMLX/M-series points, 2026-07): measured resident lands within ±10% of `predicted_resident_weights_gb` (= param × 1.12); the 12% param-overhead constant stands. Elastic/SSD expert offload (resident < full weights, issue #6) is out of scope for this ADR.
+**Community measurement reports are claims, not facts.** Accepting a claim into the ledger, the Census, or an engine constant transfers responsibility for its correctness to us — so every report is independently checked (physical consistency vs. HF weight sizes, reproduction of the quoted predictions, reporter provenance) before it influences anything. Engine constants change only on accumulated, typed, multi-runtime, independently-verified evidence — never on a single batch or a single reporter.
+
+Evidence status (2026-07-11): 8 oMLX/M-series points from one reporter, plausible (spot-checked against HF disk sizes) but single-source with no raw artifacts — not calibration-grade. The original issue #1 Gemma point was mis-attributed by a third party and is downgraded to `measurementKind: unknown` (see ledger notes; the 2026-05-28 engine reconstruction contradicts the M5 Max attribution). Elastic/SSD expert offload (issue #6) is a runtime residency policy, out of scope for engine-error calibration.
 
 ## Open items (tracked, not promised)
 
