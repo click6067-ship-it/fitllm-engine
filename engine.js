@@ -811,7 +811,8 @@ export function parseHfConfig(id, raw, totalSize) {
   let totalParams = null;
   if (totalSize) {
     // 선-양자화 레포(MLX/AWQ/bnb): 저장 비트폭의 진실은 quantization(.bits) — torch_dtype은 원본 정밀도라
-    // ÷2 과소계산 → 거짓 "fits" (issue #2, gilbert-barajas 실측: MLX 8bit Qwen3-Coder-30B 15.1 예측 vs 30.4GiB 실제)
+    // ÷2 과소계산 → 거짓 "fits" (issue #2). 합성 재현: 8bit 레포에 qbits 무시 시 params 절반 (test/parsehf.test.mjs).
+    // 혼합 정밀도(일부 레이어 상위 bit)는 params 과대 방향으로만 틀림 — 보수적이라 허용.
     const qbits = c.quantization?.bits ?? c.quantization_config?.bits;
     const dt = String(c.torch_dtype || '').toLowerCase();
     const dtypeBytes = qbits ? qbits / 8
