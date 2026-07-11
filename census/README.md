@@ -10,7 +10,7 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 | Device | Memory | Biggest comfortable fit |
 |---|---|---|
 | M1 8GB | 8GB | ❌ none comfortably at ~4-bit |
-| M2 16GB | 16GB | **Gemma 4 e2b** (5.1B) — free 3.32GB, up to ~11K ctx |
+| M2 16GB | 16GB | **Llama-3.2-3B-Instruct** (3.2B) — free 4.08GB, up to ~14K ctx |
 | M4 32GB | 32GB | **GLM-4.7-Flash** (30B) — free 7.13GB, up to ~17K ctx |
 | M5 Max 64GB | 64GB | **Qwen 3.6 35B-A3B** (35B) — free 37.32GB, up to ~262K ctx |
 | M4 Max 128GB | 128GB | **gpt-oss-120b** (117B) — free 58.41GB, up to ~131K ctx |

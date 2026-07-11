@@ -455,12 +455,15 @@ export function benchAvg(benchmarks) {
   return vals.reduce((s, v) => s + v, 0) / vals.length;
 }
 
-// 양자화별 메모리 보정(공개 벤치 기준 — 작은 모델일수록 오버헤드↑)
+// 양자화별 메모리 보정 — MLX 공개 산출물 실크기 ÷ (totalParams × bits/8), safetensors 바이트합 기준 (HF API blobs, 2026-07-11 재유도).
+// 구값(16bit 0.94~0.95, 8bit 0.9~0.99)은 출처 불명 + 방향 오류(실제는 base보다 큼 → 7~17% 과소, 거짓-fits) → 전면 교체.
+// 작은 모델일수록 4bit 배율↑(임베딩 등 비양자 텐서 비중): e2b 1.39 > e4b 1.29 > 26b/31b 1.20. GGUF는 소수 bpw 경로(multiplier 1.0, 이중계상 금지).
+// 출처: huggingface.co/mlx-community/gemma-4-{e2b,e4b,26b-a4b,31b}-it-{4bit,8bit,bf16} (+nvfp4 4bit 동률 1.20 확인)
 const quantAdjust = {
-  'Gemma 4 e2b': { 16: 0.94, 8: 0.9, 4: 1.26 },
-  'Gemma 4 e4b': { 16: 0.94, 8: 0.94, 4: 1.25 },
-  'Gemma 4 31b': { 16: 0.95, 8: 0.99, 4: 1.13 },
-  'Gemma 4 26b A4B': { 16: 0.95, 8: 0.99, 4: 1.24 },
+  'Gemma 4 e2b': { 16: 1.0, 8: 1.15, 4: 1.39 },   // 실측 1.001 / 1.150 / 1.392
+  'Gemma 4 e4b': { 16: 1.0, 8: 1.11, 4: 1.29 },   // 실측 0.993 / 1.110 / 1.287
+  'Gemma 4 31b': { 16: 1.02, 8: 1.1, 4: 1.2 },    // 실측 1.019 / 1.100 / 1.199
+  'Gemma 4 26b A4B': { 16: 1.01, 8: 1.1, 4: 1.2 }, // 실측 1.012 / 1.096 / 1.203
 };
 
 export function calcParamMemory(model, bits) {
