@@ -26,6 +26,17 @@ test('simulate: used == param + kv + rtDyn + reserve on every model × platform'
   }
 });
 
+test('negative/NaN ctx cannot flip verdict via negative KV (public-input guard)', () => {
+  const m = LOCAL_MODELS.find((x) => x.name === 'gpt-oss-120b');
+  const gpu = gpuDevice(GPUS.find((g) => g.name === 'RTX 4090'));
+  const bad = simulate(m, gpu, -1e9, { weightBpw: 4.85, kvBits: 16 });
+  assert.ok(bad.used > 0, `used ${bad.used} — 음수 ctx가 통과함`);
+  assert.ok(bad.kv >= 0);
+  assert.equal(bad.verdict, simulate(m, gpu, 1, { weightBpw: 4.85, kvBits: 16 }).verdict);
+  const nan = simulate(m, gpu, 'abc', { weightBpw: 4.85, kvBits: 16 });
+  assert.ok(nan.used > 0 && nan.kv >= 0);
+});
+
 test('CLI --json: breakdown fields sum to usedGB (Apple path — the 2GB double-display regression)', () => {
   const out = execFileSync(process.execPath, [BIN, 'Qwen 3.6 27B', '--mac', '128', '--quant', '4', '--ctx', '32768', '--json'], { encoding: 'utf8' });
   const j = JSON.parse(out);

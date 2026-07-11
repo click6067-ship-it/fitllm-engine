@@ -398,6 +398,7 @@ export function slidingSplit(model) {
 }
 
 export function calcKVCache(model, ctx, bits) {
+  ctx = Math.max(0, Math.floor(Number(ctx)) || 0); // 음수/NaN 가드
   if (!model.kvHeads || !model.kvHeadDim || !model.layerCount) {
     return { totalGB: 0, perTokenKB: 0, kvPerToken: 0, totalBytes: 0, effectiveCtx: 0 };
   }
@@ -482,6 +483,7 @@ export function calcParamMemory(model, bits) {
 // 런타임 오버헤드: 양자화 메타(12%) + KV 블록 padding(15%) + 활성화 버퍼 + 고정 2GB
 // 검증: Qwen3.6 35B @130K @8bit → 이론 43GB, 실제 ~54GB (오버헤드 ~11GB)
 export function calcRuntimeOverhead(model, ctx, bitsOrQuant, device) {
+  ctx = Math.max(0, Math.floor(Number(ctx)) || 0); // 음수/NaN 가드 (활성화 버퍼 ctx 비례)
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight↔KV 분리(GGUF: KV padding이 weight bpw 오염 금지)
   const paramMem = calcParamMemory(model, weightBpw).totalGB;
   const kvMem = calcKVCache(model, ctx, kvBits).totalGB;
@@ -547,6 +549,7 @@ export const HEADROOM_RATIO = 0.2; // RAM의 20%는 앱/스파이크용 여유�
 // verdict: 'yes'(넉넉) | 'tight'(빠듯) | 'no'(초과)
 export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   const device = toDevice(deviceOrRam);              // number(ram)→appleDevice / device 객체→그대로
+  ctx = Math.min(Math.max(1, Math.floor(Number(ctx)) || 1), model.maxContext || Infinity); // 음수/NaN ctx 가드 — 음수 KV가 판정을 fits로 뒤집는 것 방지 (2026-07-11 감사)
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight(파라미터) ↔ KV 비트 분리
   const param = calcParamMemory(model, weightBpw).totalGB;
   const kv = calcKVCache(model, ctx, kvBits).totalGB;
