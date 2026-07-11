@@ -31,4 +31,4 @@ parseHfConfig(id, configJson, totalSizeBytes)            // any HF model → eng
 
 ## Measured data welcome
 
-Real peak-memory measurements calibrate the engine for everyone: add to `fixtures/measured.json` per `fixtures/schema.json` via PR, or open an issue with the numbers.
+Real measurements calibrate the engine for everyone — and they are **typed**: say what you measured (`measurementKind`: idle resident weights / load peak / generation peak / whole-system peak — `fixtures/README.md` maps each kind to the predicted column it compares against). Add to `fixtures/measured.json` per `fixtures/schema.json` via PR, or open an issue with the numbers. Reports are treated as claims until independently checked.

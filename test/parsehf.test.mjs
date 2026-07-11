@@ -28,6 +28,16 @@ test('bf16 path preserved: no quantization key → total_size 16GB / 2 bytes = 8
   assert.ok(Math.abs(m.totalParams - 8) < 0.1, `totalParams ${m.totalParams}B ≠ 8B`);
 });
 
+test('bitsandbytes load_in_4bit (no bits field): total_size 8GB → ~16B params, NOT ~4B', () => {
+  const m = parseHfConfig('test/bnb-4bit', { ...BASE, torch_dtype: 'float16', quantization_config: { load_in_4bit: true, bnb_4bit_quant_type: 'nf4' } }, 8e9);
+  assert.ok(m.totalParams > 14 && m.totalParams < 18, `totalParams ${m.totalParams}B — load_in_4bit 미인식으로 torch_dtype 경로 탔음`);
+});
+
+test('bitsandbytes load_in_8bit: total_size 16GB → ~16B params', () => {
+  const m = parseHfConfig('test/bnb-8bit', { ...BASE, torch_dtype: 'float16', quantization_config: { load_in_8bit: true } }, 16e9);
+  assert.ok(m.totalParams > 14 && m.totalParams < 18, `totalParams ${m.totalParams}B`);
+});
+
 test('fp32 and int8 dtype paths preserved', () => {
   const fp32 = parseHfConfig('test/fp32', { ...BASE, torch_dtype: 'float32' }, 16e9);
   assert.ok(Math.abs(fp32.totalParams - 4) < 0.1, `fp32 ${fp32.totalParams}B ≠ 4B`);

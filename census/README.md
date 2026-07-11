@@ -10,7 +10,7 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 | Device | Memory | Biggest comfortable fit |
 |---|---|---|
 | M1 8GB | 8GB | ❌ none comfortably at ~4-bit |
-| M2 16GB | 16GB | **Gemma 4 e2b** (5.1B) — free 3.33GB, up to ~12K ctx |
+| M2 16GB | 16GB | **Gemma 4 e2b** (5.1B) — free 3.32GB, up to ~11K ctx |
 | M4 32GB | 32GB | **GLM-4.7-Flash** (30B) — free 7.13GB, up to ~17K ctx |
 | M5 Max 64GB | 64GB | **Qwen 3.6 35B-A3B** (35B) — free 37.32GB, up to ~262K ctx |
 | M4 Max 128GB | 128GB | **gpt-oss-120b** (117B) — free 58.41GB, up to ~131K ctx |
@@ -49,7 +49,7 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 
 ## Full data
 
-- [`census-v1.csv`](census-v1.csv) / [`census-v1.json`](census-v1.json) — every model × device × quant verdict with the full predicted breakdown (`predicted_total_to_run_gb` = weights + KV + runtime + reserve — what the verdict uses; `predicted_resident_weights_gb` = weights alone) and max context. Machine-readable; import it, chart it, cite it.
-- **Measurements are typed** (from [`fixtures/measured.json`](../fixtures/README.md), community PRs): `measurement_kind` says what was measured. `idle_resident` readings (e.g. oMLX `actual_size`) are a resident-weights **floor** — compare them to `predicted_resident_weights_gb`, not to the total; only `system_total_peak` is comparable to `predicted_total_to_run_gb`. An idle_resident value below the predicted total is expected, not an over-prediction. 9 measurement(s) so far.
+- [`census-v1.csv`](census-v1.csv) / [`census-v1.json`](census-v1.json) — every model × device × quant verdict with the full predicted breakdown (`predicted_total_to_run_gb` = weights + KV + runtime + reserve — what the verdict uses; `predicted_resident_weights_gb` = quantized weights **plus ~12% runtime weight overhead** (non-quantized parts, buffers) — the number resident-weights measurements should be compared against; `predicted_param_gb` = quantized weights alone) and max context. Machine-readable; import it, chart it, cite it.
+- **Measurements are typed** (from [`fixtures/measured.json`](../fixtures/README.md), community PRs): `measurement_kind` says what was measured. `idle_resident` readings (e.g. oMLX `actual_size`) are a resident-weights **floor** — compare them to `predicted_resident_weights_gb`, not to the total; only `system_total_peak` is comparable to `predicted_total_to_run_gb`. An idle_resident value below the predicted total is expected, not an over-prediction. Ledger holds 9 entries; 3 join this census (exact model+device+quant match required — the rest cover models/devices outside the catalog or carry unconfirmed attribution).
 
 All figures are estimates; real usage varies with runtime, driver and OS state. Verdicts: ✅ fits comfortably · ⚠️ tight · ❌ won't fit.

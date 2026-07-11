@@ -86,9 +86,10 @@ export const MODELS = [
     hiddenSize: 1536,
     maxContext: 131072,
     slidingWindow: 512,
-    slidingPattern: '5:1',
+    slidingPattern: '4:1', // layer_types 실측: sliding 28 : full 7 (google/gemma-4-E2B-it config.json — 구 '5:1'은 글로벌 6층 오계산, 2026-07-11 정정)
+    globalAttnLayers: 7,
     benchmarks: { GPQA: 0.3, 'MMLU-Pro': 0.68, 'SWE-Bench': null },
-    desc: 'Dense+PLE · 5.1B raw / 2.3B 유효 · 슬라이딩윈도우 512(5:1) · 최대 128K · 벤치 근사치',
+    desc: 'Dense+PLE · 5.1B raw / 2.3B 유효 · 슬라이딩윈도우 512(4:1) · 최대 128K · 벤치 근사치',
   },
   // === Gemma 4 E4B (Dense + PLE) — HF config.json ===
   {
@@ -105,6 +106,7 @@ export const MODELS = [
     maxContext: 131072,
     slidingWindow: 512,
     slidingPattern: '5:1',
+    globalAttnLayers: 7, // layer_types 실측: sliding 35 : full 7 (google/gemma-4-E4B-it config.json — 패턴 유도값과 일치, 명시 고정 2026-07-11)
     benchmarks: { GPQA: 0.586, 'MMLU-Pro': 0.694, 'SWE-Bench': null },
     desc: 'Dense+PLE · 8B raw / 4.5B 유효 · 슬라이딩윈도우 512(5:1) · 최대 128K',
   },
@@ -315,7 +317,7 @@ const _GPUS = [
   { name: 'A100 80GB', series: 'datacenter', vramGB: 80, bandwidthGBs: 1935, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/a100-80gb-datasheet-update-nvidia-us-1521051-r2-web.pdf', 'https://en.wikipedia.org/wiki/Ampere_(microarchitecture)'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/a100-80gb-datasheet-update-nvidia-us-1521051-r2-web.pdf', 'https://www.techpowerup.com/gpu-specs/a100-pcie-80-gb.c3821'] } }, // PCIe HBM2e 1.94TB/s
   { name: 'H100 80GB', series: 'datacenter', vramGB: 80, bandwidthGBs: 3350, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/h100/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'], bandwidthGBs: ['https://www.nvidia.com/en-us/data-center/h100/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'] } }, // SXM5 HBM3 3.35TB/s
   { name: 'H200 141GB', series: 'datacenter', vramGB: 141, bandwidthGBs: 4800, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/h200/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'], bandwidthGBs: ['https://www.nvidia.com/en-us/data-center/h200/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'] } }, // HBM3e 4.8TB/s
-  { name: 'B200', series: 'datacenter', vramGB: 192, bandwidthGBs: 8000, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/dgx-b200/', 'https://jarvislabs.ai/gpu/nvidia-b200'], bandwidthGBs: ['https://www.nvidia.com/en-us/data-center/dgx-b200/', 'https://jarvislabs.ai/gpu/nvidia-b200'] } }, // Blackwell HBM3e 8.0TB/s
+  { name: 'B200', series: 'datacenter', vramGB: 180, bandwidthGBs: 7700, status: 'VERIFIED', verifiedAt: '2026-07-11', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/dgx-b200/', 'https://lenovopress.lenovo.com/lp2226-thinksystem-nvidia-b200-180gb-1000w-gpu'], bandwidthGBs: ['https://www.nvidia.com/en-us/data-center/dgx-b200/'] } }, // Blackwell HBM3e — 출하 구성 180GB/7.7TB/s(DGX 1440GB÷8·Lenovo) 또는 186GB/8TB/s. 192GB는 GTC 발표치로 출하 스펙 아님(2026-07-11 이중검증 정정, 구 192/8000은 거짓-fits 방향 오류)
 ];
 // 검증 메타(이중트랙·검증일)를 전 행에 주입 — 데이터 무결성 테스트가 강제.
 export const GPUS = _GPUS.map((g) => ({ verifiedAt: GPU_VERIFIED_AT, tracks: GPU_TRACKS, ...g }));
@@ -813,7 +815,9 @@ export function parseHfConfig(id, raw, totalSize) {
     // 선-양자화 레포(MLX/AWQ/bnb): 저장 비트폭의 진실은 quantization(.bits) — torch_dtype은 원본 정밀도라
     // ÷2 과소계산 → 거짓 "fits" (issue #2). 합성 재현: 8bit 레포에 qbits 무시 시 params 절반 (test/parsehf.test.mjs).
     // 혼합 정밀도(일부 레이어 상위 bit)는 params 과대 방향으로만 틀림 — 보수적이라 허용.
-    const qbits = c.quantization?.bits ?? c.quantization_config?.bits;
+    const qc = c.quantization_config;
+    // bitsandbytes는 bits 필드 없이 load_in_4bit/8bit 불리언만 씀 — 누락 시 torch_dtype(2B) 경로로 ÷2~4 과소계산(거짓 fits)
+    const qbits = c.quantization?.bits ?? qc?.bits ?? (qc?.load_in_4bit ? 4 : qc?.load_in_8bit ? 8 : undefined);
     const dt = String(c.torch_dtype || '').toLowerCase();
     const dtypeBytes = qbits ? qbits / 8
       : dt.includes('float32') || dt.includes('fp32') ? 4 : dt.includes('fp8') || dt.includes('int8') ? 1 : 2;
