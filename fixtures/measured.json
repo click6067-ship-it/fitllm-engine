@@ -1,16 +1,16 @@
 [
   {
     "model": "Gemma 4 26b A4B",
-    "device": "16GB or 24GB Mac (unconfirmed)",
+    "device": "RTX 5060 Ti 16GB, Windows 11 (per reporter 2026-07-11; the 26.7 estimate was read off a 24GB Mac preset the reporter used as an approximation)",
     "quant": "4bit",
     "ctx": 32768,
     "kvBits": 16,
     "measuredPeakGB": 15.1,
     "measurementKind": "unknown",
-    "runtime": "unreported (original report left the runtime field blank)",
+    "runtime": "unreported (Windows box — MLX excluded; tool and which memory the 15.1 refers to, dedicated VRAM vs system RAM, both unknown)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/issues/1",
     "date": "2026-05-28",
-    "notes": "Original report (2026-05-28): title says 24GB, body says 16GB VRAM, measured peak 15.1 GB, FitLLM estimate 26.7 (wont fit). Reconstruction on the engine revision deployed that day reproduces used=26.71 exactly for BOTH 16GB and 24GB Macs at 4bit/32K, while a 128GB Mac produced 25.71 with a fits verdict — so the reported estimate can only have come from a 16-24GB Mac, using the built-in catalog entry (present since 2026-05-25; the site was Apple-only until GPU mode shipped 2026-06-04). A third-party follow-up (2026-07-10) attributed this measurement to an M5 Max 128GB via oMLX; that attribution is contradicted by the 26.7 figure itself and was mistakenly written into this entry on 2026-07-10 — reverted 2026-07-11. measurementKind=unknown: the 15.1 readings methodology is unverified and the original reporter has not confirmed. If the device was a 24GB Mac the model demonstrably runs there, making this a real small-Mac over-conservatism case (Apple reserve/overhead stack), tracked in issue #1 (reopened 2026-07-11).",
+    "notes": "Original report (2026-05-28): title said 24GB, body said 16GB VRAM, measured peak 15.1 GB, FitLLM estimate 26.7 (wont fit). Reconstruction on the engine revision deployed that day reproduces used=26.71 exactly for a 16GB or 24GB Mac preset at 4bit/32K (site was Apple-only until GPU mode shipped 2026-06-04). RESOLVED 2026-07-11 by the reporter: the machine was never a Mac — it is a Windows 11 box with an RTX 5060 Ti 16GB, and the 24GB Mac in the UI was the reporter's stand-in for it ('I approximated this with a 24gb Mac'). Consequences: (a) the 26.7-vs-15.1 headline is a cross-platform comparison — a Mac-preset total-footprint estimate vs a measurement on different hardware — and does not falsify the Mac verdict; (b) this entry is DISQUALIFIED as a small-Mac reserve calibration point (issue #8 tracker starts from zero candidates); (c) as a GPU data point it stays unusable until the runtime/tool and memory kind (VRAM vs system) are known. Audit trail: a third-party follow-up (2026-07-10) attributed this to an M5 Max 128GB via oMLX; contradicted by the 26.7 figure and reverted 2026-07-11.",
     "evidenceLevel": "community_unverified",
     "reporter": "itzpingcat"
   },
