@@ -1,7 +1,7 @@
 # FitLLM Engine
 
 [![npm](https://img.shields.io/npm/v/fitllm-engine?color=cb3837&label=npm)](https://www.npmjs.com/package/fitllm-engine)
-[![conformance](https://img.shields.io/badge/conformance_vectors-14%2F14-brightgreen)](vectors/fit-vectors-v1.json)
+[![conformance](https://img.shields.io/badge/conformance_vectors-15%2F15-brightgreen)](vectors/fit-vectors-v1.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![zero deps](https://img.shields.io/badge/dependencies-0-success)](package.json)
 
@@ -54,11 +54,12 @@ That assumes **every layer keeps a full-context KV cache with one uniform head s
 
 An 11× error flips the verdict: a naive calculator says Gemma 4 31B *won't fit* in 64 GB at long context, when it **fits comfortably**.
 
-### The four things they ignore
+### The five things they ignore
 1. **Sliding-window attention** (Gemma 2/3/4, gpt-oss): most layers only keep the last *N* tokens, so their KV stops growing. Only the global layers scale with full context.
 2. **Hybrid / linear attention** (Qwen 3.6, many 2026 models): linear-attention layers use a fixed-size recurrent state, not a growing KV cache.
 3. **MLA — Multi-head Latent Attention** (GLM-5.2, GLM-4.7-Flash, DeepSeek family): the cache is a single low-rank latent (`kv_lora_rank` + RoPE dims) shared across all heads — per-head "2 × heads × head_dim" formulas over-count by an order of magnitude. Verified against the DeepSeek-V2 paper (arXiv:2405.04434) and the official DeepSeek-V3 inference code.
 4. **Heterogeneous head dims + MoE**: global layers can use a different `head_dim` (Gemma 4: 512 vs 256). MoE keeps every expert in memory while activating only a few per token.
+5. **PLE — Per-Layer Embeddings** (Gemma 4 e2b/e4b): llama.cpp keeps the `per_layer_token_embd` tensor in **system RAM by default** regardless of `-ngl` (forcing it onto CUDA crashes for K-quant GGUFs; only non-K quants can opt in — ggml-org/llama.cpp#14430), so only the non-PLE weights need VRAM. Counting all 5.1B params against a GPU over-predicts e2b's resident weights by ~1.9× and flips small-card verdicts. On Apple Silicon system RAM *is* accelerator memory, so total params stay correct there. (Caveats: vLLM loads PLE fully onto the GPU — this engine's GPU math is anchored to the default GGUF/llama.cpp behavior its quant tiers come from; the residency measurements are from the E-series PLE stack, and a direct measurement on a Gemma 4 GGUF is welcome in issue #7.)
 
 This engine models each layer type separately, verified against official HuggingFace `config.json` files.
 
@@ -108,7 +109,7 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 ## Conformance vectors
 
-[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **14 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
+[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **15 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
 
 **Why this matters:** the formulas are easy to copy; a verified answer key is not. If you port this engine to Python, Rust or Go, you don't become an untrusted fork — pass the vectors and you're a **conformant implementation of the same standard**. Port the engine, keep the vectors.
 

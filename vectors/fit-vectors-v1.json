@@ -1,27 +1,170 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "generated": "2026-07-09",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
-    { "id": "gemma31b-kv-full-bf16", "kind": "kv_total_bytes", "model": "Gemma 4 31b", "ctx": 262144, "kvBits": 16, "expect": 22313697280,
-      "note": "global 10L*2*4h*512d*2B*262144 + local 50L*2*16h*256d*2B*1024 = 20.78 GiB (public anchor)" },
-    { "id": "gemma31b-kv-131k-q8", "kind": "kv_total_bytes", "model": "Gemma 4 31b", "ctx": 131072, "kvBits": 8, "expect": 5788139520 },
-    { "id": "gemma12b-kv-full-bf16", "kind": "kv_total_bytes", "model": "Gemma 4 12b", "ctx": 262144, "kvBits": 16, "expect": 4630511616,
-      "note": "heterogeneous head_dim: global 8L*2*1h*512d + sliding 40L*2*8h*256d (window 1024)" },
-    { "id": "qwen27b-kv-131k-q8", "kind": "kv_total_bytes", "model": "Qwen 3.6 27B", "ctx": 131072, "kvBits": 8, "expect": 4294967296,
-      "note": "hybrid linear: only 16/64 full-attention layers carry KV" },
-    { "id": "glm47-mla-per-token", "kind": "kv_per_token_bytes", "model": "GLM-4.7-Flash", "kvBits": 16, "expect": 54144,
-      "note": "MLA: (kv_lora_rank 512 + rope 64) * 2B * 47L — single shared latent, NOT per-head K/V" },
-    { "id": "glm52-mla-per-token", "kind": "kv_per_token_bytes", "model": "GLM-5.2", "kvBits": 16, "expect": 89856 },
-    { "id": "gptoss20b-marginal-past-window", "kind": "kv_per_token_bytes", "model": "gpt-oss-20b", "kvBits": 16, "ctx": 200000, "expect": 24576,
-      "note": "past sliding window(128) only 12/24 full-attn layers grow: 2*8h*64d*2B*12L" },
-    { "id": "agentworld-kv-10k", "kind": "kv_total_bytes", "model": "Qwen-AgentWorld-35B-A3B", "ctx": 10000, "kvBits": 16, "expect": 204800000,
-      "note": "hybrid: 10/40 full-attn layers only (30 linear carry no growing KV)" },
-    { "id": "v-gemma31b-64gb-8bit-8k", "kind": "verdict", "model": "Gemma 4 31b", "device": { "type": "mac", "ram": 64 }, "ctx": 8192, "weightBpw": 8, "kvBits": 16, "expect": "yes" },
-    { "id": "v-gemma31b-64gb-bf16-full", "kind": "verdict", "model": "Gemma 4 31b", "device": { "type": "mac", "ram": 64 }, "ctx": 262144, "weightBpw": 16, "kvBits": 16, "expect": "no" },
-    { "id": "v-glm52-mac512-4bit", "kind": "verdict", "model": "GLM-5.2", "device": { "type": "mac", "ram": 512 }, "ctx": 8192, "weightBpw": 4, "kvBits": 16, "expect": "yes" },
-    { "id": "v-glm52-mac512-8bit", "kind": "verdict", "model": "GLM-5.2", "device": { "type": "mac", "ram": 512 }, "ctx": 8192, "weightBpw": 8, "kvBits": 16, "expect": "no" },
-    { "id": "v-gptoss120b-rtxpro6000-q4-32k", "kind": "verdict", "model": "gpt-oss-120b", "device": { "type": "gpu", "gpu": "RTX PRO 6000 Blackwell", "env": "linux-headless" }, "ctx": 32768, "weightBpw": 4.8944, "kvBits": 16, "expect": "yes" },
-    { "id": "v-llama31-3060-8gb-q4-8k", "kind": "verdict", "model": "Llama-3.1-8B-Instruct", "device": { "type": "gpu", "gpu": "RTX 3060 8GB", "env": "windows-display" }, "ctx": 8192, "weightBpw": 4.8944, "kvBits": 16, "expect": "no" }
+    {
+      "id": "gemma31b-kv-full-bf16",
+      "kind": "kv_total_bytes",
+      "model": "Gemma 4 31b",
+      "ctx": 262144,
+      "kvBits": 16,
+      "expect": 22313697280,
+      "note": "global 10L*2*4h*512d*2B*262144 + local 50L*2*16h*256d*2B*1024 = 20.78 GiB (public anchor)"
+    },
+    {
+      "id": "gemma31b-kv-131k-q8",
+      "kind": "kv_total_bytes",
+      "model": "Gemma 4 31b",
+      "ctx": 131072,
+      "kvBits": 8,
+      "expect": 5788139520
+    },
+    {
+      "id": "gemma12b-kv-full-bf16",
+      "kind": "kv_total_bytes",
+      "model": "Gemma 4 12b",
+      "ctx": 262144,
+      "kvBits": 16,
+      "expect": 4630511616,
+      "note": "heterogeneous head_dim: global 8L*2*1h*512d + sliding 40L*2*8h*256d (window 1024)"
+    },
+    {
+      "id": "qwen27b-kv-131k-q8",
+      "kind": "kv_total_bytes",
+      "model": "Qwen 3.6 27B",
+      "ctx": 131072,
+      "kvBits": 8,
+      "expect": 4294967296,
+      "note": "hybrid linear: only 16/64 full-attention layers carry KV"
+    },
+    {
+      "id": "glm47-mla-per-token",
+      "kind": "kv_per_token_bytes",
+      "model": "GLM-4.7-Flash",
+      "kvBits": 16,
+      "expect": 54144,
+      "note": "MLA: (kv_lora_rank 512 + rope 64) * 2B * 47L — single shared latent, NOT per-head K/V"
+    },
+    {
+      "id": "glm52-mla-per-token",
+      "kind": "kv_per_token_bytes",
+      "model": "GLM-5.2",
+      "kvBits": 16,
+      "expect": 89856
+    },
+    {
+      "id": "gptoss20b-marginal-past-window",
+      "kind": "kv_per_token_bytes",
+      "model": "gpt-oss-20b",
+      "kvBits": 16,
+      "ctx": 200000,
+      "expect": 24576,
+      "note": "past sliding window(128) only 12/24 full-attn layers grow: 2*8h*64d*2B*12L"
+    },
+    {
+      "id": "agentworld-kv-10k",
+      "kind": "kv_total_bytes",
+      "model": "Qwen-AgentWorld-35B-A3B",
+      "ctx": 10000,
+      "kvBits": 16,
+      "expect": 204800000,
+      "note": "hybrid: 10/40 full-attn layers only (30 linear carry no growing KV)"
+    },
+    {
+      "id": "v-gemma31b-64gb-8bit-8k",
+      "kind": "verdict",
+      "model": "Gemma 4 31b",
+      "device": {
+        "type": "mac",
+        "ram": 64
+      },
+      "ctx": 8192,
+      "weightBpw": 8,
+      "kvBits": 16,
+      "expect": "yes"
+    },
+    {
+      "id": "v-gemma31b-64gb-bf16-full",
+      "kind": "verdict",
+      "model": "Gemma 4 31b",
+      "device": {
+        "type": "mac",
+        "ram": 64
+      },
+      "ctx": 262144,
+      "weightBpw": 16,
+      "kvBits": 16,
+      "expect": "no"
+    },
+    {
+      "id": "v-glm52-mac512-4bit",
+      "kind": "verdict",
+      "model": "GLM-5.2",
+      "device": {
+        "type": "mac",
+        "ram": 512
+      },
+      "ctx": 8192,
+      "weightBpw": 4,
+      "kvBits": 16,
+      "expect": "yes"
+    },
+    {
+      "id": "v-glm52-mac512-8bit",
+      "kind": "verdict",
+      "model": "GLM-5.2",
+      "device": {
+        "type": "mac",
+        "ram": 512
+      },
+      "ctx": 8192,
+      "weightBpw": 8,
+      "kvBits": 16,
+      "expect": "no"
+    },
+    {
+      "id": "v-gptoss120b-rtxpro6000-q4-32k",
+      "kind": "verdict",
+      "model": "gpt-oss-120b",
+      "device": {
+        "type": "gpu",
+        "gpu": "RTX PRO 6000 Blackwell",
+        "env": "linux-headless"
+      },
+      "ctx": 32768,
+      "weightBpw": 4.8944,
+      "kvBits": 16,
+      "expect": "yes"
+    },
+    {
+      "id": "v-llama31-3060-8gb-q4-8k",
+      "kind": "verdict",
+      "model": "Llama-3.1-8B-Instruct",
+      "device": {
+        "type": "gpu",
+        "gpu": "RTX 3060 8GB",
+        "env": "windows-display"
+      },
+      "ctx": 8192,
+      "weightBpw": 4.8944,
+      "kvBits": 16,
+      "expect": "no"
+    },
+    {
+      "id": "v-e2b-ple-fp16-3060-8gb-headless",
+      "kind": "verdict",
+      "model": "Gemma 4 e2b",
+      "device": {
+        "type": "gpu",
+        "gpu": "RTX 3060 8GB",
+        "env": "linux-headless"
+      },
+      "ctx": 8192,
+      "weightBpw": 16,
+      "kvBits": 16,
+      "expect": "yes",
+      "note": "PLE residency: GPU weights = (5.1-2.349)B x 2B = 5.12 GB resident; 2.349B PLE (262144x256x35, config.json) lives in system RAM (llama.cpp #14430). Without PLE split this reads 'no' (12.96 GB)."
+    }
   ]
 }

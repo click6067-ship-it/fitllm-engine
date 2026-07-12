@@ -79,6 +79,10 @@ export const MODELS = [
     tags: ['dense', 'ple'],
     totalParams: 5.1,
     activeParams: 2.3,
+    // PLE 텐서 = vocab_size_per_layer_input 262144 × hidden_size_per_layer_input 256 × 35L = 2,348,810,240
+    // 출처: google/gemma-4-E2B-it config.json(text_config) + GGUF per_layer_token_embd 실측 산술 일치
+    // (unsloth GGUF discussion: 1,837MiB = 262144×256×35 × Q6_K 6.5625bpw 정확 재현). GPU 상주 제외 근거는 residentParamsB 참조.
+    pleParams: 2.349,
     layerCount: 35,
     kvHeads: 1,
     kvHeadDim: 256,
@@ -98,6 +102,9 @@ export const MODELS = [
     tags: ['dense', 'ple'],
     totalParams: 8,
     activeParams: 4.5,
+    // PLE 텐서 = 262144 × 256 × 42L = 2,818,572,288 — google/gemma-4-E4B-it config.json(text_config).
+    // 공식 유효치 역산 정합: raw 7,996.2M − PLE 2,818.6M − token_embd 671.1M ≈ 4,506M = "4.5B effective" (모델카드·HF 블로그)
+    pleParams: 2.819,
     layerCount: 42,
     kvHeads: 2,
     kvHeadDim: 256,
@@ -467,10 +474,30 @@ const quantAdjust = {
   'Gemma 4 26b A4B': { 16: 1.01, 8: 1.1, 4: 1.2 }, // 실측 1.012 / 1.096 / 1.203
 };
 
-export function calcParamMemory(model, bits) {
+// PLE(Per-Layer Embeddings, Gemma 4 e2b/e4b) 상주 분리 — 이슈 #7.
+// llama.cpp는 *기본값으로* per_layer_token_embd를 시스템 RAM에 상주시킴(-ngl 무관, ggml-org/llama.cpp#14430)
+// → GPU VRAM에는 non-PLE(totalParams−pleParams)만 필요. 단 절대 불가는 아님: K-quant GGUF는 CUDA 강제
+// 배치(-ot)가 getrows 미지원으로 크래시, non-K(Q4_1/Q5_1 등)만 opt-in 오프로드 가능(unsloth GGUF discussion).
+// 실측 근거는 E-시리즈 PLE 스택(전세대 구현 + unsloth per_layer_token_embd 1,837MiB RAM 실측) —
+// gemma-4 파일 직접 실측은 미확보(verifier 2026-07-12, 이슈 #7에 measurement 요청).
+// Apple 통합메모리는 시스템 RAM = 액셀러레이터 메모리(같은 풀) → totalParams 유지.
+// ⚠️ vLLM은 PLE를 GPU에 통째 로드(vLLM gemma4 model: VocabParallelEmbedding, CPU 캐싱 없음 — VERIFIED) —
+// 엔진 GPU 모드의 런타임 앵커는 GGUF/llama.cpp 기본 동작(GPU_QUANTS가 GGUF 티어)이므로 제외가 정본.
+// 가드: pleParams ≥ totalParams는 데이터 오류(parseHfConfig는 임의 공개 config를 받음) —
+// 음수 상주가 거짓 "fits"를 만들지 않게 무시(음수 ctx 가드와 같은 공개-입력 계열).
+// simulate의 pleOffloadGB도 같은 가드를 타야 함(가드된 판정 + 비가드 표시값 모순 방지 — Codex 리뷰).
+function guardedPleParamsB(model) {
+  return model.pleParams && model.pleParams < model.totalParams ? model.pleParams : 0;
+}
+function residentParamsB(model, device) {
+  const ple = guardedPleParamsB(model);
+  return device && device.type === 'gpu' && ple ? model.totalParams - ple : model.totalParams;
+}
+
+export function calcParamMemory(model, bits, device) {
   if (!model.totalParams) return { totalGB: 0, activeGB: null };
   const bpe = bits / 8;
-  const baseTotalGB = (model.totalParams * 1e9 * bpe) / 1024 ** 3;
+  const baseTotalGB = (residentParamsB(model, device) * 1e9 * bpe) / 1024 ** 3;
   const baseActiveGB = model.activeParams ? (model.activeParams * 1e9 * bpe) / 1024 ** 3 : null;
   // quantAdjust는 정수 bits(Apple NVFP4/MXFP8 4/8/16) 보정용. GGUF는 weightBpw가 소수(4.8944 등)라
   // 매치 안 돼 multiplier=1.0 — 이는 *의도*다: GGUF bpw는 블록 스케일 등 실측 오버헤드를 이미 포함하므로
@@ -485,7 +512,7 @@ export function calcParamMemory(model, bits) {
 export function calcRuntimeOverhead(model, ctx, bitsOrQuant, device) {
   ctx = Math.max(0, Math.floor(Number(ctx)) || 0); // 음수/NaN 가드 (활성화 버퍼 ctx 비례)
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight↔KV 분리(GGUF: KV padding이 weight bpw 오염 금지)
-  const paramMem = calcParamMemory(model, weightBpw).totalGB;
+  const paramMem = calcParamMemory(model, weightBpw, device).totalGB; // PLE: GPU면 상주분만(오버헤드도 상주 가중치 비례)
   const kvMem = calcKVCache(model, ctx, kvBits).totalGB;
   const paramOverhead = paramMem * 0.12;
   const kvOverhead = kvMem * 0.15;
@@ -509,7 +536,7 @@ export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
   const wbpe = weightBpw / 8; // 파라미터(weight) 바이트
   const kbpe = kvBits / 8;    // KV 원소 바이트(GPU 기본 F16=16)
   const quantMultiplier = (quantAdjust[model.name] && quantAdjust[model.name][weightBpw]) || 1.0;
-  const paramBytes = model.totalParams * 1e9 * wbpe * quantMultiplier;
+  const paramBytes = residentParamsB(model, device) * 1e9 * wbpe * quantMultiplier; // PLE: GPU면 상주분만
   const budget =
     device.memoryGB * 1024 ** 3 * (1 - device.headroomRatio) - paramBytes - paramBytes * 0.12 - device.reserveGB * 1024 ** 3;
   if (budget <= 0) return 0;
@@ -551,8 +578,12 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   const device = toDevice(deviceOrRam);              // number(ram)→appleDevice / device 객체→그대로
   ctx = Math.min(Math.max(1, Math.floor(Number(ctx)) || 1), model.maxContext || Infinity); // 음수/NaN ctx 가드 — 음수 KV가 판정을 fits로 뒤집는 것 방지 (2026-07-11 감사)
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight(파라미터) ↔ KV 비트 분리
-  const param = calcParamMemory(model, weightBpw).totalGB;
+  const param = calcParamMemory(model, weightBpw, device).totalGB; // PLE 모델은 GPU에서 상주분만 (residentParamsB)
   const kv = calcKVCache(model, ctx, kvBits).totalGB;
+  // PLE가 시스템 RAM에 스트리밍되는 *근사* 크기 — 같은 bpw 가정. 실제 GGUF는 PLE를 상위 티어(Q6_K 등)로
+  // 별도 양자화하는 경우가 있어 실호스트 RAM은 수백 MiB 더 클 수 있음(unsloth 실측: Q4 파일의 PLE가 Q6_K).
+  // UI 각주용 정보값이며 used/verdict에는 불포함(GPU 모드는 시스템 RAM을 모델링하지 않음).
+  const pleOffloadGB = device.type === 'gpu' ? (guardedPleParamsB(model) * 1e9 * (weightBpw / 8)) / 1024 ** 3 : 0;
 
   // 단일 reserve 방정식(Codex council): used = param + kv + rtDyn + reserve. reserve는 1회만.
   // 오버헤드 공식의 단일 진실원 = calcRuntimeOverhead (KvDeepDive와 같은 소스 — 인라인 중복 금지, 드리프트 방지)
@@ -588,6 +619,7 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
     rtDyn,
     reserve,
     system: os + rt, // 비전공자용 묶음
+    pleOffloadGB, // >0이면 PLE 가중치가 시스템 RAM 상주(GPU/llama.cpp 경로) — UI 각주용
     used,
     free,
     headroom,
@@ -606,7 +638,7 @@ export function simulateStack(entries, deviceOrRam) {
   const parts = entries.map(({ model, ctx, weightBpw, kvBits }) => {
     const c = Math.min(ctx, model.maxContext);
     const kb = kvBits ?? 16;
-    const param = calcParamMemory(model, weightBpw).totalGB;
+    const param = calcParamMemory(model, weightBpw, device).totalGB;
     const kv = calcKVCache(model, c, kb).totalGB;
     const ov = calcRuntimeOverhead(model, c, { weightBpw, kvBits: kb }, device);
     const rtDyn = ov.paramOverheadGB + ov.kvOverheadGB + ov.activationOverheadGB;
@@ -810,6 +842,12 @@ export function parseHfConfig(id, raw, totalSize) {
   const expertsPerToken = c.num_experts_per_tok;
   const isMoe = !!numExperts;
 
+  // PLE(Per-Layer Embeddings, Gemma e2b/e4b류) 감지 — config에 두 필드가 있으면 텐서 크기 결정론 산출.
+  // GPU fit에서 이 분량은 시스템 RAM 상주(residentParamsB 참조). 카탈로그의 손계산 값과 같은 식.
+  const pleParams = c.vocab_size_per_layer_input && c.hidden_size_per_layer_input
+    ? (c.vocab_size_per_layer_input * c.hidden_size_per_layer_input * layerCount) / 1e9
+    : undefined;
+
   // MLA(Multi-head Latent Attention) 감지 — kv_lora_rank 있으면 압축 KV 경로(GLM-5.2/GLM-4.7-Flash 등).
   // ⚠ DeepSeek-V4류(kv_lora_rank 부재 + MQA/compressor)는 MLA 아님 → 표준 경로 유지.
   const mlaKvLoraRank = c.kv_lora_rank || undefined;
@@ -851,6 +889,7 @@ export function parseHfConfig(id, raw, totalSize) {
     expertsPerToken,
     mlaKvLoraRank,
     mlaRopeDim,
+    pleParams: pleParams ? +pleParams.toFixed(3) : undefined,
     maxContext: c.max_position_embeddings || 131072,
     // MLA가 우선 경로 → MLA 모델엔 sliding 필드 미설정(계산은 MLA 먼저 타지만 dead data 방지, correct-by-construction)
     slidingWindow: mlaKvLoraRank ? undefined : sliding || undefined,

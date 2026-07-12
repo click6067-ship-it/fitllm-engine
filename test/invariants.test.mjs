@@ -72,3 +72,60 @@ test('census: predicted_total_to_run_gb == used_gb, measured rows carry measurem
     }
   }
 });
+
+// ── PLE(Per-Layer Embeddings) 상주 분리 — 이슈 #7 ──────────────────────────
+// 기대값은 전부 손계산: PLE = vocab_size_per_layer_input 262144 × hidden_size_per_layer_input 256 × L
+// (e2b 35L = 2,348,810,240 → 2.349B / e4b 42L = 2,818,572,288 → 2.819B, config.json 필드 산술)
+test('PLE: GPU weights = (totalParams - pleParams) × bpw — hand-derived literals', async () => {
+  const { calcParamMemory } = await import('../engine.js');
+  const e2b = LOCAL_MODELS.find((m) => m.name === 'Gemma 4 e2b');
+  const e4b = LOCAL_MODELS.find((m) => m.name === 'Gemma 4 e4b');
+  const gpu = { type: 'gpu' };
+  // e2b Q4_K_M: (5.1-2.349)e9 × 4.8944/8 ÷ 1024³ = 1,683,181,800/1024³... 손계산 1.5675 GB
+  assert.ok(Math.abs(calcParamMemory(e2b, 4.8944, gpu).totalGB - 1.5675) < 5e-4, 'e2b GPU Q4');
+  // e2b FP16: 2.751e9 × 2 ÷ 1024³ = 5.1241 GB (구값 9.499 — 5.1e9×2×1.0 — 대비 4.37 GB 감소)
+  assert.ok(Math.abs(calcParamMemory(e2b, 16, gpu).totalGB - 5.1241) < 5e-4, 'e2b GPU FP16');
+  // e4b Q4_K_M: (8-2.819)e9 × 0.6118 ÷ 1024³ = 2.9520 GB
+  assert.ok(Math.abs(calcParamMemory(e4b, 4.8944, gpu).totalGB - 2.9520) < 5e-4, 'e4b GPU Q4');
+});
+
+test('PLE: Apple unified memory path unchanged (same pool — totalParams stays)', async () => {
+  const { calcParamMemory } = await import('../engine.js');
+  const e2b = LOCAL_MODELS.find((m) => m.name === 'Gemma 4 e2b');
+  // 회귀 고정: 5.1e9 × 0.5 × quantAdjust 1.39 ÷ 1024³ = 3.3011 GB (변경 전과 동일해야 함)
+  assert.ok(Math.abs(calcParamMemory(e2b, 4).totalGB - 3.3011) < 5e-4, 'e2b Mac 4bit param drifted');
+  const s = simulate(e2b, 16, 8192, { weightBpw: 4, kvBits: 16 });
+  assert.ok(Math.abs(s.used - 13.0216) < 5e-3, `e2b mac16 used drifted: ${s.used}`);
+  assert.equal(s.pleOffloadGB, 0, 'pleOffloadGB must be 0 on Apple');
+});
+
+test('PLE: verdict flip — e2b FP16 on RTX 3060 8GB (linux-headless) no→yes', () => {
+  const g = GPUS.find((x) => x.name === 'RTX 3060 8GB');
+  const s = simulate(LOCAL_MODELS.find((m) => m.name === 'Gemma 4 e2b'), gpuDevice(g, 'linux-headless'), 8192, { weightBpw: 16, kvBits: 16 });
+  assert.equal(s.verdict, 'yes', `expected yes, got ${s.verdict} (used ${s.used})`);
+  // pleOffloadGB 정보값: 2.349e9 × 2 ÷ 1024³ = 4.3754 GB가 시스템 RAM으로
+  assert.ok(Math.abs(s.pleOffloadGB - 4.3754) < 5e-4);
+  // 비-PLE 모델은 GPU에서도 0
+  const s2 = simulate(LOCAL_MODELS.find((m) => m.name === 'Gemma 4 12b'), gpuDevice(g, 'linux-headless'), 8192, { weightBpw: 4.8944, kvBits: 16 });
+  assert.equal(s2.pleOffloadGB, 0);
+});
+
+test('PLE: parseHfConfig detects vocab_size_per_layer_input × hidden_size_per_layer_input × L', async () => {
+  const { parseHfConfig } = await import('../engine.js');
+  const cfg = { text_config: { num_hidden_layers: 35, num_attention_heads: 8, num_key_value_heads: 1, head_dim: 256, hidden_size: 1536, vocab_size_per_layer_input: 262144, hidden_size_per_layer_input: 256, max_position_embeddings: 131072, sliding_window: 512, layer_types: Array.from({ length: 35 }, (_, i) => ((i + 1) % 5 === 0 ? 'full_attention' : 'sliding_attention')) } };
+  const m = parseHfConfig('google/gemma-4-E2B-it', cfg, 10246356102); // bf16 2B × 5,123,178,051
+  assert.equal(m.pleParams, 2.349); // 262144×256×35/1e9 = 2.34881 → toFixed(3)
+  const plain = parseHfConfig('meta-llama/Llama-3.1-8B', { num_hidden_layers: 32, num_attention_heads: 32, hidden_size: 4096 }, 16060522496);
+  assert.equal(plain.pleParams, undefined);
+});
+
+test('PLE guard: pleParams >= totalParams (broken/hostile config) cannot produce negative resident weights', async () => {
+  const { calcParamMemory } = await import('../engine.js');
+  const evil = { name: 'evil', totalParams: 5, pleParams: 99, layerCount: 10, kvHeads: 1, kvHeadDim: 64, attnHeads: 8, hiddenSize: 512, maxContext: 8192 };
+  const gb = calcParamMemory(evil, 16, { type: 'gpu' }).totalGB;
+  // 가드 작동 = pleParams 무시 → 전체 5B × 2B = 9.3132 GB (음수/0 아님)
+  assert.ok(Math.abs(gb - 9.3132) < 5e-4, `expected full-weight fallback, got ${gb}`);
+  // 표시값도 같은 가드: 가드된 판정 + 비가드 pleOffloadGB 모순 금지 (Codex 리뷰 minor)
+  const s = simulate(evil, gpuDevice(GPUS.find((g) => g.name === 'RTX 3060 8GB'), 'linux-headless'), 4096, { weightBpw: 16, kvBits: 16 });
+  assert.equal(s.pleOffloadGB, 0, 'guarded model must not report PLE offload');
+});
