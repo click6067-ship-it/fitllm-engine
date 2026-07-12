@@ -1,0 +1,16 @@
+# 공개 npm 패키지의 계약(CLI exit code·conformance vectors·불변식)을 push/PR마다 강제.
+# 2026-07-12 자율 감사 minor 지적 후속 — v2에만 있던 게이트를 엔진 레포에도.
+name: ci
+on:
+  push:
+    branches: [master]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test # node --test test/ (invariants·CLI·parseHfConfig) + vectors/run.mjs (conformance 14) — 커밋된 census 정합성은 invariants가 검증

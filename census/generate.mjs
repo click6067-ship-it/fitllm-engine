@@ -40,6 +40,7 @@ for (const m of LOCAL_MODELS) {
         measured_ctx: meas ? meas.ctx : null,
         measurement_match: meas ? (meas.ctx === ctx ? 'same_ctx' : 'different_ctx') : null,
         measured_unit: meas ? (meas.unit || null) : null,
+        measured_evidence_level: meas ? (meas.evidenceLevel || 'community_unverified') : null, // 제보=주장 원칙 — 검증 등급을 소비자에게 그대로 노출
         measured_source: meas ? meas.source : null,
       });
     }

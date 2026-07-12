@@ -54,6 +54,7 @@ test('fixtures/measured.json: every entry typed and schema-conformant', () => {
     }
     assert.ok(KINDS.includes(e.measurementKind), `${e.model}: bad measurementKind ${e.measurementKind}`);
     if (e.unit != null) assert.ok(['GiB', 'GB'].includes(e.unit), `${e.model}: bad unit ${e.unit}`);
+    if (e.evidenceLevel != null) assert.ok(['maintainer_verified', 'community_unverified'].includes(e.evidenceLevel), `${e.model}: bad evidenceLevel`);
     assert.ok(e.measuredPeakGB > 0);
     assert.match(e.date, /^\d{4}-\d{2}-\d{2}$/);
     assert.match(e.source, /^https:\/\//);

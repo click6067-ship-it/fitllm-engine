@@ -10,7 +10,9 @@
     "runtime": "unreported (original report left the runtime field blank)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/issues/1",
     "date": "2026-05-28",
-    "notes": "Original report (2026-05-28): title says 24GB, body says 16GB VRAM, measured peak 15.1 GB, FitLLM estimate 26.7 (wont fit). Reconstruction on the engine revision deployed that day reproduces used=26.71 exactly for BOTH 16GB and 24GB Macs at 4bit/32K, while a 128GB Mac produced 25.71 with a fits verdict — so the reported estimate can only have come from a 16-24GB Mac, using the built-in catalog entry (present since 2026-05-25; the site was Apple-only until GPU mode shipped 2026-06-04). A third-party follow-up (2026-07-10) attributed this measurement to an M5 Max 128GB via oMLX; that attribution is contradicted by the 26.7 figure itself and was mistakenly written into this entry on 2026-07-10 — reverted 2026-07-11. measurementKind=unknown: the 15.1 readings methodology is unverified and the original reporter has not confirmed. If the device was a 24GB Mac the model demonstrably runs there, making this a real small-Mac over-conservatism case (Apple reserve/overhead stack), tracked in issue #1 (reopened 2026-07-11)."
+    "notes": "Original report (2026-05-28): title says 24GB, body says 16GB VRAM, measured peak 15.1 GB, FitLLM estimate 26.7 (wont fit). Reconstruction on the engine revision deployed that day reproduces used=26.71 exactly for BOTH 16GB and 24GB Macs at 4bit/32K, while a 128GB Mac produced 25.71 with a fits verdict — so the reported estimate can only have come from a 16-24GB Mac, using the built-in catalog entry (present since 2026-05-25; the site was Apple-only until GPU mode shipped 2026-06-04). A third-party follow-up (2026-07-10) attributed this measurement to an M5 Max 128GB via oMLX; that attribution is contradicted by the 26.7 figure itself and was mistakenly written into this entry on 2026-07-10 — reverted 2026-07-11. measurementKind=unknown: the 15.1 readings methodology is unverified and the original reporter has not confirmed. If the device was a 24GB Mac the model demonstrably runs there, making this a real small-Mac over-conservatism case (Apple reserve/overhead stack), tracked in issue #1 (reopened 2026-07-11).",
+    "evidenceLevel": "community_unverified",
+    "reporter": "itzpingcat"
   },
   {
     "model": "Qwen3-Coder-30B-A3B-Instruct-8bit",
@@ -25,7 +27,9 @@
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/issues/2",
     "date": "2026-07-09",
-    "notes": "Measured on M5 Max 128GB via the oMLX fork's /engine/loaded endpoint (actual resident bytes) — the same metric issue #2 used. Source figure 30.4 GiB is taken from the issue #2 table; not re-measured this session because the model was not resident at measurement time. oMLX reports estimated_size 31.72 GiB for the full 8-bit MoE weights, so 30.4 resident reflects dFlash SSD expert offload (active experts only). ctx=32768 and kvBits=16 are the oMLX defaults (max_context_window global default; unquantized fp16 KV) — the Coder was not loaded this session so its per-model ctx/KV settings were not directly re-read, but the 30.4 figure is weight-residency-dominated and effectively ctx-independent. Issue #2 is closed (parseHfConfig bit-width fix landed)."
+    "notes": "Measured on M5 Max 128GB via the oMLX fork's /engine/loaded endpoint (actual resident bytes) — the same metric issue #2 used. Source figure 30.4 GiB is taken from the issue #2 table; not re-measured this session because the model was not resident at measurement time. oMLX reports estimated_size 31.72 GiB for the full 8-bit MoE weights, so 30.4 resident reflects dFlash SSD expert offload (active experts only). ctx=32768 and kvBits=16 are the oMLX defaults (max_context_window global default; unquantized fp16 KV) — the Coder was not loaded this session so its per-model ctx/KV settings were not directly re-read, but the 30.4 figure is weight-residency-dominated and effectively ctx-independent. Issue #2 is closed (parseHfConfig bit-width fix landed).",
+    "evidenceLevel": "community_unverified",
+    "reporter": "gilbert-barajas"
   },
   {
     "model": "Qwen3.6-27B-4bit",
@@ -40,7 +44,9 @@
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/issues/2",
     "date": "2026-07-09",
-    "notes": "Measured live this session from oMLX /admin/api/models -> Qwen3.6-27B-4bit.actual_size = 16,457,805,464 bytes = 15.33 GiB (oMLX's own formatted label). This is oMLX's per-model resident-bytes field — identical to what the fork's /engine/loaded endpoint reports (commit 373d09b: memory_bytes = actual_size). config_model_type=qwen3_5 (Gated-DeltaNet / linear-attention hybrid), so the recurrent state is ctx-independent and resident memory does not scale with context length — the linear-attention calibration datapoint issue #2 asked for. ctx=32768 = oMLX global default max_context_window (per-model setting null -> inherits default, omlx/server.py:244 + model_settings.py:38). kvBits=16 from the loaded engine's settings (turboquant_kv_enabled=false -> unquantized fp16 KV). Idle measurement (no active generation); excludes generation-time activation growth, so treat as floor not peak-during-gen. Reported in GiB to match issue #2's convention (decimal-GB equivalent: 16.46). NOTE: this is the 4-bit variant — the only Qwen3.6-27B resident at measurement time; the oQ8-mtp (8-bit) variant was registered but NOT loaded, so no number is reported for it. The source URL is the fork PR and resolves once opened; repoint to the upstream PR URL if preferred."
+    "notes": "Measured live this session from oMLX /admin/api/models -> Qwen3.6-27B-4bit.actual_size = 16,457,805,464 bytes = 15.33 GiB (oMLX's own formatted label). This is oMLX's per-model resident-bytes field — identical to what the fork's /engine/loaded endpoint reports (commit 373d09b: memory_bytes = actual_size). config_model_type=qwen3_5 (Gated-DeltaNet / linear-attention hybrid), so the recurrent state is ctx-independent and resident memory does not scale with context length — the linear-attention calibration datapoint issue #2 asked for. ctx=32768 = oMLX global default max_context_window (per-model setting null -> inherits default, omlx/server.py:244 + model_settings.py:38). kvBits=16 from the loaded engine's settings (turboquant_kv_enabled=false -> unquantized fp16 KV). Idle measurement (no active generation); excludes generation-time activation growth, so treat as floor not peak-during-gen. Reported in GiB to match issue #2's convention (decimal-GB equivalent: 16.46). NOTE: this is the 4-bit variant — the only Qwen3.6-27B resident at measurement time; the oQ8-mtp (8-bit) variant was registered but NOT loaded, so no number is reported for it. The source URL is the fork PR and resolves once opened; repoint to the upstream PR URL if preferred.",
+    "evidenceLevel": "community_unverified",
+    "reporter": "gilbert-barajas"
   },
   {
     "model": "Qwen 3.6 27B",
@@ -55,7 +61,9 @@
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
-    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 16,474,582,728 B = 15.34 GiB (16.47 GB decimal), M5 Max 128GB. config_model_type=qwen3_5. qwen3_5 Gated-DeltaNet linear-attention hybrid; recurrent state ctx-independent. Reproduces PR#4's 15.33. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures."
+    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 16,474,582,728 B = 15.34 GiB (16.47 GB decimal), M5 Max 128GB. config_model_type=qwen3_5. qwen3_5 Gated-DeltaNet linear-attention hybrid; recurrent state ctx-independent. Reproduces PR#4's 15.33. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures.",
+    "evidenceLevel": "community_unverified",
+    "reporter": "gilbert-barajas"
   },
   {
     "model": "Qwen 3.6 27B",
@@ -70,7 +78,9 @@
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
-    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 29,912,487,056 B = 27.86 GiB (29.91 GB decimal), M5 Max 128GB. config_model_type=qwen3_5. qwen3_5 Gated-DeltaNet; 8-bit (oQ8) with MTP head; NEW quant point. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures."
+    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 29,912,487,056 B = 27.86 GiB (29.91 GB decimal), M5 Max 128GB. config_model_type=qwen3_5. qwen3_5 Gated-DeltaNet; 8-bit (oQ8) with MTP head; NEW quant point. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures.",
+    "evidenceLevel": "community_unverified",
+    "reporter": "gilbert-barajas"
   },
   {
     "model": "Qwen 3.6 35B-A3B",
@@ -85,7 +95,9 @@
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
-    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 19,408,091,008 B = 18.08 GiB (19.41 GB decimal), M5 Max 128GB. config_model_type=qwen3_5_moe. qwen3_5_moe 35B-A3B (OSU-NLP QUEST-RL); catalog name is nearest match by params. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures."
+    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 19,408,091,008 B = 18.08 GiB (19.41 GB decimal), M5 Max 128GB. config_model_type=qwen3_5_moe. qwen3_5_moe 35B-A3B (OSU-NLP QUEST-RL); catalog name is nearest match by params. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures.",
+    "evidenceLevel": "community_unverified",
+    "reporter": "gilbert-barajas"
   },
   {
     "model": "Qwen3-4B-Instruct-2507",
@@ -100,7 +112,9 @@
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
-    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 2,246,903,416 B = 2.09 GiB (2.25 GB decimal), M5 Max 128GB. config_model_type=qwen3. qwen3 4B dense; not in catalog. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. (not in the built-in catalog -- no fitllm prediction paired here.)"
+    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 2,246,903,416 B = 2.09 GiB (2.25 GB decimal), M5 Max 128GB. config_model_type=qwen3. qwen3 4B dense; not in catalog. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. (not in the built-in catalog -- no fitllm prediction paired here.)",
+    "evidenceLevel": "community_unverified",
+    "reporter": "gilbert-barajas"
   },
   {
     "model": "Qwen3-Coder-30B-A3B-Instruct",
@@ -115,7 +129,9 @@
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
-    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 32,393,780,000 B = 30.17 GiB (32.39 GB decimal), M5 Max 128GB. config_model_type=qwen3_moe. qwen3_moe 30B-A3B coder; dFlash SSD expert offload (active experts resident). Matches issue #2's 30.4. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. (not in the built-in catalog -- no fitllm prediction paired here.)"
+    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 32,393,780,000 B = 30.17 GiB (32.39 GB decimal), M5 Max 128GB. config_model_type=qwen3_moe. qwen3_moe 30B-A3B coder; dFlash SSD expert offload (active experts resident). Matches issue #2's 30.4. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. (not in the built-in catalog -- no fitllm prediction paired here.)",
+    "evidenceLevel": "community_unverified",
+    "reporter": "gilbert-barajas"
   },
   {
     "model": "Qwen3-Coder-Next (elastic)",
@@ -130,6 +146,8 @@
     "runtime": "oMLX 0.4.5.dev1 (MLX 0.31.2)",
     "source": "https://github.com/click6067-ship-it/fitllm-engine/pull/5",
     "date": "2026-07-09",
-    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 56,452,863,080 B = 52.58 GiB (56.45 GB decimal), M5 Max 128GB. config_model_type=qwen3_next. qwen3_next ~80B elastic MoE; oMLX ESTIMATED 82.78 GB but only 52.58 resident -> elastic/SSD offload the engine does not model yet. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. (not in the built-in catalog -- no fitllm prediction paired here.)"
+    "notes": "Measured resident bytes via oMLX /admin/api/models actual_size = 56,452,863,080 B = 52.58 GiB (56.45 GB decimal), M5 Max 128GB. config_model_type=qwen3_next. qwen3_next ~80B elastic MoE; oMLX ESTIMATED 82.78 GB but only 52.58 resident -> elastic/SSD offload the engine does not model yet. Idle measurement (weights resident, no active generation) -- floor, not peak-during-gen. ctx=32768 & kvBits=16 are oMLX defaults. Reported in GiB to match existing fixtures. (not in the built-in catalog -- no fitllm prediction paired here.)",
+    "evidenceLevel": "community_unverified",
+    "reporter": "gilbert-barajas"
   }
 ]

@@ -20,6 +20,12 @@
       },
       "unit": { "type": "string", "enum": ["GiB", "GB"], "description": "Unit of measuredPeakGB. GiB = 1024^3 bytes (what nvidia-smi/Activity Monitor/oMLX labels show), GB = 10^9. Omit if the source did not specify." },
       "includesOsReserve": { "type": "boolean", "description": "true only if the number includes OS/driver/display memory (whole-system measurements). Resident-weights readings are false." },
+      "evidenceLevel": {
+        "type": "string",
+        "enum": ["maintainer_verified", "community_unverified"],
+        "description": "maintainer_verified = independently checked by maintainers (physical consistency vs HF weight sizes, engine reproduction, raw artifacts). community_unverified = accepted as a plausible claim, not calibration-grade. Reports are claims until verified — engine constants never change on community_unverified evidence alone."
+      },
+      "reporter": { "type": "string", "description": "GitHub username of the person who TOOK the measurement. Must be the measurer — third-party relays of someone else's numbers are not accepted (issue #1 lesson)." },
       "runtime": { "type": "string", "description": "llama.cpp <version> / ollama <version> / mlx <version> / vllm <version> — version required for reproducibility. Legacy exception: entries whose original report omitted it carry 'unreported ...' and measurementKind: unknown; new submissions must include it." },
       "source": { "type": "string", "description": "URL of the PR or issue containing the full report" },
       "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
