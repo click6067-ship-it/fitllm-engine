@@ -75,18 +75,16 @@ Total = Parameters (quantization-adjusted)
       + macOS base (Apple Silicon unified memory)
 ```
 
-Plus decode-speed estimate (`bandwidth ÷ active-params`) and an `parseHfConfig()` that turns any HuggingFace config into the model shape above.
+Plus a `parseHfConfig()` that turns any HuggingFace config into the model shape above. (No token/s prediction — deliberately: speed depends on runtime/backend in ways a static model can't claim honestly. Fit is a verifiable claim; speed is not.)
 
 ## Usage
 
 ```js
-import { simulate, LOCAL_MODELS, estimateSpeed, parseHfConfig } from './engine.js';
+import { simulate, LOCAL_MODELS, parseHfConfig } from './engine.js';
 
 const model = LOCAL_MODELS.find((m) => m.name === 'Gemma 4 31b');
 const sim = simulate(model, /*ram*/ 64, /*ctx*/ 131072, /*bits*/ 8);
 // → { used, free, verdict: 'yes'|'tight'|'no', param, kv, rt, os, maxContext, ... }
-
-estimateSpeed(model, 'M5 Max', 8, /*gpuCores*/ 40); // ≈ tok/s
 
 // any HuggingFace model:
 const m = parseHfConfig('Qwen/Qwen3-32B', configJson, totalSizeBytes);

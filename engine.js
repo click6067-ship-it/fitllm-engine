@@ -809,6 +809,8 @@ export function chipBandwidth(chip, gpuCores = 40) {
   return CHIP_BANDWIDTH[chip] || 307;
 }
 
+// ⚠️ @deprecated — tok/s 예측은 unwinnable 판정으로 제품에서 삭제됨(2026-06-05 결정, README·사이트 미노출).
+// 하위호환(기존 임포터 breaking 방지)용으로만 export 유지 — 신규 사용 금지. fit만이 검증 가능한 주장이다.
 // 예상 토큰 생성 속도(tok/s): 디코드 1토큰마다 활성 파라미터를 메모리에서 읽음
 // → tok/s ≈ 대역폭 ÷ (활성파라미터 × 바이트) × 실현효율
 export function estimateSpeed(model, chipOrDevice, bitsOrWeightBpw, gpuCores = 40) {
