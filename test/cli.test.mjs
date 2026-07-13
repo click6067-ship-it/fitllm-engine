@@ -59,3 +59,30 @@ test('combo with unknown part exits 2 naming the part', () => {
   assert.equal(code, 2);
   assert.match(out, /notacard/);
 });
+
+// ── --top: "이 하드웨어에서 뭘 돌릴 수 있나" ──
+test('--top: scans catalog, sorted by params desc, all fit, honest ranking label', () => {
+  const { out, code } = run(['--top', '--gpu', 'RTX 4090', '--json']);
+  assert.equal(code, 0);
+  const j = JSON.parse(out);
+  assert.ok(j.fits.length >= 5);
+  for (let i = 1; i < j.fits.length; i++) assert.ok(j.fits[i - 1].params_b >= j.fits[i].params_b, 'sorted by params desc');
+  assert.ok(j.fits.every((f) => f.verdict !== 'no'));
+  assert.match(j.rankedBy, /not a quality ranking/);
+});
+test('--top N limits results', () => {
+  const { out, code } = run(['--top', '3', '--mac', '64', '--json']);
+  assert.equal(code, 0);
+  assert.equal(JSON.parse(out).fits.length, 3);
+});
+test('--top respects --quant filter', () => {
+  const { out, code } = run(['--top', '--gpu', 'RTX 4090', '--quant', 'FP16', '--json']);
+  assert.equal(code, 0);
+  const j = JSON.parse(out);
+  assert.ok(j.fits.length >= 1);
+  assert.ok(j.fits.every((f) => f.quant === 'FP16'));
+});
+test('--top exits 1 when nothing in catalog fits', () => {
+  const { code } = run(['--top', '--mac', '8']);
+  assert.equal(code, 1);
+});

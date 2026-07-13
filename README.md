@@ -17,6 +17,7 @@
 npx fitllm "GLM-4.7-Flash" --gpu 4090     # ✓ FITS — 21.9/24 GB, free 2.1 GB
 npx fitllm "gpt-oss-120b" --mac 64        # ✗ WON'T FIT → what to change to make it fit
 npx fitllm "Qwen 3.6 35B" --gpu "5090 + 3090"   # multi-GPU rig — VRAM pools (56GB), even mixed cards
+npx fitllm --top --detect                 # what CAN this machine run? — best quant per model
 npx fitllm --detect                       # reads this machine's real hardware
 ```
 

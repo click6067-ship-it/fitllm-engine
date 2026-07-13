@@ -20,6 +20,7 @@ usage:
   npx fitllm <model> --gpu 3090 --count 2    N identical cards (2× RTX 3090)
   npx fitllm <model> --mac 64                Apple Silicon fit (8-bit default)
   npx fitllm <model> --detect                read this machine's real hardware (best-effort)
+  npx fitllm --top [N] --gpu 4090            what CAN I run? — best quant per model that fits
   npx fitllm --list                          list built-in models & hardware
 options:
   --quant Q4_K_M|Q5_K_M|Q6_K|Q8_0|FP16 | 4|8|16    weight quant (GPU tiers | Mac bits)
@@ -41,9 +42,13 @@ if (has('--list')) {
   process.exit(0);
 }
 
-const q = (positional[0] || '').toLowerCase();
-const model = LOCAL_MODELS.find((m) => m.name.toLowerCase() === q) || LOCAL_MODELS.find((m) => m.name.toLowerCase().includes(q));
-if (!model) { console.error(`unknown model: "${positional[0] || ''}" — try: npx fitllm --list`); process.exit(2); }
+const TOP = has('--top'); // --top 모드는 모델 인자 불필요 (전 카탈로그 스캔)
+let model = null;
+if (!TOP) {
+  const q = (positional[0] || '').toLowerCase();
+  model = LOCAL_MODELS.find((m) => m.name.toLowerCase() === q) || LOCAL_MODELS.find((m) => m.name.toLowerCase().includes(q));
+  if (!model) { console.error(`unknown model: "${positional[0] || ''}" — try: npx fitllm --list`); process.exit(2); }
+}
 
 // ── device: --gpu | --mac | --detect ──
 let device, isGpu, hwLabel;
@@ -90,6 +95,63 @@ if (gpuName) {
 const kvRaw = parseInt(flag('--kv'), 10);
 const kvBits = [16, 8, 4].includes(kvRaw) ? kvRaw : 16;
 const rawQ = flag('--quant');
+
+// ── --top: "이 하드웨어에서 뭘 돌릴 수 있나" — 모델별 최고 quant 티어로 fit 스캔 ──
+if (TOP) {
+  const nRaw = flag('--top');
+  const n = /^\d+$/.test(nRaw || '') ? Math.max(1, parseInt(nRaw, 10)) : Infinity; // --top 뒤가 플래그면 전체
+  const ctxReq = parseInt(flag('--ctx'), 10) || 8192;
+  // 티어는 최고 정밀도부터 시도 (fit되는 가장 좋은 quant를 그 모델의 대표로). --quant 지정 시 그 티어만.
+  let tiers;
+  if (isGpu) {
+    if (rawQ) {
+      const t = GPU_QUANTS.find((x) => x.tier.toLowerCase() === String(rawQ).toLowerCase());
+      if (!t) { console.error(`unknown GGUF tier "${rawQ}" — one of: ${GPU_QUANTS.map((x) => x.tier).join(', ')}`); process.exit(2); }
+      tiers = [{ label: t.tier, bpw: t.bpw }];
+    } else tiers = [...GPU_QUANTS].sort((a, b) => b.bpw - a.bpw).map((t) => ({ label: t.tier, bpw: t.bpw }));
+  } else {
+    const b = parseInt(rawQ, 10);
+    tiers = ([4, 8, 16].includes(b) ? [b] : [16, 8, 4]).map((bits) => ({ label: `${bits}-bit`, bpw: bits }));
+  }
+  const fits = [];
+  for (const m of LOCAL_MODELS) {
+    if (!m.totalParams) continue;
+    for (const t of tiers) {
+      const c = Math.min(ctxReq, m.maxContext);
+      const s = simulate(m, device, c, { weightBpw: t.bpw, kvBits });
+      if (s.verdict !== 'no') {
+        fits.push({ m, t, s, ctx: c, maxCtx: calcMaxContext(m, device, { weightBpw: t.bpw, kvBits }) });
+        break; // 최고 티어에서 멈춤 — 이 모델의 대표
+      }
+    }
+  }
+  fits.sort((a, b) => b.m.totalParams - a.m.totalParams); // 파라미터 수 내림차순 — 크기 순일 뿐 품질 순위 아님
+  const top = Number.isFinite(n) ? fits.slice(0, n) : fits;
+  if (has('--json')) {
+    console.log(JSON.stringify({
+      hardware: hwLabel, ctx: ctxReq, kvBits, rankedBy: 'total parameter count (size only — not a quality ranking)',
+      fits: top.map(({ m, t, s, maxCtx }) => ({
+        model: m.name, params_b: m.totalParams, quant: t.label, verdict: s.verdict,
+        usedGB: +s.used.toFixed(2), freeGB: +s.free.toFixed(2), maxContext: maxCtx,
+      })),
+      engine: 'fitllm-engine',
+    }, null, 2));
+  } else {
+    const EN = (ko, en) => en;
+    if (!top.length) {
+      console.log(`✗ nothing in the built-in catalog fits ${hwLabel} at ${formatTokens(ctxReq, EN)} — try --kv 8 or a smaller --ctx`);
+    } else {
+      console.log(`What fits ${hwLabel} @ ${formatTokens(ctxReq, EN)}${kvBits !== 16 ? `, KV Q${kvBits}` : ''} — best quant per model, largest first (size ≠ quality):`);
+      const W = Math.max(...top.map(({ m }) => m.name.length));
+      top.forEach(({ m, t, s, maxCtx }, i) => {
+        const mark = s.verdict === 'tight' ? '△' : '✓';
+        console.log(`  ${String(i + 1).padStart(2)}. ${m.name.padEnd(W)}  ${String(m.totalParams).padStart(6)}B  ${t.label.padEnd(6)}  ${mark} ${fmtGB(s.used)}/${s.memoryGB} GB${maxCtx >= 1024 ? `  max ctx ~${formatTokens(maxCtx, EN)}` : ''}`);
+      });
+      console.log(`  every number from official config.json — audit: github.com/click6067-ship-it/fitllm-engine`);
+    }
+  }
+  process.exit(top.length ? 0 : 1);
+}
 let weightBpw, quantLabel;
 if (isGpu) {
   const tier = GPU_QUANTS.find((x) => x.tier.toLowerCase() === String(rawQ || 'Q4_K_M').toLowerCase());
