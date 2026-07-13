@@ -1,0 +1,28 @@
+name: day0-watch
+# HF 트렌딩 감시 → 카탈로그 밖 신규 모델을 day0-candidate 이슈로 (Day-0 플레이북 기계 트리거)
+on:
+  schedule:
+    - cron: '17 */6 * * *' # 6시간마다 — 발견→라이브 ≤24h 목표의 상류
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'DRY_RUN=1 (이슈 생성 없이 출력만)'
+        default: ''
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: scan trending vs catalog vs issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: node .github/scripts/day0-watch.mjs
