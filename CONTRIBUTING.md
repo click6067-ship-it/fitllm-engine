@@ -22,4 +22,9 @@ Ran a model and measured actual peak memory? Two ways:
 - **PR (preferred)**: add one object to [`fixtures/measured.json`](fixtures/measured.json) per [`fixtures/schema.json`](fixtures/schema.json) — it appears in the public [Fit Census](census/README.md) as a predicted-vs-measured row. Runtime + version required (reproducibility).
 - Or [open a measurement issue](../../issues/new?labels=measurement).
 
+### Partial-residency / SSD expert offload reports (elastic MoE)
+"It runs under partial residency" observations are recorded in the ledger but **never change verdicts by themselves** — the promotion gates live in [issue #6](../../issues/6):
+- **Gate A (UI measured-exception note)**: ≥2 independent reporters · `measurementKind: generation_peak` with completed prefill+decode (context + generated token counts) · raw artifacts (runtime version/commit, launch flags, completion status, wall-clock prefill/decode timing, logs/screenshots, report URL) · canonical model/quant/runtime/platform ids. `idle_resident` observations don't qualify — the schema forbids comparing them to totals.
+- **Gate B (engine modeling)**: a deterministic residency derivation from runtime source/docs — only then does the engine gain a runtime dimension.
+
 Estimate-vs-measured reports calibrate the overhead constants for everyone — they're the most valuable contribution this repo takes.
