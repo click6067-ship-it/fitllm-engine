@@ -1,7 +1,7 @@
 {
  "version": 1,
  "schema_version": 2,
- "generated": "2026-07-12",
+ "generated": "2026-07-13",
  "engine_data": "2026-07",
  "verdicts": 6048,
  "assumptions": "ctx=min(8192,model max), KV cache F16, engine reserve/headroom per platform",

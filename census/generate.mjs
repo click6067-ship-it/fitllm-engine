@@ -3,6 +3,7 @@
 // 산출: census-v1.json(기계용) + census-v1.csv + README.md(스타터 매트릭스·모델별 최소장비)
 // measured 열은 ../fixtures/measured.json(커뮤니티 실측 PR)에서 교차 참조 — 예측 vs 실측을 공개 원장으로.
 import { writeFileSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { LOCAL_MODELS, GPUS, MACBOOK_RAM_GROUPS, GPU_QUANTS, gpuDevice, simulate, calcMaxContext, calcRuntimeOverhead, DATA_UPDATED } from '../engine.js';
 
 const OUT = new URL('./', import.meta.url).pathname;
@@ -66,6 +67,23 @@ const cols = Object.keys(rows[0]);
 const cell = (v) => (v == null ? '' : typeof v === 'number' ? String(v) : /[",]/.test(v) ? JSON.stringify(v) : v);
 writeFileSync(OUT + 'census-v1.csv', [cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\n') + '\n');
 
+// ── manifest: UI 파싱 없이 데이터셋을 인용·검증할 수 있는 기계용 명세 (라이선스·행수·체크섬·정본 URL) ──
+const sha256 = (f) => createHash('sha256').update(readFileSync(OUT + f)).digest('hex');
+writeFileSync(OUT + 'manifest.json', JSON.stringify({
+  name: 'FitLLM Fit Census',
+  version: header.version, schema_version: header.schema_version, generated: header.generated,
+  license: 'CC0-1.0', license_url: 'https://creativecommons.org/publicdomain/zero/1.0/',
+  rows: rows.length, devices: devices.length, measured_rows: measured.length,
+  canonical: {
+    site: 'https://fitllm.run/data/',
+    json: 'https://fitllm.run/data/census-v1.json',
+    csv: 'https://fitllm.run/data/census-v1.csv',
+    source: 'https://github.com/click6067-ship-it/fitllm-engine/tree/master/census',
+  },
+  sha256: { 'census-v1.json': sha256('census-v1.json'), 'census-v1.csv': sha256('census-v1.csv') },
+  engine: { name: 'fitllm-engine', license: 'MIT', npm: 'https://www.npmjs.com/package/fitllm-engine', repo: 'https://github.com/click6067-ship-it/fitllm-engine' },
+}, null, 1));
+
 // ── README: 사람용 요약 ──
 const ICON = { yes: '✅', tight: '⚠️', no: '❌' };
 const q4of = (p) => (p === 'gpu' ? 'Q4_K_M' : '4bit');
@@ -115,4 +133,4 @@ ${minDevice}
 All figures are estimates; real usage varies with runtime, driver and OS state. Verdicts: ✅ fits comfortably · ⚠️ tight · ❌ won't fit.
 `;
 writeFileSync(OUT + 'README.md', md);
-console.log(`census: ${rows.length} verdicts · ${devices.length} devices · measured=${measured.length} → census-v1.{json,csv} + README.md`);
+console.log(`census: ${rows.length} verdicts · ${devices.length} devices · measured=${measured.length} → census-v1.{json,csv} + manifest.json + README.md`);

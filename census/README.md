@@ -1,4 +1,4 @@
-# Local LLM Fit Census v1 — 2026-07-12
+# Local LLM Fit Census v1 — 2026-07-13
 
 **6,048 verdicts**: 18 models × 88 devices (36 GPUs + 52 Mac configs) × per-platform quant tiers.
 Every number computed by [fitllm-engine](https://github.com/click6067-ship-it/fitllm-engine) from official `config.json` values — architecture-aware (MLA, sliding-window, hybrid attention, MoE). **Reproduce it yourself: `npm run census`.**
