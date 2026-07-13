@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "generated": "2026-07-09",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
@@ -165,6 +165,15 @@
       "kvBits": 16,
       "expect": "yes",
       "note": "PLE residency: GPU weights = (5.1-2.349)B x 2B = 5.12 GB resident; 2.349B PLE (262144x256x35, config.json) lives in system RAM (llama.cpp #14430). Without PLE split this reads 'no' (12.96 GB)."
+    },
+    {
+      "id": "hy3-kv-full-f16",
+      "kind": "kv_total_bytes",
+      "model": "Hy3",
+      "ctx": 262144,
+      "kvBits": 16,
+      "expect": 85899345920,
+      "note": "standard GQA full attention: 2(K,V) x 8 kv-heads x 128 dim x 2 B x 80 layers x 262,144 = 85,899,345,920 B = 80.00 GiB exactly (tencent/Hy3 config.json)"
     }
   ]
 }

@@ -5,7 +5,7 @@
  "generated": "2026-07-13",
  "license": "CC0-1.0",
  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
- "rows": 6048,
+ "rows": 6384,
  "devices": 88,
  "measured_rows": 9,
  "canonical": {
@@ -15,8 +15,8 @@
   "source": "https://github.com/click6067-ship-it/fitllm-engine/tree/master/census"
  },
  "sha256": {
-  "census-v1.json": "205c03659dff10e5969d6e2a3380b356050fc2fcde574123c0a2cd6ecf24965c",
-  "census-v1.csv": "9e5f122e97e0fce11aca290ce16e51b08321db46f9f869b69dbfe41a0fd76666"
+  "census-v1.json": "3a440662c59ca3203880099862ef037c9f1f59f7d71a17ec8b4e26692c6f31ef",
+  "census-v1.csv": "960278d532c72c65a9945923a4b6781898f3fa74fbcbd81b11777eff38ae85e5"
  },
  "engine": {
   "name": "fitllm-engine",

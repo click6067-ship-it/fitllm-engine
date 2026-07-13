@@ -229,6 +229,29 @@ export const MODELS = [
     desc: 'Cloud 모델 — 벤치마크 기준점 (로컬 설치 불가, 비교용)',
   },
 
+  // === Hy3 (Tencent, MoE 192E top-8 + shared 1) — Day-0 2026-07-13, https://huggingface.co/tencent/Hy3 config.json ===
+  // ⚠️ 배열 끝 append 고정(?m= 링크 보존). BF16 확정: HF API safetensors BF16 298,786,140,416 + F32 15,360
+  //    → ×2B(+×4B) = index total 597,572,342,272 B 바이트 정확 일치. FP8은 별도 레포(tencent/Hy3-FP8).
+  {
+    name: 'Hy3',
+    group: 'Hunyuan',
+    tags: ['moe'],
+    // 298.8 = 디스크/로드 풋프린트(엔진 관례) — 모델카드 "295B 본체 + MTP 3.8B". ⚠️ 커뮤니티 GGUF가 MTP를 포함
+    //    ("80 layers + 1 MTP", Q4_K_M 181GB = 298.8B×4.8944/8 ±1.5% — vcruz305/Hy3-GGUF 실측, verifier 2026-07-13)
+    //    → nextn 탈락 가정(295) 기각, 실파일 기준 298.8 채택.
+    totalParams: 298.8,
+    activeParams: 21, // 모델카드 "Activated: 21B" (산술 재구성 ≈20.6B 부합: attn 6.04 + MoE 79L×(8+1shared)×18.87M + dense L0 + embed×2 untied)
+    layerCount: 80,
+    kvHeads: 8,
+    kvHeadDim: 128,
+    attnHeads: 64,
+    hiddenSize: 4096,
+    numExperts: 192,
+    expertsPerToken: 8,
+    maxContext: 262144, // config max_position_embeddings, rope_type default(스케일링 없음) — 모델카드 "256K"
+    benchmarks: { GPQA: 0.904, 'MMLU-Pro': null, 'SWE-Bench': 0.78 }, // 모델카드 공식: GPQA Diamond 90.4 / SWE-Bench Verified 78 / MMLU-Pro 미공표
+    desc: 'MoE · 295B(+3.8B MTP) / 21B active · 표준 GQA(8KV×128) 전층 풀어텐션 · 최대 256K · Apache 2.0',
+  },
 ];
 
 // 로컬에서 돌릴 수 있는(시뮬 대상) 모델만

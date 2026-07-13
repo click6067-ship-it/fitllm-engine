@@ -129,3 +129,22 @@ test('PLE guard: pleParams >= totalParams (broken/hostile config) cannot produce
   const s = simulate(evil, gpuDevice(GPUS.find((g) => g.name === 'RTX 3060 8GB'), 'linux-headless'), 4096, { weightBpw: 16, kvBits: 16 });
   assert.equal(s.pleOffloadGB, 0, 'guarded model must not report PLE offload');
 });
+
+// ── Hy3 (Day-0 2026-07-13) — 기대값 전부 손계산 ──
+test('Hy3: standard-GQA KV = 2×8kvh×128d×2B×80L×262144 = 85,899,345,920 B exactly', async () => {
+  const { calcKVCache } = await import('../engine.js');
+  const hy3 = LOCAL_MODELS.find((m) => m.name === 'Hy3');
+  assert.ok(hy3, 'Hy3 in catalog');
+  assert.equal(calcKVCache(hy3, 262144, 16).totalBytes, 85899345920);
+  // 토큰당 한계비용: 2×8×128×2×80 = 327,680 B
+  assert.equal(calcKVCache(hy3, 1, 16).kvPerToken, 327680);
+});
+test('Hy3: verdicts — 512GB Mac 4bit fits, RTX 4090 Q4 does not', () => {
+  const hy3 = LOCAL_MODELS.find((m) => m.name === 'Hy3');
+  const mac = simulate(hy3, 512, 8192, { weightBpw: 4, kvBits: 16 });
+  // 손계산: weights 298.8e9×0.5 = 149.4e9 B = 139.14 GB (quantAdjust 미등재 → ×1.0, MTP 포함 디스크 기준)
+  assert.ok(Math.abs(mac.param - 139.14) < 0.01, `param ${mac.param}`);
+  assert.notEqual(mac.verdict, 'no', '512GB Mac @4bit must fit');
+  const gpu = simulate(hy3, gpuDevice(GPUS.find((g) => g.name === 'RTX 4090')), 8192, { weightBpw: 4.8944, kvBits: 16 });
+  assert.equal(gpu.verdict, 'no', '24GB card cannot hold 295B MoE');
+});

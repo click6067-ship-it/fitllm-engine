@@ -1,7 +1,7 @@
 # FitLLM Engine
 
 [![npm](https://img.shields.io/npm/v/fitllm-engine?color=cb3837&label=npm)](https://www.npmjs.com/package/fitllm-engine)
-[![conformance](https://img.shields.io/badge/conformance_vectors-15%2F15-brightgreen)](vectors/fit-vectors-v1.json)
+[![conformance](https://img.shields.io/badge/conformance_vectors-16%2F16-brightgreen)](vectors/fit-vectors-v1.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![zero deps](https://img.shields.io/badge/dependencies-0-success)](package.json)
 
@@ -110,7 +110,7 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 ## Conformance vectors
 
-[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **15 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
+[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **16 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
 
 **Why this matters:** the formulas are easy to copy; a verified answer key is not. If you port this engine to Python, Rust or Go, you don't become an untrusted fork — pass the vectors and you're a **conformant implementation of the same standard**. Port the engine, keep the vectors.
 
