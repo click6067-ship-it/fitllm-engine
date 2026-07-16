@@ -17,8 +17,35 @@ const gh = async (path, init = {}) => {
   return r.status === 422 ? null : r.json();
 };
 
-// 1) HF 트렌딩 (텍스트 생성만)
-const trending = await (await fetch('https://huggingface.co/api/models?sort=trendingScore&direction=-1&limit=20&filter=text-generation')).json();
+// 1) HF 트렌딩 (텍스트 생성만) — 견고 fetch: HF가 일시적으로 HTML(레이트리밋·인터스티셜)을 주면
+//    JSON.parse 크래시 대신 재시도 후 graceful skip. 발견 크론은 best-effort라 한 런 건너뛰어도 무해
+//    (다음 6h 런이 따라잡음). 상류 일시장애로 실패 메일을 쏘지 않는다.
+const HF_URL = 'https://huggingface.co/api/models?sort=trendingScore&direction=-1&limit=20&filter=text-generation';
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+async function fetchTrending() {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await fetch(HF_URL, { headers: { Accept: 'application/json', 'User-Agent': 'fitllm-day0-watch' } });
+      const ct = r.headers.get('content-type') || '';
+      const text = await r.text();
+      if (!r.ok) throw new Error(`HF ${r.status}: ${text.slice(0, 120)}`);
+      if (!ct.includes('json')) throw new Error(`non-JSON (${ct || 'no content-type'}): ${text.slice(0, 120)}`);
+      const data = JSON.parse(text);
+      if (!Array.isArray(data)) throw new Error('payload is not an array');
+      return data;
+    } catch (e) {
+      console.warn(`HF trending fetch attempt ${attempt}/3 failed: ${e.message}`);
+      if (attempt < 3) await sleep(attempt * 2000);
+    }
+  }
+  return null;
+}
+
+const trending = await fetchTrending();
+if (!trending) {
+  console.log('day0-watch: HF trending unavailable (transient) — skipping this run.');
+  process.exit(0);
+}
 
 // 2) 카탈로그 소프트 매치 (이름 부분일치 — 정본 dedup은 이슈)
 const { LOCAL_MODELS } = await import('../../engine.js');
