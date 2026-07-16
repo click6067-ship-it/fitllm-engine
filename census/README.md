@@ -1,6 +1,6 @@
-# Local LLM Fit Census v1 — 2026-07-13
+# Local LLM Fit Census v1 — 2026-07-16
 
-**6,384 verdicts**: 19 models × 88 devices (36 GPUs + 52 Mac configs) × per-platform quant tiers.
+**6,720 verdicts**: 20 models × 88 devices (36 GPUs + 52 Mac configs) × per-platform quant tiers.
 Every number computed by [fitllm-engine](https://github.com/click6067-ship-it/fitllm-engine) from official `config.json` values — architecture-aware (MLA, sliding-window, hybrid attention, MoE). **Reproduce it yourself: `npm run census`.**
 
 Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/headroom per engine. Interactive per-combo pages: [fitllm.run/can-i-run](https://fitllm.run/can-i-run).
@@ -42,6 +42,7 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 | Gemma 4 31b | 30.7B | RTX 4090 | M5 32GB |
 | Llama-3.2-3B-Instruct | 3.2B | RTX 4060 Ti 8GB | M5 16GB |
 | Llama-3.1-8B-Instruct | 8B | RTX 3080 10GB | M5 16GB |
+| MiniCPM5-1B | 1.081B | RTX 4060 Ti 8GB | M5 16GB |
 | Qwen3-0.6B | 0.596B | RTX 4060 Ti 8GB | M5 16GB |
 | Qwen3-1.7B | 1.721B | RTX 4060 Ti 8GB | M5 16GB |
 | Llama-3.2-1B-Instruct | 1.236B | RTX 4060 Ti 8GB | M5 16GB |

@@ -189,6 +189,13 @@ export const MODELS = [
     maxContext: 131072, benchmarks: null,
     desc: 'Dense · 8.0B · 32레이어 · GQA(32/8) · 최대 128K' }, // meta-llama/Llama-3.1-8B-Instruct (gated) ↔ unsloth/Meta-Llama-3.1-8B-Instruct 미러
 
+  // --- MiniCPM (openbmb) — on-device/edge 계열 ---
+  { name: 'MiniCPM5-1B', group: 'MiniCPM', tags: ['dense'],
+    totalParams: 1.081, activeParams: 1.081, layerCount: 24, kvHeads: 2, kvHeadDim: 128, attnHeads: 16, hiddenSize: 1536,
+    maxContext: 131072, benchmarks: null,
+    // openbmb/MiniCPM5-1B config.json(model_type=llama·tie_word_embeddings=false). 2독립출처 파라미터: safetensors.index total_size 2,161,265,664B ÷ 2(bf16) = 1,080,632,832 == config-dim 손계산(embed 130560×1536 + 미tied lm_head + 24층×(attn 7,077,888 + mlp 21,233,664)) = 1,080,632,832 정확 일치
+    desc: 'Dense · 1.1B · GQA(16/2) · on-device/edge · 최대 128K' },
+
   // --- Draft 소형모델 — Stack 탭(speculative decoding draft+target · IDE 자동완성) 페어용. 플래그십 아님(카탈로그 최신순 정리와 별개 기능군) ---
   // ⚠️ Qwen3 2종 totalParams = GGUF/디스크 기준(임베딩 1회): safetensors 카운트(751.6M/2031.7M)는 tied lm_head 중복 저장 포함 — 사용 금지.
   //    검증(2026-07-09 verifier): Qwen3-0.6B-Q8_0.gguf 실측 639,446,688B = 596.0M×Q8_0+메타 ✓ / 1.7B GGUF 1,834,426,016B ✓ (2출처+GGUF 실측)

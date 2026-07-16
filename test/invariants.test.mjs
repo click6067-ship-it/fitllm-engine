@@ -148,3 +148,10 @@ test('Hy3: verdicts — 512GB Mac 4bit fits, RTX 4090 Q4 does not', () => {
   const gpu = simulate(hy3, gpuDevice(GPUS.find((g) => g.name === 'RTX 4090')), 8192, { weightBpw: 4.8944, kvBits: 16 });
   assert.equal(gpu.verdict, 'no', '24GB card cannot hold 295B MoE');
 });
+test('MiniCPM5-1B: standard-GQA KV = 2×2kvh×128d×2B×24L×131072 = 3,221,225,472 B exactly', async () => {
+  const { calcKVCache } = await import('../engine.js');
+  const m = LOCAL_MODELS.find((x) => x.name === 'MiniCPM5-1B');
+  assert.ok(m, 'MiniCPM5-1B in catalog');
+  assert.equal(calcKVCache(m, 131072, 16).totalBytes, 3221225472);
+  assert.equal(calcKVCache(m, 1, 16).kvPerToken, 24576); // 2×2kvh×128d×2B×24L
+});
