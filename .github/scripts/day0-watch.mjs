@@ -70,7 +70,7 @@ for (const m of trending) {
   if (created >= MAX_NEW) break;
   const id = m.id || m.modelId;
   if (!id || seen.has(id) || inCatalog(id)) continue;
-  if (/[-_.](gguf|awq|gptq|mlx|bnb|exl2|int[48])\b/i.test(id)) continue; // 양자화 미러 repo = 노이즈 (원본이 따로 트렌딩됨)
+  if (/[-_.](gguf|awq|gptq|mlx|bnb|exl2|int[48]|nvfp4|mxfp4|fp4|fp8)\b/i.test(id)) continue; // 양자화 미러 repo = 노이즈 (원본이 따로 트렌딩됨). fp4/fp8 추가 — issue #13(NVFP4 미러) 유출 방지
   const body = [
     `HF trending detected (trendingScore ${m.trendingScore ?? '?'}, downloads ${m.downloads ?? '?'}, likes ${m.likes ?? '?'}).`,
     '',
