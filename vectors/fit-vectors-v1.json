@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "generated": "2026-07-09",
+  "version": "1.3.0",
+  "generated": "2026-08-24",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
     {
@@ -174,6 +174,126 @@
       "kvBits": 16,
       "expect": 85899345920,
       "note": "standard GQA full attention: 2(K,V) x 8 kv-heads x 128 dim x 2 B x 80 layers x 262,144 = 85,899,345,920 B = 80.00 GiB exactly (tencent/Hy3 config.json)"
+    },
+    {
+      "id": "qwen38-27b-kv-full-f16",
+      "kind": "kv_total_bytes",
+      "model": "Qwen 3.8 27B",
+      "ctx": 262144,
+      "kvBits": 16,
+      "expect": 17179869184,
+      "note": "hybrid Gated DeltaNet: KV only on the 16 full-attention layers of 64 = 2(K,V) x 4 kv-heads x 256 dim x 2 B x 16 L x 262,144 = 16.00 GiB exactly. Counting all 64 layers gives 68,719,476,736 B (4x too much) — the common naive-calculator error. Source: Qwen/Qwen3.8-27B config.json layer_types + model card 'Hidden Layout: 16 x (3 x Gated DeltaNet -> 1 x Gated Attention)'"
+    },
+    {
+      "id": "qwen38-27b-linear-state",
+      "kind": "linear_state_bytes",
+      "model": "Qwen 3.8 27B",
+      "expect": 154927104,
+      "note": "Gated DeltaNet fixed recurrent state (context-independent): per layer conv (16*128*2 + 48*128 = 10,240 conv_dim) x 4 kernel x 2 B = 81,920 + recurrent 48 v-heads x 128 x 128 x 4 B (mamba_ssm_dtype float32) = 3,145,728; x 48 linear layers = 154,927,104 B = 147.75 MiB. Shapes: transformers qwen3_next modeling (conv_dim = key_dim*2 + value_dim)"
+    },
+    {
+      "id": "qwen38-2.4t-kv-full-f16",
+      "kind": "kv_total_bytes",
+      "model": "Qwen 3.8 2.4T-A95B",
+      "ctx": 262144,
+      "kvBits": 16,
+      "expect": 24696061952,
+      "note": "KV only on 23 full-attention layers of 92 = 2 x 4 x 256 x 2 B x 23 L x 262,144 = 23.00 GiB exactly (model card '23 x (3 x Gated DeltaNet -> 1 x Gated Attention)')"
+    },
+    {
+      "id": "qwen38-2.4t-linear-state",
+      "kind": "linear_state_bytes",
+      "model": "Qwen 3.8 2.4T-A95B",
+      "expect": 590118912,
+      "note": "conv_dim 16*128*2 + 128*128 = 20,480; (20,480 x 4 x 2 + 128 x 128 x 128 x 4) x 69 linear layers = 590,118,912 B = 562.79 MiB"
+    },
+    {
+      "id": "qwen36-27b-linear-state",
+      "kind": "linear_state_bytes",
+      "model": "Qwen 3.6 27B",
+      "expect": 154927104,
+      "note": "backfill guard — Qwen 3.6 27B shares the qwen3_5 DeltaNet dims with Qwen 3.8 27B (48 linear layers, 48 v-heads). KV total is unchanged by this component"
+    },
+    {
+      "id": "hy3-linear-state-zero",
+      "kind": "linear_state_bytes",
+      "model": "Hy3",
+      "expect": 0,
+      "note": "standard full-attention GQA model must report exactly zero linear state — the new component may never leak into non-hybrid models"
+    },
+    {
+      "id": "laguna-xs-kv-full-f16",
+      "kind": "kv_total_bytes",
+      "model": "Laguna XS 2.1",
+      "ctx": 262144,
+      "kvBits": 16,
+      "expect": 10800332800,
+      "note": "interleaved SWA: global 10 L x full ctx + local 30 L x window 512, all 2 x 8 kv-heads x 128 dim x 2 B = 4,096 B/layer/token -> 4,096 x 10 x 262,144 + 4,096 x 30 x 512 = 10,800,332,800 B. Source: poolside/Laguna-XS-2.1 config.json layer_types {full 10, sliding 30}, sliding_window 512"
+    },
+    {
+      "id": "laguna-s-kv-full-f16",
+      "kind": "kv_total_bytes",
+      "model": "Laguna S 2.1",
+      "ctx": 262144,
+      "kvBits": 16,
+      "expect": 12960399360,
+      "note": "global 12 L + local 36 L (window 512) = 4,096 x 12 x 262,144 + 4,096 x 36 x 512 = 12,960,399,360 B. Model card: '48 layers in a 1:3 global-to-SWA ratio (12 global, 36 sliding, window 512)'"
+    },
+    {
+      "id": "v-qwen38-27b-5090-q4-32k",
+      "kind": "verdict",
+      "model": "Qwen 3.8 27B",
+      "device": {
+        "type": "gpu",
+        "gpu": "RTX 5090",
+        "env": "linux-headless"
+      },
+      "ctx": 32768,
+      "weightBpw": 4,
+      "kvBits": 16,
+      "expect": "yes",
+      "note": "hybrid KV keeps 27.8B at Q4 comfortably on 32GB even at 32K context (~13.5 GiB free)"
+    },
+    {
+      "id": "v-qwen38-27b-5060ti16-q4-32k",
+      "kind": "verdict",
+      "model": "Qwen 3.8 27B",
+      "device": {
+        "type": "gpu",
+        "gpu": "RTX 5060 Ti 16GB",
+        "env": "linux-headless"
+      },
+      "ctx": 32768,
+      "weightBpw": 4,
+      "kvBits": 16,
+      "expect": "no",
+      "note": "27.8B at Q4 does not fit a 16GB card even before context: weights alone ~12.9 GiB + 2.0 GiB KV. Chosen with ~2.5 GiB of margin so the vector is a stable answer-key entry, not a knife-edge"
+    },
+    {
+      "id": "v-laguna-xs-mac64-q4-131k",
+      "kind": "verdict",
+      "model": "Laguna XS 2.1",
+      "device": {
+        "type": "mac",
+        "ram": 64
+      },
+      "ctx": 131072,
+      "weightBpw": 4,
+      "kvBits": 16,
+      "expect": "yes"
+    },
+    {
+      "id": "v-qwen38-2.4t-mac512-q4-8k",
+      "kind": "verdict",
+      "model": "Qwen 3.8 2.4T-A95B",
+      "device": {
+        "type": "mac",
+        "ram": 512
+      },
+      "ctx": 8192,
+      "weightBpw": 4,
+      "kvBits": 16,
+      "expect": "no"
     }
   ]
 }

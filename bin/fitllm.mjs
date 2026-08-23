@@ -172,14 +172,15 @@ if (has('--json')) {
   console.log(JSON.stringify({
     model: model.name, hardware: hwLabel, quant: quantLabel, kvBits, ctx,
     verdict: s.verdict, usedGB: +s.used.toFixed(2), memoryGB: s.memoryGB, freeGB: +s.free.toFixed(2),
-    breakdown: { paramGB: +s.param.toFixed(2), kvGB: +s.kv.toFixed(2), overheadGB: +s.rtDyn.toFixed(2), reserveGB: +s.reserve.toFixed(2) }, // reserve 병기 분해는 rtDyn(s.rt는 Apple 고정 2GB 중복)
+    breakdown: { paramGB: +s.param.toFixed(2), kvGB: +s.kv.toFixed(2), linearStateGB: +s.linearState.toFixed(2), overheadGB: +s.rtDyn.toFixed(2), reserveGB: +s.reserve.toFixed(2) }, // reserve 병기 분해는 rtDyn(s.rt는 Apple 고정 2GB 중복). linearState=선형어텐션 고정상태(표준 어텐션은 0)
     maxContext: maxCtx, engine: 'fitllm-engine',
   }, null, 2));
 } else {
   const WORD = { yes: 'FITS', tight: 'TIGHT', no: "WON'T FIT" };
   const mark = s.verdict === 'no' ? '✗' : s.verdict === 'tight' ? '△' : '✓';
   console.log(`${mark} ${WORD[s.verdict]} — ${model.name} on ${hwLabel} @ ${quantLabel}, ${formatTokens(ctx, EN)}${kvBits !== 16 ? `, KV Q${kvBits}` : ''}`);
-  console.log(`  weights ${fmtGB(s.param)} + KV ${fmtGB(s.kv)} + overhead ${fmtGB(s.rtDyn)} + reserve ${fmtGB(s.reserve)} = ${fmtGB(s.used)} / ${s.memoryGB} GB  (${s.verdict === 'no' ? 'short by ' + fmtGB(-s.free) : 'free ' + fmtGB(s.free)} GB)`);
+  const lsPart = s.linearState > 0 ? ` + linear-state ${fmtGB(s.linearState)}` : ''; // 하이브리드 선형 어텐션만 표시(표준 어텐션은 0이라 생략)
+  console.log(`  weights ${fmtGB(s.param)} + KV ${fmtGB(s.kv)}${lsPart} + overhead ${fmtGB(s.rtDyn)} + reserve ${fmtGB(s.reserve)} = ${fmtGB(s.used)} / ${s.memoryGB} GB  (${s.verdict === 'no' ? 'short by ' + fmtGB(-s.free) : 'free ' + fmtGB(s.free)} GB)`);
   if (maxCtx >= 1024) console.log(`  max context at this quant: ~${formatTokens(maxCtx, EN)}`);
   if (s.verdict === 'no') {
     const fix = isGpu ? suggestFixGpu(model, s.device, ctx, { weightBpw, kvBits }, EN) : suggestFix(model, device, ctx, weightBpw, EN);

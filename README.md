@@ -50,6 +50,7 @@ That assumes **every layer keeps a full-context KV cache with one uniform head s
 |---|---|---|---|---|
 | **Gemma 4 31B** @131K, 8-bit | 50 of 60 layers are sliding-window (keep only the last 1024 tokens); the 10 global layers use a different head shape (4 KV-heads × 512, not 16 × 256) | ~60 GB | ~5.4 GB | **11×** |
 | **Qwen 3.6 27B** @131K, 8-bit | 48 of 64 layers are linear attention (Gated DeltaNet) — no growing KV cache | ~16 GB | ~4 GB | **4×** |
+| **Qwen 3.8 27B** @256K, F16 KV | same shape, newest generation: KV lives on 16 of 64 layers only | 64.0 GiB | **16.0 GiB** | **4×** |
 | **GLM-4.7-Flash** @128K, bf16 | MLA: K/V compressed into one shared latent (512+64 dims, cached once — not per-head K and V) | ~117 GB | ~6.6 GB | **17.8×** |
 | Plain dense (Llama, Mistral…) | nothing — standard transformer | same | same | 1× ✅ |
 
@@ -57,7 +58,7 @@ An 11× error flips the verdict: a naive calculator says Gemma 4 31B *won't fit*
 
 ### The five things they ignore
 1. **Sliding-window attention** (Gemma 2/3/4, gpt-oss): most layers only keep the last *N* tokens, so their KV stops growing. Only the global layers scale with full context.
-2. **Hybrid / linear attention** (Qwen 3.6, many 2026 models): linear-attention layers use a fixed-size recurrent state, not a growing KV cache.
+2. **Hybrid / linear attention** (Qwen 3.6 / 3.8, many 2026 models): linear-attention layers use a fixed-size recurrent state, not a growing KV cache. That state is modeled too, as its own component (`linearState`) — it is a constant per sequence, so it never inflates the context curve.
 3. **MLA — Multi-head Latent Attention** (GLM-5.2, GLM-4.7-Flash, DeepSeek family): the cache is a single low-rank latent (`kv_lora_rank` + RoPE dims) shared across all heads — per-head "2 × heads × head_dim" formulas over-count by an order of magnitude. Verified against the DeepSeek-V2 paper (arXiv:2405.04434) and the official DeepSeek-V3 inference code.
 4. **Heterogeneous head dims + MoE**: global layers can use a different `head_dim` (Gemma 4: 512 vs 256). MoE keeps every expert in memory while activating only a few per token.
 5. **PLE — Per-Layer Embeddings** (Gemma 4 e2b/e4b): llama.cpp keeps the `per_layer_token_embd` tensor in **system RAM by default** regardless of `-ngl` (forcing it onto CUDA crashes for K-quant GGUFs; only non-K quants can opt in — ggml-org/llama.cpp#14430), so only the non-PLE weights need VRAM. Counting all 5.1B params against a GPU over-predicts e2b's resident weights by ~1.9× and flips small-card verdicts. On Apple Silicon system RAM *is* accelerator memory, so total params stay correct there. (Caveats: vLLM loads PLE fully onto the GPU — this engine's GPU math is anchored to the default GGUF/llama.cpp behavior its quant tiers come from; the residency measurements are from the E-series PLE stack, and a direct measurement on a Gemma 4 GGUF is welcome in issue #7.)
@@ -114,7 +115,7 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 ## The Fit Census — every model × every device, one truth table
 
-[`census/`](census/README.md) holds **6,000+ verdicts** (19 models incl. draft tier × 88 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
+[`census/`](census/README.md) holds **8,000+ verdicts** (24 models incl. draft tier × 88 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
 
 ## Embed a fit badge
 
@@ -152,7 +153,7 @@ curl 'https://fitllm.run/api/check?model=gemma%204%2031b&gpu=4090'
 # multi-GPU rigs: gpu=5090%2B3090 · Mac: ram=64 · usage: curl https://fitllm.run/api/check
 ```
 
-Open data: the full **Fit Census** (6,000+ verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
+Open data: the full **Fit Census** (8,000+ verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
 
 ## Principles
 
