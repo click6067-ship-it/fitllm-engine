@@ -33,7 +33,7 @@ for (const m of LOCAL_MODELS) {
         predicted_total_to_run_gb: +s.used.toFixed(2),                      // 판정 기준: weights+KV+runtime+reserve
         predicted_param_gb: +s.param.toFixed(2),                            // 순수 가중치(양자화 bpw 기준)
         predicted_resident_weights_gb: +(s.param + ov.paramOverheadGB).toFixed(2), // 상주 가중치 예측(비양자 임베딩 등 +12%) — idle_resident 실측과 비교하는 컬럼
-        kv_cache_gb: +s.kv.toFixed(2), runtime_dynamic_gb: +s.rtDyn.toFixed(2), reserve_gb: +s.reserve.toFixed(2),
+        kv_cache_gb: +s.kv.toFixed(2), linear_state_gb: +s.linearState.toFixed(3), runtime_dynamic_gb: +s.rtDyn.toFixed(2), reserve_gb: +s.reserve.toFixed(2),
         free_gb: +s.free.toFixed(2), max_context: maxCtx,
         // 실측 — 타입 없이 예측 옆에 붙이지 않는다(resident 바닥값을 total과 직접 비교하면 오독).
         measured_peak_gb: meas ? meas.measuredPeakGB : null,                // v1 하위호환 — 의미는 measurement_kind가 정의
@@ -53,7 +53,8 @@ const header = {
   version: 1, schema_version: 2, generated, engine_data: DATA_UPDATED, verdicts: rows.length,
   assumptions: 'ctx=min(8192,model max), KV cache F16, engine reserve/headroom per platform',
   definitions: {
-    predicted_total_to_run_gb: 'Total memory required to RUN: weights + KV cache + runtime overhead + OS/GPU reserve. This is what the verdict uses. (used_gb is its v1 alias.)',
+    predicted_total_to_run_gb: 'Total memory required to RUN: weights + KV cache + linear-attention state + runtime overhead + OS/GPU reserve. This is what the verdict uses. (used_gb is its v1 alias.)',
+    linear_state_gb: 'Fixed recurrent state of hybrid linear-attention (Gated DeltaNet) layers. Unlike KV cache this does NOT grow with context — it is a constant per sequence. Exactly 0 for standard full/sliding attention models.',
     predicted_resident_weights_gb: 'Predicted resident model weights incl. non-quantized parts — compare against idle_resident measurements.',
     measurement_kind: 'What the measured number is: idle_resident (resident weights floor, e.g. oMLX actual_size) / load_peak / generation_peak / system_total_peak. Only system_total_peak is directly comparable to predicted_total_to_run_gb; idle_resident readings SHOULD be lower than the total — that is not a prediction error.',
     measurement_match: 'same_ctx = measured at this row’s ctx; different_ctx = measured under a different context length (KV portion not directly comparable).',

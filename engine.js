@@ -39,6 +39,8 @@ export const MODELS = [
     activeParams: null,
     layerCount: 64,
     fullAttnLayers: 16, // 64레이어 중 16개만 Gated(full) attention, 48개는 Gated DeltaNet(linear) → KV 캐시는 16레이어만
+    // Gated DeltaNet 고정 상태(ctx 무관) — Qwen/Qwen3.6-27B config.json linear_* 필드
+    linearAttn: { layers: 48, numKHeads: 16, numVHeads: 48, headKDim: 128, headVDim: 128, convKernel: 4 },
     kvHeads: 4,
     kvHeadDim: 256,
     attnHeads: 24,
@@ -56,6 +58,8 @@ export const MODELS = [
     activeParams: 3.0,
     layerCount: 40,
     fullAttnLayers: 10, // 40레이어 중 10개만 full attention(4개마다 1개), 30개는 linear attention → KV 캐시는 10레이어만
+    // Gated DeltaNet 고정 상태 — Qwen/Qwen3.6-35B-A3B config.json linear_* 필드
+    linearAttn: { layers: 30, numKHeads: 16, numVHeads: 32, headKDim: 128, headVDim: 128, convKernel: 4 },
     kvHeads: 2,
     kvHeadDim: 256,
     attnHeads: 16,
@@ -69,6 +73,7 @@ export const MODELS = [
   // --- Qwen3.5 하이브리드 linear (AgentWorld) — 40레이어 중 full 10 + linear 30(DeltaNet), KV는 full 10만 ---
   { name: 'Qwen-AgentWorld-35B-A3B', group: 'Qwen3.5', tags: ['moe'],
     totalParams: 34.7, activeParams: 3.0, layerCount: 40, fullAttnLayers: 10, kvHeads: 2, kvHeadDim: 256, attnHeads: 16, hiddenSize: 2048,
+    linearAttn: { layers: 30, numKHeads: 16, numVHeads: 32, headKDim: 128, headVDim: 128, convKernel: 4 }, // config.json linear_* 필드
     numExperts: 256, expertsPerToken: 8, maxContext: 262144, benchmarks: null,
     desc: 'MoE · ~34.7B / ~3B active · 하이브리드(full 10 + linear 30) · KV는 10레이어만 · 최대 256K' }, // config.json+index: Qwen/Qwen-AgentWorld-35B-A3B
 
@@ -258,6 +263,98 @@ export const MODELS = [
     maxContext: 262144, // config max_position_embeddings, rope_type default(스케일링 없음) — 모델카드 "256K"
     benchmarks: { GPQA: 0.904, 'MMLU-Pro': null, 'SWE-Bench': 0.78 }, // 모델카드 공식: GPQA Diamond 90.4 / SWE-Bench Verified 78 / MMLU-Pro 미공표
     desc: 'MoE · 295B(+3.8B MTP) / 21B active · 표준 GQA(8KV×128) 전층 풀어텐션 · 최대 256K · Apache 2.0',
+  },
+
+  // ==========================================================================
+  //  Qwen 3.8 (Alibaba) — 2026-08 Day-0. qwen3_5 아키(Gated DeltaNet 3 : Gated Attention 1).
+  //  ⚠️ 배열 끝 append 고정(?m= 링크 보존) — Hy3와 동일 규칙.
+  //  3중 교차검증: ① config.json layer_types 카운트 ② safetensors index total_size÷2
+  //               ③ 모델카드 "Hidden Layout" 서술 — 셋이 완전 일치.
+  // ==========================================================================
+  {
+    name: 'Qwen 3.8 27B',
+    group: 'Qwen 3.8',
+    tags: ['dense', 'vlm'],
+    // 27,781,427,952 = HF API safetensors BF16 == index total_size 55,562,855,904 ÷ 2 (바이트 정확 일치)
+    // 비전 인코더(model.visual 333텐서, SigLIP depth 27) 포함한 실제 체크포인트 전체 — 사용자 확정 2026-08-24.
+    totalParams: 27.781,
+    activeParams: null, // dense
+    layerCount: 64,
+    fullAttnLayers: 16, // layer_types: full_attention 16 / linear_attention 48 (모델카드 "16 × (3×DeltaNet → 1×Gated Attention)")
+    kvHeads: 4,         // num_key_value_heads (모델카드 "4 for KV")
+    kvHeadDim: 256,     // head_dim (모델카드 "Head Dimension: 256")
+    attnHeads: 24,      // 모델카드 "24 for Q"
+    hiddenSize: 5120,
+    linearAttn: { layers: 48, numKHeads: 16, numVHeads: 48, headKDim: 128, headVDim: 128, convKernel: 4 }, // 모델카드 "48 for V, 16 for QK, Head Dim 128"
+    maxContext: 262144, // config max_position_embeddings — 모델카드 "262,144 natively"(1M은 호스티드 확장)
+    benchmarks: { GPQA: 0.892, 'MMLU-Pro': null, 'SWE-Bench': null }, // 모델카드 GPQA Diamond 89.2. MMLU-Pro 미공표, SWE는 Pro만 공표(Verified 아님 → 미기입)
+    desc: 'Dense · 27.8B(비전 인코더 포함) · 64레이어(풀어텐션 16 + DeltaNet 48) · KV는 16레이어만 · 최대 256K',
+  },
+  {
+    name: 'Qwen 3.8 2.4T-A95B',
+    group: 'Qwen 3.8',
+    tags: ['moe'],
+    // 2,446,182,725,504 = HF API safetensors BF16 == index total_size 4,892,365,451,008 ÷ 2 (바이트 정확 일치)
+    totalParams: 2446.183,
+    activeParams: 95, // 모델카드 "2.4T in total and 95B activated"
+    layerCount: 92,
+    fullAttnLayers: 23, // layer_types: full 23 / linear 69 (모델카드 "23 × (3×DeltaNet → 1×Gated Attention)")
+    kvHeads: 4,
+    kvHeadDim: 256,
+    attnHeads: 64,
+    hiddenSize: 8192,
+    linearAttn: { layers: 69, numKHeads: 16, numVHeads: 128, headKDim: 128, headVDim: 128, convKernel: 4 }, // 모델카드 "128 for V, 16 for QK, Head Dim 128"
+    numExperts: 512,
+    expertsPerToken: 10, // 모델카드 "10 Routed + 1 Shared"
+    maxContext: 262144,  // 모델카드 "262,144 natively"
+    benchmarks: null,    // 카드의 벤치 열 헤더가 호스티드 변형 "Qwen3.8-Max" — 오픈 체크포인트 귀속 불확실 → 미기입
+    desc: 'MoE · 2.4T / 95B active · 512 experts(top-10+shared) · 풀어텐션 23/92(DeltaNet 69) · 최대 256K',
+  },
+
+  // ==========================================================================
+  //  Laguna 2.1 (poolside) — 2026-07 릴리스. 표준 GQA + full/SWA(window 512) 인터리브.
+  //  현 엔진의 슬라이딩 경로로 그대로 계산 가능(신규 수학 불필요).
+  //  교차검증: config.json layer_types 카운트 ↔ 모델카드 서술 일치.
+  // ==========================================================================
+  {
+    name: 'Laguna XS 2.1',
+    group: 'Laguna',
+    tags: ['moe'],
+    // 33,442,617,088 = HF API safetensors BF16 == index total_size 66,885,234,176 ÷ 2
+    totalParams: 33.443,
+    activeParams: 3, // 모델카드 "33B total ... with 3B activated parameters per token"
+    layerCount: 40,
+    globalAttnLayers: 10, // layer_types: full_attention 10 / sliding_attention 30
+    slidingWindow: 512,   // config sliding_window
+    kvHeads: 8,
+    kvHeadDim: 128,
+    attnHeads: 48,
+    hiddenSize: 2048,
+    numExperts: 256,
+    expertsPerToken: 8,
+    maxContext: 262144,
+    benchmarks: { GPQA: null, 'MMLU-Pro': null, 'SWE-Bench': 0.709 }, // 모델카드 SWE-bench Verified 70.9%(pass@1 4회 평균). GPQA·MMLU-Pro 미공표
+    desc: 'MoE · 33.4B / 3B active · 256 experts(top-8) · 슬라이딩512(full 10/40) · 최대 256K · OpenMDW-1.1',
+  },
+  {
+    name: 'Laguna S 2.1',
+    group: 'Laguna',
+    tags: ['moe'],
+    // 117,561,977,600 = HF API safetensors BF16 == index total_size 235,123,955,200 ÷ 2
+    totalParams: 117.562,
+    activeParams: 8, // 모델카드 "118B total ... with 8B activated"
+    layerCount: 48,
+    globalAttnLayers: 12, // 모델카드 "48 layers in a 1:3 global-to-SWA ratio (12 global, 36 sliding, window 512)" — config layer_types와 일치
+    slidingWindow: 512,
+    kvHeads: 8,
+    kvHeadDim: 128,
+    attnHeads: 48,
+    hiddenSize: 3072,
+    numExperts: 256,
+    expertsPerToken: 10,
+    maxContext: 1048576, // config max_position_embeddings
+    benchmarks: null,    // 카드 벤치표에 SWE-bench Verified·GPQA·MMLU-Pro 없음(Multilingual/Pro/Terminal만) → 미기입
+    desc: 'MoE · 117.6B / 8B active · 256 experts(top-10) · 슬라이딩512(full 12/48) · 최대 1M · OpenMDW-1.1',
   },
 ];
 
@@ -485,6 +582,30 @@ export function calcKVCache(model, ctx, bits) {
   };
 }
 
+// 하이브리드 선형 어텐션(Gated DeltaNet 등)의 *고정* 순환 상태.
+// KV 캐시와 근본적으로 다르다 — KV는 ctx에 비례하지만 이 상태는 시퀀스당 상수다.
+// 그래서 KV에 합치지 않고 별도 항목으로 둔다(기존 KV 기준값·컨포먼스 벡터 불변).
+// 형태 출처(1차): huggingface/transformers src/transformers/models/qwen3_next/modeling_qwen3_next.py
+//   key_dim   = linear_num_key_heads   × linear_key_head_dim
+//   value_dim = linear_num_value_heads × linear_value_head_dim
+//   conv_dim  = key_dim * 2 + value_dim                              (L529 self.conv_dim)
+//   conv_states      : (batch, conv_dim, linear_conv_kernel_dim)     — 활성화 dtype(bf16 2B)
+//   recurrent_states : (batch, num_v_heads, head_k_dim, head_v_dim)  (L428/L485 torch.zeros)
+//                      config mamba_ssm_dtype=float32 → 4B
+// 가중치·KV 양자화와 무관한 런타임 상태 텐서라 고정 비용으로 계상한다(batch=1 로컬 추론 기준).
+export function calcLinearState(model) {
+  const la = model && model.linearAttn;
+  if (!la || !la.layers) return { totalBytes: 0, totalGB: 0, perLayerBytes: 0, convBytes: 0, recurrentBytes: 0 };
+  const keyDim = la.numKHeads * la.headKDim;
+  const valueDim = la.numVHeads * la.headVDim;
+  const convDim = keyDim * 2 + valueDim;
+  const convBytes = convDim * la.convKernel * (la.convDtypeBytes || 2);
+  const recurrentBytes = la.numVHeads * la.headKDim * la.headVDim * (la.stateDtypeBytes || 4);
+  const perLayerBytes = convBytes + recurrentBytes;
+  const totalBytes = perLayerBytes * la.layers;
+  return { totalBytes, totalGB: totalBytes / 1024 ** 3, perLayerBytes, convBytes, recurrentBytes };
+}
+
 // 벤치마크 평균 — 숫자값만(null/미공개 건너뜀)
 export function benchAvg(benchmarks) {
   if (!benchmarks) return null;
@@ -567,8 +688,9 @@ export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
   const kbpe = kvBits / 8;    // KV 원소 바이트(GPU 기본 F16=16)
   const quantMultiplier = (quantAdjust[model.name] && quantAdjust[model.name][weightBpw]) || 1.0;
   const paramBytes = residentParamsB(model, device) * 1e9 * wbpe * quantMultiplier; // PLE: GPU면 상주분만
+  const linearStateBytes = calcLinearState(model).totalBytes; // ctx 무관 고정 → 예산에서 먼저 뺀다
   const budget =
-    device.memoryGB * 1024 ** 3 * (1 - device.headroomRatio) - paramBytes - paramBytes * 0.12 - device.reserveGB * 1024 ** 3;
+    device.memoryGB * 1024 ** 3 * (1 - device.headroomRatio) - paramBytes - paramBytes * 0.12 - device.reserveGB * 1024 ** 3 - linearStateBytes;
   if (budget <= 0) return 0;
   const overhead = 1.15; // KV 블록 할당 padding
   const perLocal = 2 * model.kvHeads * model.kvHeadDim * kbpe * overhead;
@@ -620,7 +742,8 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   const ov = calcRuntimeOverhead(model, ctx, { weightBpw, kvBits }, device);
   const rtDyn = ov.paramOverheadGB + ov.kvOverheadGB + ov.activationOverheadGB; // 동적 런타임(고정 reserve 미포함)
   const reserve = device.reserveGB;                       // OS/CUDA/디스플레이 통합 reserve
-  const used = param + kv + rtDyn + reserve;
+  const linearState = calcLinearState(model).totalGB;     // 하이브리드 선형 어텐션 고정 상태(ctx 무관, 없으면 0)
+  const used = param + kv + linearState + rtDyn + reserve;
   const free = device.memoryGB - used;
   const headroom = device.memoryGB * device.headroomRatio;
 
@@ -645,6 +768,7 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
     os,
     param,
     kv,
+    linearState, // 선형 어텐션 순환 상태(GB) — ctx 무관 고정. 표준 어텐션 모델은 0
     rt,
     rtDyn,
     reserve,
@@ -843,8 +967,72 @@ function paramsFromName(id) {
   return m ? parseFloat(m[1]) : null;
 }
 
+// 모델링이 끝난 아키텍처만 좁게 허용한다(allowlist). qwen3_5 계열 = Gated DeltaNet 하이브리드로,
+// full/linear 레이어 분리와 고정 순환 상태를 엔진이 실제로 계산한다(calcLinearState + fullAttnLayers).
+// 파생 finetune이 매우 많아(Qwen3.8-27B 계열) 이 계열만 열어두는 가치가 크다.
+const HYBRID_LINEAR_TYPES = new Set(['qwen3_5', 'qwen3_5_text', 'qwen3_5_moe', 'qwen3_5_moe_text']);
+
+// 메모리 거동을 실제로 모델링한 레이어 타입만 인정한다(허용목록). 모르는 타입이 하나라도 있으면 거부 —
+// 예: lfm2의 'conv'는 어텐션이 아니라 고정 conv 캐시라 KV 공식이 성립하지 않는다.
+const KNOWN_LAYER_TYPES = new Set(['full_attention', 'sliding_attention', 'linear_attention']);
+
+// config 치수로 파라미터 수의 자릿수를 재구성한다(이름 추정 교차검증용, 정밀 산출 아님).
+function paramsFromDims(c, layerCount) {
+  const h = c.hidden_size;
+  if (!h || !layerCount) return null;
+  const attnHeads = c.num_attention_heads || 0;
+  const kvHeads = c.num_key_value_heads ?? attnHeads;
+  const hd = c.head_dim ?? (attnHeads ? Math.round(h / attnHeads) : 128);
+  const qDim = attnHeads * hd;
+  const kvDim = kvHeads * hd;
+  const attn = h * qDim + 2 * h * kvDim + qDim * h; // q + k,v + o
+  const nExp = c.num_local_experts || c.num_experts || c.n_routed_experts || 0;
+  const inter = nExp
+    ? (c.moe_intermediate_size || 0) * (nExp + (c.n_shared_experts || c.num_shared_experts || 0))
+    : c.intermediate_size || 0;
+  const ffn = 3 * h * inter; // gate + up + down
+  const embed = c.vocab_size ? c.vocab_size * h * (c.tie_word_embeddings ? 1 : 2) : 0;
+  return (layerCount * (attn + ffn) + embed) / 1e9;
+}
+
 export function parseHfConfig(id, raw, totalSize) {
-  const c = raw.text_config || raw; // 멀티모달은 text_config에 본체
+  // 일반 파싱은 의도적으로 fail-closed다. 익숙한 필드명을 쓰면서 메모리 레이아웃이 다른 config
+  // (반복 레이어·혼합 linear/GQA·압축/인덱스 어텐션·멀티모달 프로젝터)는 그럴듯한 오답을 만든다.
+  // 숫자를 내지 않는 편이 틀린 fit보다 안전하다.
+  const inner = raw.text_config || raw;
+  const isHybridLinear =
+    HYBRID_LINEAR_TYPES.has(String(raw.model_type || '')) || HYBRID_LINEAR_TYPES.has(String(inner.model_type || ''));
+
+  // 멀티모달 래퍼(text_config) 자체는 막지 않는다 — 판정 대상은 *텍스트 본체의 메모리 레이아웃*이고,
+  // 가중치는 safetensors 전체 크기(비전 타워 포함)로 잡히므로 전체 체크포인트 기준으로 정합하다.
+  // 대신 텍스트 본체가 아래 게이트를 전부 통과해야 하고, 융합(cross-attention) 계열은 KV가
+  // 이미지 토큰 쪽으로도 자라기 때문에 별도로 거부한다.
+  if (raw.cross_attention_layers || inner.cross_attention_layers || inner.cross_attention_config) {
+    throw new Error('cross-attention 융합 멀티모달은 아직 지원하지 않아요');
+  }
+  const c = inner;
+  if ((c.num_loops || 1) !== 1) {
+    throw new Error('반복 레이어(num_loops) 아키텍처는 아직 지원하지 않아요');
+  }
+  if (c.block_configs || c.gqa_layers || c.linear_attn_config || c.compress_ratios || c.num_hash_layers || c.index_topk) {
+    throw new Error('비표준 압축·희소·혼합 어텐션 아키텍처는 아직 지원하지 않아요');
+  }
+  // Mamba/SSM 블록 스케줄(Nemotron-H류)은 layer_types가 아니라 layers_block_type을 쓴다.
+  // 이걸 못 보면 전 레이어를 full attention으로 계산해 KV를 수 배 과대 산정한다(실증: Nemotron-3.5-Lightning 52L 중 attention 6L).
+  if (Array.isArray(c.layers_block_type) || Array.isArray(c.block_types) || c.ssm_state_size || c.mamba_num_heads) {
+    throw new Error('Mamba/SSM 블록 스케줄 아키텍처는 아직 지원하지 않아요');
+  }
+  // MLA + 선형/그룹 하이브리드(bailing_hybrid류) — MLA 균일 경로로 계산하면 틀린다.
+  if (c.kv_lora_rank && (c.num_kv_heads_for_linear_attn != null || c.layer_group_size || c.short_conv_kernel_size)) {
+    throw new Error('MLA + 선형 어텐션 혼합 아키텍처는 아직 지원하지 않아요');
+  }
+  // 모르는 레이어 타입이 하나라도 있으면 거부(허용목록) — 'conv' 등.
+  if (Array.isArray(c.layer_types)) {
+    const unknown = [...new Set(c.layer_types.map(String))].filter((t) => !KNOWN_LAYER_TYPES.has(t));
+    if (unknown.length) {
+      throw new Error(`알 수 없는 어텐션 레이어 타입(${unknown.join(', ')})은 아직 지원하지 않아요`);
+    }
+  }
   const layerCount = c.num_hidden_layers;
   if (!layerCount) throw new Error('config에 num_hidden_layers 없음');
 
@@ -859,10 +1047,28 @@ export function parseHfConfig(id, raw, totalSize) {
     c.use_sliding_window !== false &&
     (hasSlidingLayers || (c.sliding_window < (c.max_position_embeddings || Infinity)));
   const sliding = slidingActive ? c.sliding_window : 0;
+  if (sliding && !Array.isArray(c.layer_types) && !c.kv_lora_rank) {
+    throw new Error('레이어별 sliding/full 구성이 없는 모델은 정확히 계산할 수 없어요');
+  }
 
   // layer_types로 full attention 레이어 수 파악 (하이브리드/슬라이딩 정확도)
-  let fullAttnLayers, globalAttnLayers;
+  let fullAttnLayers, globalAttnLayers, linearAttn;
   if (Array.isArray(c.layer_types)) {
+    const linearCount = c.layer_types.filter((t) => String(t).includes('linear')).length;
+    if (linearCount > 0) {
+      // 선형/재귀 어텐션은 고정 상태 메모리를 갖는다 — 치수를 모르면 계산할 수 없다.
+      if (!isHybridLinear || !c.linear_num_value_heads || !c.linear_key_head_dim || !c.linear_value_head_dim) {
+        throw new Error('linear/recurrent attention의 고정 상태 메모리는 HuggingFace 즉석 계산에서 지원하지 않아요');
+      }
+      linearAttn = {
+        layers: linearCount,
+        numKHeads: c.linear_num_key_heads,
+        numVHeads: c.linear_num_value_heads,
+        headKDim: c.linear_key_head_dim,
+        headVDim: c.linear_value_head_dim,
+        convKernel: c.linear_conv_kernel_dim || 4,
+      };
+    }
     const full = c.layer_types.filter((t) => String(t).includes('full')).length;
     if (full > 0 && full < layerCount) {
       if (sliding > 0) globalAttnLayers = full; // 슬라이딩: full = 글로벌 레이어
@@ -893,13 +1099,27 @@ export function parseHfConfig(id, raw, totalSize) {
     // 혼합 정밀도(일부 레이어 상위 bit)는 params 과대 방향으로만 틀림 — 보수적이라 허용.
     const qc = c.quantization_config;
     // bitsandbytes는 bits 필드 없이 load_in_4bit/8bit 불리언만 씀 — 누락 시 torch_dtype(2B) 경로로 ÷2~4 과소계산(거짓 fits)
-    const qbits = c.quantization?.bits ?? qc?.bits ?? (qc?.load_in_4bit ? 4 : qc?.load_in_8bit ? 8 : undefined);
+    const quantMethod = String(c.quantization?.quant_method || qc?.quant_method || qc?.fmt || '').toLowerCase();
+    const qbits = c.quantization?.bits ?? qc?.bits
+      ?? (qc?.load_in_4bit ? 4 : qc?.load_in_8bit ? 8 : quantMethod.includes('fp8') || quantMethod.includes('int8') ? 8 : undefined);
     const dt = String(c.torch_dtype || '').toLowerCase();
     const dtypeBytes = qbits ? qbits / 8
       : dt.includes('float32') || dt.includes('fp32') ? 4 : dt.includes('fp8') || dt.includes('int8') ? 1 : 2;
     totalParams = totalSize / dtypeBytes / 1e9;
   }
-  if (!totalParams) totalParams = paramsFromName(id);
+  if (!totalParams) {
+    // 최후 수단인 이름 추정은 config 치수와 교차검증한다. 레포 이름이 *타깃* 모델을 가리키는
+    // 드래프트 헤드·어댑터가 실재한다 — z-lab/Qwen3.8-27B-DFlash2는 5레이어 draft인데 이름은 27B다.
+    const named = paramsFromName(id);
+    if (!named) throw new Error('safetensors 크기도 이름 단서도 없어 파라미터 수를 구할 수 없어요');
+    const dims = paramsFromDims(c, layerCount);
+    if (dims && (named > dims * 2 || named < dims * 0.5)) {
+      throw new Error(
+        `레포 이름의 파라미터 수(${named}B)가 config 구조 추정(~${dims.toFixed(1)}B)과 달라요 — 드래프트/어댑터 레포일 수 있어 계산하지 않습니다`
+      );
+    }
+    totalParams = named;
+  }
 
   return {
     name: id.split('/').pop(),
@@ -912,6 +1132,7 @@ export function parseHfConfig(id, raw, totalSize) {
     layerCount,
     fullAttnLayers,
     globalAttnLayers,
+    linearAttn,
     kvHeads,
     kvHeadDim: headDim,
     globalHeadDim: c.global_head_dim || undefined,
@@ -944,4 +1165,8 @@ export function naiveKVCache(model, ctx, bits) {
 }
 
 // 내장 모델 데이터 기준일 (신선도 표시용). HF 붙여넣기는 항상 실시간이라 무관.
-export const DATA_UPDATED = '2026-07';
+export const DATA_UPDATED = '2026-08';
+
+// 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
+// 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
+export const ENGINE_VERSION = '2.7.0';
