@@ -358,6 +358,26 @@ export const MODELS = [
   },
 ];
 
+// 카탈로그 표시 순서(최신·화제순). MODELS 배열은 ?m= 공유링크 때문에 append-only라
+// 배열 순서 == 표시 순서가 더 이상 성립하지 않는다. 이 목록이 표시 순서의 단일 출처다.
+// 여기 없는 그룹은 뒤에 배열 순서대로 붙는다(신규 그룹 추가를 잊어도 사라지지 않게).
+export const MODEL_GROUP_ORDER = [
+  'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5',
+  'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft',
+];
+
+// 그룹 단위로 묶어 표시 순서대로 반환 — 드롭다운(ControlBar/GpuControlBar) 공용.
+export function groupedForDisplay(models) {
+  const groups = [];
+  for (const m of models) {
+    let g = groups.find((x) => x.group === m.group);
+    if (!g) { g = { group: m.group, items: [] }; groups.push(g); }
+    g.items.push(m);
+  }
+  const rank = (g) => { const i = MODEL_GROUP_ORDER.indexOf(g); return i === -1 ? MODEL_GROUP_ORDER.length : i; };
+  return groups.sort((a, b) => rank(a.group) - rank(b.group) || groups.indexOf(a) - groups.indexOf(b));
+}
+
 // 로컬에서 돌릴 수 있는(시뮬 대상) 모델만
 export const LOCAL_MODELS = MODELS.filter((m) => !m.isCloud);
 
