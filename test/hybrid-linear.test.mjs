@@ -149,3 +149,19 @@ test('ENGINE_VERSION == package.json version (소비처가 표시하는 버전�
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(ENGINE_VERSION, pkg.version);
 });
+
+test('표시 순서: 배열은 append-only여도 신규 그룹이 카탈로그 앞에 온다', async () => {
+  const { groupedForDisplay, MODEL_GROUP_ORDER } = await import('../engine.js');
+  const order = groupedForDisplay(LOCAL_MODELS).map((g) => g.group);
+  assert.equal(order[0], 'Qwen 3.8', `첫 그룹이 ${order[0]}`);
+  assert.equal(order[1], 'Laguna');
+  assert.ok(order.indexOf('Draft') > order.indexOf('Qwen 3.6'), 'Draft는 실모델 뒤');
+  // 모델 유실 없음
+  assert.equal(groupedForDisplay(LOCAL_MODELS).reduce((n, g) => n + g.items.length, 0), LOCAL_MODELS.length);
+  // 목록에 없는 그룹도 사라지지 않는다
+  const withNew = [...LOCAL_MODELS, { name: 'X', group: 'ZZZ-New' }];
+  assert.ok(groupedForDisplay(withNew).map((g) => g.group).includes('ZZZ-New'));
+  // 카탈로그의 모든 그룹이 순서 목록에 등재돼 있는지(신규 추가 시 알림)
+  const missing = [...new Set(LOCAL_MODELS.map((m) => m.group))].filter((g) => !MODEL_GROUP_ORDER.includes(g));
+  assert.deepEqual(missing, [], `MODEL_GROUP_ORDER에 없는 그룹: ${missing.join(', ')}`);
+});
