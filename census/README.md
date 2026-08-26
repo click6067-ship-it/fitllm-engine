@@ -1,6 +1,6 @@
-# Local LLM Fit Census v1 — 2026-08-23
+# Local LLM Fit Census v1 — 2026-08-26
 
-**8,064 verdicts**: 24 models × 88 devices (36 GPUs + 52 Mac configs) × per-platform quant tiers.
+**8,424 verdicts**: 24 models × 93 devices (36 GPUs + 57 Mac configs) × per-platform quant tiers.
 Every number computed by [fitllm-engine](https://github.com/click6067-ship-it/fitllm-engine) from official `config.json` values — architecture-aware (MLA, sliding-window, hybrid attention, MoE). **Reproduce it yourself: `npm run census`.**
 
 Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/headroom per engine. Interactive per-combo pages: [fitllm.run/can-i-run](https://fitllm.run/can-i-run).
@@ -28,30 +28,30 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 
 | Model | Params | Smallest GPU | Smallest Mac |
 |---|---|---|---|
-| GLM-4.7-Flash | 30B | RTX 4090 | M5 32GB |
+| GLM-4.7-Flash | 30B | RTX 4090 | M6 32GB |
 | GLM-5.2 | 753B | — | M3 Ultra 512GB |
-| gpt-oss-20b | 21B | RTX 5080 | M5 24GB |
-| gpt-oss-120b | 117B | A100 80GB | M3 Max 96GB |
-| Qwen 3.6 27B | 27.2B | RTX 4090 | M5 32GB |
-| Qwen 3.6 35B-A3B | 35B | RTX 5090 | M5 32GB |
-| Qwen-AgentWorld-35B-A3B | 34.7B | RTX 5090 | M5 32GB |
-| Gemma 4 e2b | 5.1B | RTX 4060 Ti 8GB | M5 16GB |
-| Gemma 4 e4b | 8B | RTX 4060 Ti 8GB | M5 16GB |
-| Gemma 4 12b | 11.95B | RTX 2080 Ti | M5 16GB |
-| Gemma 4 26b A4B | 25.5B | RX 7900 XT | M5 32GB |
-| Gemma 4 31b | 30.7B | RTX 4090 | M5 32GB |
-| Llama-3.2-3B-Instruct | 3.2B | RTX 4060 Ti 8GB | M5 16GB |
-| Llama-3.1-8B-Instruct | 8B | RTX 3080 10GB | M5 16GB |
-| MiniCPM5-1B | 1.081B | RTX 4060 Ti 8GB | M5 16GB |
-| Qwen3-0.6B | 0.596B | RTX 4060 Ti 8GB | M5 16GB |
-| Qwen3-1.7B | 1.721B | RTX 4060 Ti 8GB | M5 16GB |
-| Llama-3.2-1B-Instruct | 1.236B | RTX 4060 Ti 8GB | M5 16GB |
-| Gemma-3-1B-it | 1B | RTX 4060 Ti 8GB | M5 16GB |
+| gpt-oss-20b | 21B | RTX 5080 | M6 24GB |
+| gpt-oss-120b | 117B | A100 80GB | M5 Ultra 96GB |
+| Qwen 3.6 27B | 27.2B | RTX 4090 | M6 32GB |
+| Qwen 3.6 35B-A3B | 35B | RTX 5090 | M6 32GB |
+| Qwen-AgentWorld-35B-A3B | 34.7B | RTX 5090 | M6 32GB |
+| Gemma 4 e2b | 5.1B | RTX 4060 Ti 8GB | M6 16GB |
+| Gemma 4 e4b | 8B | RTX 4060 Ti 8GB | M6 16GB |
+| Gemma 4 12b | 11.95B | RTX 2080 Ti | M6 16GB |
+| Gemma 4 26b A4B | 25.5B | RX 7900 XT | M6 32GB |
+| Gemma 4 31b | 30.7B | RTX 4090 | M6 32GB |
+| Llama-3.2-3B-Instruct | 3.2B | RTX 4060 Ti 8GB | M6 16GB |
+| Llama-3.1-8B-Instruct | 8B | RTX 3080 10GB | M6 16GB |
+| MiniCPM5-1B | 1.081B | RTX 4060 Ti 8GB | M6 16GB |
+| Qwen3-0.6B | 0.596B | RTX 4060 Ti 8GB | M6 16GB |
+| Qwen3-1.7B | 1.721B | RTX 4060 Ti 8GB | M6 16GB |
+| Llama-3.2-1B-Instruct | 1.236B | RTX 4060 Ti 8GB | M6 16GB |
+| Gemma-3-1B-it | 1B | RTX 4060 Ti 8GB | M6 16GB |
 | Hy3 | 298.8B | — | M2 Ultra 192GB |
-| Qwen 3.8 27B | 27.781B | RTX 4090 | M5 32GB |
+| Qwen 3.8 27B | 27.781B | RTX 4090 | M6 32GB |
 | Qwen 3.8 2.4T-A95B | 2446.183B | — | — |
-| Laguna XS 2.1 | 33.443B | RTX 5090 | M5 32GB |
-| Laguna S 2.1 | 117.562B | A100 80GB | M3 Max 96GB |
+| Laguna XS 2.1 | 33.443B | RTX 5090 | M6 32GB |
+| Laguna S 2.1 | 117.562B | A100 80GB | M5 Ultra 96GB |
 
 ## Full data
 

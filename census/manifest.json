@@ -2,11 +2,11 @@
  "name": "FitLLM Fit Census",
  "version": 1,
  "schema_version": 2,
- "generated": "2026-08-23",
+ "generated": "2026-08-26",
  "license": "CC0-1.0",
  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
- "rows": 8064,
- "devices": 88,
+ "rows": 8424,
+ "devices": 93,
  "measured_rows": 9,
  "canonical": {
   "site": "https://fitllm.run/data/",
@@ -15,8 +15,8 @@
   "source": "https://github.com/click6067-ship-it/fitllm-engine/tree/master/census"
  },
  "sha256": {
-  "census-v1.json": "6b2f88a527aea7f24a3177bdc17c76d5458460dbc991400b647aefefc19ead31",
-  "census-v1.csv": "c59ced5286b8ec726deaf9376ebab422871ecf0de67fd9769981b23760f2b57e"
+  "census-v1.json": "4df9a8522880fc6a6dd7176c2a512bba4e5f26342ada3375299f79e469f81cdb",
+  "census-v1.csv": "9b624e6f4146122311cdabb64102cf3fd64d393951521e5be174e6fef1ebfe1e"
  },
  "engine": {
   "name": "fitllm-engine",
