@@ -382,13 +382,23 @@ export function groupedForDisplay(models) {
 export const LOCAL_MODELS = MODELS.filter((m) => !m.isCloud);
 
 // ===== 맥북/맥 RAM 옵션 (통합메모리 GB) =====
-// M1–M4 전세대 + Ultra/Studio. fit엔 통합메모리 GB만 영향(대역폭은 chipBandwidth = dormant speed용).
-// Track A(Apple newsroom+Wikipedia) ∥ Track B(Codex) 이중검증(2026-07-09, 일치). M4 Ultra 미존재(M3 Ultra가 최신).
+// M1–M6 전세대 + Ultra/Studio. fit엔 통합메모리 GB만 영향(대역폭은 chipBandwidth = dormant speed용).
+// Track A(Apple newsroom+Wikipedia) ∥ Track B(Codex) 이중검증(2026-07-09, 일치). M4 Ultra는 미출시 — 2026-08-25 기준 최신 Ultra는 M5 Ultra.
 // 출처: Apple Newsroom 각 세대 발표 + support.apple.com 스펙 + Wikipedia Apple_M1..M4.
+// 2026-08-27 추가(M6 · M5 Ultra) — 2026-08-25 Apple 발표, 출하 2026-09-22. 1차 출처 직접 확인:
+//   뉴스룸 https://www.apple.com/newsroom/2026/08/apple-introduces-m6-and-m5-ultra-for-a-big-leap-in-performance-and-ai-compute/
+//   기술사양 https://www.apple.com/mac-mini/specs/ · https://www.apple.com/mac-studio/specs/
+// ⚠️ 최대 통합메모리는 안 늘었다: M6 32GB = M4·M5와 동일 / M5 Ultra 512GB = M3 Ultra와 동일 → fit 판정 불변, 바뀐 건 대역폭뿐.
 export const MACBOOK_RAM_GROUPS = {
+  'M6': [16, 24, 32], // Mac mini(2026). 최대 32GB — M4·M5와 동일. 대역폭만 용량 연동(16GB 153 / 24·32GB 170) → chipBandwidth 참조
   'M5': [16, 24, 32], // MacBook Air/Pro 14" (Wikipedia Apple_M5 ∥ Codex 트랙 교차확인 2026-07-09)
-  'M5 Pro': [24, 48, 64],
-  'M5 Max': [36, 48, 64, 128],
+  'M5 Pro': [24, 48, 64], // Mac mini 기술사양 재확인 2026-08-27 (24 base / 48 / 64)
+  'M5 Max': [36, 48, 64, 128], // Mac Studio 기술사양 재확인 2026-08-27 (36=32코어GPU / 48·64·128=40코어GPU)
+  // ⚠️ 512GB 의도적 제외 — 2026-08-27 apple.com/shop/buy-mac/mac-studio 실측: M5 Ultra는 96GB·256GB만 예약 가능하고
+  //    512GB는 예약조차 안 됨. Apple 뉴스룸 원문(1차 출처) "Mac Studio with 512GB of unified memory is coming in late October."
+  //    가격 미공개. 실제 판매 시작되면 512 추가할 것. ⚠️ Sol 크로스리뷰는 "공식 카탈로그면 512를 남기고 가용성 메타데이터를 붙이라"며 반대함 — 사용자 결정으로 제외 유지.
+  //    (512GB 티어 자체는 M3 Ultra로 이미 선택 가능 — fit 수학은 동일)
+  'M5 Ultra': [96, 256], // Mac Studio(2026). 128GB 옵션 없음(96 다음이 256) — 예약 가능 구성만 등재
   'M4': [16, 24, 32],
   'M4 Pro': [24, 48, 64],
   'M4 Max': [36, 48, 64, 128],
@@ -953,9 +963,17 @@ const CHIP_BANDWIDTH = {
   'M2': 100, 'M2 Pro': 200, 'M2 Max': 400, 'M2 Ultra': 800,
   'M3': 100, 'M3 Pro': 150, 'M3 Max': 400, 'M3 Ultra': 819,
   'M4': 120, 'M4 Pro': 273, 'M4 Max': 546,
-  'M5': 153, 'M5 Pro': 307, 'M5 Max': 614, // M5 base 153.6 (Wikipedia ∥ Codex 이중확인)
+  'M5': 153, 'M5 Pro': 307, 'M5 Max': 614, 'M5 Ultra': 1200, // M5 base 153GB/s (Apple 공식 — apple.com/mac-mini/specs M6 16GB 구성과 동일값) · M5 Ultra 1.2TB/s (Apple 뉴스룸/Mac Studio 기술사양 2026-08-27)
+  'M6': 170, // ⚠️ 대표값(마케팅 "up to"). 실제는 용량 연동 — 아래 chipBandwidth의 ramGB 분기 참조
 };
-export function chipBandwidth(chip, gpuCores = 40) {
+// ⚠️ M6는 "같은 칩인데 통합메모리 용량에 따라 대역폭이 다르다":
+//    16GB = 153GB/s (M5와 동일) · 24GB·32GB = 170GB/s  — 출처 https://www.apple.com/mac-mini/specs/ (2026-08-27 직접 확인)
+//    ⚠️ "베이스 M시리즈 사상 최초"라고는 쓰지 않는다 — M2~M5 공식 사양은 용량 무관 단일 대역폭이지만
+//       M1 공식 사양은 8/16GB 대역폭 자체를 게재하지 않아 반증 불가(Sol 크로스리뷰 2026-08-27 지적, 수용).
+//       검증 가능한 표현은 "확인된 M2~M5 범위에서는 선례 없음"까지다.
+//    ramGB를 안 넘기면 풀스펙 값(170)을 반환한다 — chipBandwidth('M5 Max')가 기본 614(고사양)를 주는 기존 관례와 동일.
+export function chipBandwidth(chip, gpuCores = 40, ramGB = null) {
+  if (chip === 'M6') return (ramGB != null && ramGB <= 16) ? 153 : 170; // M6 용량별
   if (chip === 'M5 Max') return gpuCores === 32 ? 460 : 614; // M5 Max GPU 코어수별
   return CHIP_BANDWIDTH[chip] || 307;
 }
@@ -964,12 +982,12 @@ export function chipBandwidth(chip, gpuCores = 40) {
 // 하위호환(기존 임포터 breaking 방지)용으로만 export 유지 — 신규 사용 금지. fit만이 검증 가능한 주장이다.
 // 예상 토큰 생성 속도(tok/s): 디코드 1토큰마다 활성 파라미터를 메모리에서 읽음
 // → tok/s ≈ 대역폭 ÷ (활성파라미터 × 바이트) × 실현효율
-export function estimateSpeed(model, chipOrDevice, bitsOrWeightBpw, gpuCores = 40) {
+export function estimateSpeed(model, chipOrDevice, bitsOrWeightBpw, gpuCores = 40, ramGB = null) {
   if (model.isCloud || !model.totalParams) return null;
   // chip 문자열(Apple) → chipBandwidth / device 객체(GPU) → device.bandwidthGBs
   const bwGBs = (chipOrDevice && typeof chipOrDevice === 'object' && chipOrDevice.bandwidthGBs != null)
     ? chipOrDevice.bandwidthGBs
-    : chipBandwidth(chipOrDevice, gpuCores);
+    : chipBandwidth(chipOrDevice, gpuCores, ramGB); // ramGB는 M6 용량별 대역폭에만 쓰임(미전달 시 기존 동작 그대로)
   const bw = bwGBs * 1e9; // bytes/s
   const activeB = (model.activeParams || model.totalParams) * 1e9; // 활성 파라미터 수
   const bytesPerToken = activeB * (bitsOrWeightBpw / 8); // 디코드: weight를 메모리에서 1회 read
@@ -1189,4 +1207,4 @@ export const DATA_UPDATED = '2026-08';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.7.0';
+export const ENGINE_VERSION = '2.8.0';
