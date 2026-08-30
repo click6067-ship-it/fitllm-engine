@@ -1175,6 +1175,29 @@ export function parseHfConfig(id, raw, totalSize) {
   const layerCount = c.num_hidden_layers;
   if (!layerCount) throw new Error('config에 num_hidden_layers 없음');
 
+  // 값 검증 — 종래엔 필드가 "있는지"만 보고 값은 안 봤다. 그래서 0·음수·소수·문자열이 그대로
+  // 계산에 들어갔다. num_key_value_heads: 0 이면 calcKVCache의 falsy 가드가 KV를 0으로 돌려주고,
+  // num_attention_heads가 아예 없으면 kvHeads가 1로 떨어져 32-head MHA를 32배 과소계산한다.
+  // 둘 다 거짓 "fits" 방향이다.
+  const posInt = (v) => Number.isInteger(v) && v > 0;
+  if (!posInt(layerCount)) throw new Error('num_hidden_layers 값이 양의 정수가 아니에요');
+  if (!posInt(c.num_attention_heads)) {
+    throw new Error('config에 num_attention_heads가 없거나 값이 양의 정수가 아니에요 — KV 치수를 추정하지 않습니다');
+  }
+  for (const k of ['num_key_value_heads', 'head_dim', 'hidden_size', 'kv_lora_rank', 'qk_rope_head_dim']) {
+    if (c[k] != null && !posInt(c[k])) {
+      throw new Error(`config의 ${k} 값이 양의 정수가 아니에요 — 계산하지 않습니다`);
+    }
+  }
+  // sliding_window만은 0을 허용한다 — "슬라이딩 비활성"의 관례적 표기다(아래 slidingActive가 판정).
+  if (c.sliding_window != null && c.sliding_window !== 0 && !posInt(c.sliding_window)) {
+    throw new Error('config의 sliding_window 값이 양의 정수가 아니에요 — 계산하지 않습니다');
+  }
+  // 두 메타데이터가 어긋나면 어느 쪽이 참인지 알 수 없다.
+  if (Array.isArray(c.layer_types) && c.layer_types.length !== layerCount) {
+    throw new Error('layer_types 길이가 num_hidden_layers와 달라요 — 계산하지 않습니다');
+  }
+
   const attnHeads = c.num_attention_heads;
   const kvHeads = c.num_key_value_heads ?? attnHeads ?? 1;
   const headDim = c.head_dim ?? (c.hidden_size && attnHeads ? Math.round(c.hidden_size / attnHeads) : 128);
@@ -1188,6 +1211,13 @@ export function parseHfConfig(id, raw, totalSize) {
   const sliding = slidingActive ? c.sliding_window : 0;
   if (sliding && !Array.isArray(c.layer_types) && !c.kv_lora_rank) {
     throw new Error('레이어별 sliding/full 구성이 없는 모델은 정확히 계산할 수 없어요');
+  }
+  // 슬라이딩 레이어가 있는데 쓸 수 있는 윈도우 크기를 못 읽으면, 아래 분기가 sliding 레이어를
+  // 'KV 없는 linear'로 해석해 그 레이어들의 KV를 통째로 삭제한다 — 거짓 "fits"의 직행로다.
+  // sliding_windows(복수형) 말고도 swa_size 등 이름이 다른 경우가 있어 개별 필드명이 아니라
+  // "윈도우를 못 읽었다"는 상태 자체로 막는다.
+  if (hasSlidingLayers && !(sliding > 0)) {
+    throw new Error('슬라이딩 어텐션 레이어가 있는데 윈도우 크기를 읽을 수 없어 계산하지 않아요');
   }
 
   // layer_types로 full attention 레이어 수 파악 (하이브리드/슬라이딩 정확도)
@@ -1236,12 +1266,34 @@ export function parseHfConfig(id, raw, totalSize) {
     // 선-양자화 레포(MLX/AWQ/bnb): 저장 비트폭의 진실은 quantization(.bits) — torch_dtype은 원본 정밀도라
     // ÷2 과소계산 → 거짓 "fits" (issue #2). 합성 재현: 8bit 레포에 qbits 무시 시 params 절반 (test/parsehf.test.mjs).
     // 혼합 정밀도(일부 레이어 상위 bit)는 params 과대 방향으로만 틀림 — 보수적이라 허용.
-    const qc = c.quantization_config;
+    // 저장 정보는 멀티모달 래퍼의 *최상위*에만 있는 경우가 있다. inner(text_config)만 보면
+    // 4비트를 못 읽고 2바이트로 나눠 4배 과소계산 = 거짓 "fits"가 된다.
+    // 실측: Qwen/Qwen3.5-397B-A17B-GPTQ-Int4 는 quantization_config.bits=4가 raw 최상위에 있고
+    // text_config는 중첩이라, inner만 읽던 종래 코드가 397B 모델을 117.8B로 계산했다.
+    // 양쪽에 다 있고 서로 다르면 어느 쪽이 참인지 알 수 없으므로 거부한다.
+    const pick = (key) => {
+      const a = inner[key], b = raw[key];
+      if (a != null && b != null && JSON.stringify(a) !== JSON.stringify(b)) {
+        throw new Error(`${key}가 text_config와 최상위에서 서로 달라요 — 계산하지 않습니다`);
+      }
+      return a ?? b;
+    };
+    const qc = pick('quantization_config');
+    const quant = pick('quantization');
     // bitsandbytes는 bits 필드 없이 load_in_4bit/8bit 불리언만 씀 — 누락 시 torch_dtype(2B) 경로로 ÷2~4 과소계산(거짓 fits)
-    const quantMethod = String(c.quantization?.quant_method || qc?.quant_method || qc?.fmt || '').toLowerCase();
-    const qbits = c.quantization?.bits ?? qc?.bits
+    const quantMethod = String(quant?.quant_method || qc?.quant_method || qc?.fmt || '').toLowerCase();
+    const qbits = quant?.bits ?? qc?.bits
       ?? (qc?.load_in_4bit ? 4 : qc?.load_in_8bit ? 8 : quantMethod.includes('fp8') || quantMethod.includes('int8') ? 8 : undefined);
-    const dt = String(c.torch_dtype || '').toLowerCase();
+    const dt = String(pick('torch_dtype') || pick('dtype') || '').toLowerCase();
+    // 양자화를 *선언해놓고* 비트폭을 못 읽으면 2바이트로 추정하지 않는다 — 그 추정이 틀리는
+    // 방향이 곧 거짓 fits다. 실측: gpt-oss는 dtype도 bits도 없이 quant_method만 "mxfp4"라
+    // 종래엔 bf16으로 가정해 117B 모델을 32.6B로 계산했다(3.6배 과소, #98).
+    // 반대로 양자화 선언이 아예 없으면 bf16이 HF 관례이므로 종래 기본값을 유지한다.
+    if ((qc || quant) && !qbits) {
+      throw new Error(
+        `선언된 양자화(${quantMethod || '방식 미상'})의 저장 비트폭을 확정할 수 없어 계산하지 않아요`
+      );
+    }
     const dtypeBytes = qbits ? qbits / 8
       : dt.includes('float32') || dt.includes('fp32') ? 4 : dt.includes('fp8') || dt.includes('int8') ? 1 : 2;
     totalParams = totalSize / dtypeBytes / 1e9;

@@ -105,15 +105,83 @@ test('통과: 이름이 틀리고 크기가 맞는 경우는 크기를 믿는다
   assert.ok(m.totalParams > 1.5 && m.totalParams < 2.5, `params ${m.totalParams}B`);
 });
 
-test('MoE 전문가 폭이 intermediate_size에 있으면 치수 심판을 건너뛴다 (gpt_oss 거짓 거부 방지)', () => {
-  // 실측: gpt-oss-120b는 moe_intermediate_size가 없어 paramsFromDims가 FFN을 0으로 세고
-  // ~2.1B로 추정한다. 그 상태로 32.6B와 비교하면 정상 모델을 거짓 거부한다.
-  const gptOss = {
+test('MoE 전문가 폭이 intermediate_size에 있으면 치수 심판을 건너뛴다 (거짓 거부 방지)', () => {
+  // paramsFromDims는 MoE일 때 moe_intermediate_size만 보므로, 전문가 폭이 intermediate_size에
+  // 있는 config는 FFN이 0으로 잡혀 추정이 자릿수째 무너진다. 그 추정으로 심판하면 거짓 거부가 난다.
+  const moe = {
     ...BASE, model_type: 'gpt_oss', num_hidden_layers: 36, hidden_size: 2880,
     intermediate_size: 2880, num_local_experts: 128, experts_per_token: 4,
-    vocab_size: 201088, sliding_window: 128,
+    vocab_size: 201088, sliding_window: 128, num_attention_heads: 64, head_dim: 64,
     layer_types: [...Array(18).fill('sliding_attention'), ...Array(18).fill('full_attention')],
   };
-  const m = parseHfConfig('openai/gpt-oss-120b', gptOss, 65.2e9);
+  const m = parseHfConfig('x/moe', moe, 65.2e9);
   assert.ok(m.totalParams > 30, `totalParams ${m.totalParams}B — 거짓 거부되면 안 된다`);
+});
+
+// ── 저장 비트폭 (Codex 리뷰 P0) ───────────────────────────────────────────────
+test('거부: dtype도 quantization도 없으면 2바이트로 추정하지 않는다 (gpt-oss mxfp4, #98)', () => {
+  // 실측: gpt-oss-120b는 torch_dtype·dtype·bits가 전부 없고 quant_method만 "mxfp4"라,
+  // 종래엔 기본 2바이트로 가정해 117B 모델을 32.6B로 계산했다(3.6배 과소 = 거짓 fits).
+  const { torch_dtype, ...noDtype } = BASE;
+  const gptOss = {
+    ...noDtype, model_type: 'gpt_oss', num_hidden_layers: 36, hidden_size: 2880,
+    num_attention_heads: 64, head_dim: 64, intermediate_size: 2880,
+    num_local_experts: 128, vocab_size: 201088,
+    quantization_config: { quant_method: 'mxfp4', modules_to_not_convert: ['model.layers.*.self_attn'] },
+  };
+  assert.throws(() => parseHfConfig('openai/gpt-oss-120b', gptOss, 65248815744), /저장 비트폭/);
+});
+
+test('최상위 quantization_config + 중첩 text_config를 함께 읽는다 (Qwen GPTQ-Int4 4배 과소계산)', () => {
+  // 실측: Qwen/Qwen3.5-397B-A17B-GPTQ-Int4 는 quantization_config.bits=4가 raw 최상위에 있고
+  // text_config는 중첩이라, inner만 읽던 종래 코드가 /2 를 적용해 397B를 117.8B로 계산했다.
+  // 치수 심판도 117.8 vs ~392.9 = 3.3배라 4배 경계 안이라 못 막았다.
+  const raw = {
+    architectures: ['Qwen3VLMoeForConditionalGeneration'],
+    quantization_config: { bits: 4, quant_method: 'gptq' },
+    text_config: {
+      model_type: 'qwen3_moe', num_hidden_layers: 60, num_attention_heads: 64,
+      num_key_value_heads: 4, head_dim: 128, hidden_size: 4096,
+      moe_intermediate_size: 1536, num_experts: 128, vocab_size: 151936,
+      max_position_embeddings: 262144,
+    },
+  };
+  const m = parseHfConfig('Qwen/Qwen3.5-397B-A17B-GPTQ-Int4', raw, 235657499488);
+  // 4bit = 0.5B/param → 235.7GB / 0.5 ≈ 471B. /2 로 읽으면 117.8B가 나온다.
+  assert.ok(m.totalParams > 400, `totalParams ${m.totalParams}B — 4비트를 못 읽고 2바이트로 나눴다`);
+});
+
+test('거부: 양자화 정보가 최상위와 text_config에서 서로 다르면 어느 쪽도 믿지 않는다', () => {
+  const raw = {
+    quantization_config: { bits: 4, quant_method: 'gptq' },
+    text_config: { ...BASE, quantization_config: { bits: 8, quant_method: 'gptq' } },
+  };
+  assert.throws(() => parseHfConfig('x/conflict', raw, 16e9), /서로 달라요/);
+});
+
+// ── 필수 KV 치수·값 검증 (Codex 리뷰 P0) ─────────────────────────────────────
+test('거부: num_attention_heads가 없으면 kvHeads를 1로 떨어뜨리지 않는다', () => {
+  // 종래: kvHeads = num_key_value_heads ?? num_attention_heads ?? 1 → 32-head MHA가 1로 계산돼
+  // 128K KV가 64GiB인데 2GiB로 나왔다(32배 과소 = 거짓 fits).
+  const { num_attention_heads, num_key_value_heads, ...noHeads } = BASE;
+  assert.throws(() => parseHfConfig('x/noheads', noHeads, 16e9), /num_attention_heads/);
+});
+
+test('거부: num_key_value_heads가 0이면 KV가 0으로 계산되는 것을 막는다', () => {
+  assert.throws(() => parseHfConfig('x/zerokv', { ...BASE, num_key_value_heads: 0 }, 16e9), /양의 정수가 아니에요/);
+});
+
+test('거부: layer_types 길이가 num_hidden_layers와 다르면 계산하지 않는다', () => {
+  const cfg = { ...BASE, num_hidden_layers: 32, layer_types: Array(8).fill('full_attention') };
+  assert.throws(() => parseHfConfig('x/mismatch', cfg, 16e9), /layer_types 길이/);
+});
+
+test('거부: 슬라이딩 레이어가 있는데 윈도우 크기를 못 읽으면 KV를 삭제하지 않는다', () => {
+  // sliding_windows(복수형) 외에도 swa_size처럼 이름이 다른 경우가 있다. 개별 필드명이 아니라
+  // "윈도우를 못 읽었다"는 상태로 막아야 한다 — 안 그러면 sliding 레이어가 KV 0으로 취급된다.
+  const cfg = {
+    ...BASE, num_hidden_layers: 32, swa_size: 4096,
+    layer_types: [...Array(8).fill('full_attention'), ...Array(24).fill('sliding_attention')],
+  };
+  assert.throws(() => parseHfConfig('x/swa', cfg, 16e9), /윈도우 크기를 읽을 수 없어|구조를 알 수 없는/);
 });
