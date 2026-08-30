@@ -1014,6 +1014,84 @@ const HYBRID_LINEAR_TYPES = new Set(['qwen3_5', 'qwen3_5_text', 'qwen3_5_moe', '
 // 예: lfm2의 'conv'는 어텐션이 아니라 고정 conv 캐시라 KV 공식이 성립하지 않는다.
 const KNOWN_LAYER_TYPES = new Set(['full_attention', 'sliding_attention', 'linear_attention']);
 
+// ── 미지 구조 필드 게이트 (issue #87) ────────────────────────────────────────
+// 종래 게이트는 "알려진 나쁜 필드"를 하나씩 막는 블랙리스트였다. 그래서 처음 보는 architectures라도
+// num_hidden_layers/num_key_value_heads/head_dim만 표준처럼 생겼으면 통과했다 — 필드 *이름*만 보고
+// 아키텍처 *정체*는 안 본 것이다. 실증(2026-08-31 day0 28건 전수): TTS 모델(Breeze-TTS-2)이
+// 3.5B LLM으로 통과했고, MHC+MLA+sliding 혼합(Motif-3)이 MLA 균일 경로로 통과했다.
+// → 화이트리스트로 뒤집는다. 구조에 영향 줄 수 있는 이름의 키가 있는데 우리가 그 의미를 모르면 거부.
+//
+// 판정 원칙: "이 키가 KV 레이아웃 또는 파라미터 산출을 바꿀 수 있는가?"
+// 파라미터는 safetensors total_size(실측)에서 나오므로, 가중치만 늘리는 키는 무해로 본다.
+const STRUCTURAL_KEY_RE =
+  /attn|attention|kv|head|sliding|window|state|conv|expert|latent|lora|compress|sparse|index|mhc|hybrid|linear|block|mamba|ssm|nope|layer/i;
+
+// 엔진이 실제로 읽어서 계산에 쓰는 키 — 의미를 아는 것들이다.
+// (cross_attention_layers·layers_block_type·index_topk 등 "보면 즉시 거부"하는 키는 위쪽 검사에서
+//  이미 throw되므로 여기 넣지 않는다. 넣으면 검사 순서가 바뀔 때 조용히 통과할 수 있다.)
+const ENGINE_READ_KEYS = new Set([
+  'num_hidden_layers', 'num_attention_heads', 'num_key_value_heads', 'head_dim', 'global_head_dim',
+  'sliding_window', 'use_sliding_window', 'layer_types',
+  'num_local_experts', 'num_experts', 'n_routed_experts',
+  'kv_lora_rank', 'qk_rope_head_dim',
+  'vocab_size_per_layer_input', 'hidden_size_per_layer_input',
+  'linear_num_key_heads', 'linear_num_value_heads', 'linear_key_head_dim',
+  'linear_value_head_dim', 'linear_conv_kernel_dim',
+]);
+
+// 계열 무관 무해 — 계산 방식은 바꾸지만 메모리 레이아웃은 안 바꾼다.
+const BENIGN_STRUCTURAL_KEYS = new Set([
+  // RoPE 계열: 위치 인코딩이라 KV *텐서 크기*와 무관 (θ·스케일링·인터리브 모두)
+  'rope_theta', 'rope_scaling', 'rope_parameters', 'rope_interleave', 'rope_factor',
+  'partial_rotary_factor',
+  // 정규화·드롭아웃·바이어스: 학습/수치 안정화용, 캐시 크기 불변
+  'attention_dropout', 'attention_bias', 'qk_layernorm', 'layer_norm_epsilon',
+  // Granite: 어텐션 스코어에 곱하는 스칼라. 텐서 치수 불변
+  'attention_multiplier',
+  // FFN/MoE 배치: 어텐션이 아니라 MLP 쪽 구조라 KV 불변. 가중치 증감은 total_size에 이미 반영됨
+  'moe_intermediate_size', 'moe_layer_freq', 'shared_expert_intermediate_size',
+  'n_shared_experts', 'num_shared_experts', 'norm_topk_prob', 'output_router_logits',
+  'router_aux_loss_coef', 'first_k_dense_replace', 'interleave_moe_layer_step',
+  'moe_router_enable_expert_bias', 'num_experts_per_tok', 'experts_top_k',
+  'experts_per_token', 'decoder_sparse_step', 'mlp_only_layers',
+  // MTP(Multi-Token Prediction) 헤드 레이어 — 디코더 본체 밖이라 KV 불변.
+  // 가중치는 total_size에 포함돼 파라미터가 소폭 과대되지만 보수적(과대) 방향이라 허용.
+  'num_nextn_predict_layers',
+  // Qwen 계열 레거시 필드. 슬라이딩이 실제로 쓰이는지는 slidingActive가 따로 판정하므로
+  // 이 값 자체는 캐시 크기에 영향이 없다.
+  'max_window_layers',
+]);
+
+// MLA(kv_lora_rank) 경로에서만 무해한 키 — 압축 latent가 캐시되므로 아래 치수들은 캐시 크기와 무관하다.
+// MLA가 아닐 때는 같은 이름이라도 K/V 텐서 치수를 직접 바꿀 수 있어 허용하지 않는다.
+// (예: v_head_dim은 비-MLA에서 V의 head_dim이 K와 다르다는 뜻이 되어 2×kvHeads×headDim 공식이 깨진다.)
+const MLA_ONLY_KEYS = new Set([
+  'q_lora_rank',      // 쿼리 압축 — 캐시되는 건 KV latent라 무관
+  'qk_nope_head_dim', // 비-RoPE 성분. 캐시는 kv_lora_rank + qk_rope_head_dim
+  'v_head_dim',       // MLA에선 V도 latent에서 복원 — 별도 캐시 없음
+]);
+
+// 계열 전용 — 해당 model_type을 실제로 모델링·테스트했을 때만 허용한다.
+// 같은 키라도 미검증 계열에서 나오면 의미가 같다는 보장이 없으므로 거부한다(이게 #87의 요지).
+const FAMILY_STRUCTURAL_KEYS = new Map([
+  // qwen3_5 = Gated DeltaNet 하이브리드. full/linear 분리와 고정 순환 상태를 엔진이 계산하고
+  // 벡터로 검증돼 있다(v-qwen38-*). 아래 키들은 그 계열에서 의미가 확인된 것들.
+  ['qwen3_5', new Set([
+    'attn_output_gate',        // 출력 게이팅 — 가중치만 늘고 KV 불변
+    'full_attention_interval', // layer_types와 중복 정보. 엔진은 layer_types를 쓴다
+    'mlp_only_layers',         // MoE 대신 dense MLP인 레이어 — FFN 구조, KV 불변
+    'mtp_num_hidden_layers',   // Multi-Token Prediction 추가 레이어. 디코더 본체 밖(가중치만)
+    'mamba_ssm_dtype',         // dtype 힌트. 실제 SSM 스케줄은 layers_block_type 게이트가 따로 본다
+  ])],
+]);
+
+// model_type을 계열 키로 정규화 — qwen3_5 / qwen3_5_moe / qwen3_5_moe_text 를 한 계열로 본다.
+function familyOf(modelType) {
+  const t = String(modelType || '');
+  if (HYBRID_LINEAR_TYPES.has(t)) return 'qwen3_5';
+  return t;
+}
+
 // config 치수로 파라미터 수의 자릿수를 재구성한다(이름 추정 교차검증용, 정밀 산출 아님).
 function paramsFromDims(c, layerCount) {
   const h = c.hidden_size;
@@ -1070,6 +1148,29 @@ export function parseHfConfig(id, raw, totalSize) {
     if (unknown.length) {
       throw new Error(`알 수 없는 어텐션 레이어 타입(${unknown.join(', ')})은 아직 지원하지 않아요`);
     }
+  }
+  // 레이어별로 *다른* 윈도우 크기(sliding_windows 복수형, ExaoneMoe류). 단수 sliding_window 하나로
+  // 표현할 수 없다. 이걸 못 보면 sliding=0이 되어 아래 분기가 슬라이딩 레이어를 'KV 없는 linear'로
+  // 취급한다 → KV 과소계산 = 거짓 "fits"(실증: K-EXAONE-2.0 78레이어 중 20레이어만 KV 보유로 산출).
+  if (c.sliding_windows || c.mtp_sliding_windows) {
+    throw new Error('레이어별로 다른 슬라이딩 윈도우(sliding_windows)는 아직 지원하지 않아요');
+  }
+  // 미지 구조 필드 게이트(#87) — 구조에 영향 줄 수 있는 이름인데 의미를 모르는 키가 있으면 거부.
+  // 특정 실패 패턴을 막는 위 검사들보다 뒤에 둔다(그쪽이 더 정확한 메시지를 준다).
+  const familyKeys = FAMILY_STRUCTURAL_KEYS.get(familyOf(c.model_type || raw.model_type));
+  const unknownStructural = Object.keys(c).filter(
+    (k) =>
+      STRUCTURAL_KEY_RE.test(k) &&
+      !ENGINE_READ_KEYS.has(k) &&
+      !BENIGN_STRUCTURAL_KEYS.has(k) &&
+      !(c.kv_lora_rank && MLA_ONLY_KEYS.has(k)) &&
+      !(familyKeys && familyKeys.has(k))
+  );
+  if (unknownStructural.length) {
+    throw new Error(
+      `구조를 알 수 없는 config 필드(${unknownStructural.slice(0, 4).join(', ')}` +
+        `${unknownStructural.length > 4 ? ` 외 ${unknownStructural.length - 4}개` : ''})가 있어 계산하지 않아요`
+    );
   }
   const layerCount = c.num_hidden_layers;
   if (!layerCount) throw new Error('config에 num_hidden_layers 없음');
@@ -1144,6 +1245,30 @@ export function parseHfConfig(id, raw, totalSize) {
     const dtypeBytes = qbits ? qbits / 8
       : dt.includes('float32') || dt.includes('fp32') ? 4 : dt.includes('fp8') || dt.includes('int8') ? 1 : 2;
     totalParams = totalSize / dtypeBytes / 1e9;
+    // total_size sanity check — 종래엔 아래 fallback 경로에만 교차검증이 있어서, total_size가
+    // 있기만 하면 그 값을 무조건 믿었다. 그런데 index의 metadata.total_size가 아예 틀린 레포가 있다.
+    // 실증: InternScience/Agents-A1-4B는 shard 2개(텍스트 32L·hidden 2560 = ~4B급 멀티모달)인데
+    // total_size가 550.7GB로 적혀 있어 275.3B가 산출됐다 — 2개 샤드에 550GB는 물리적으로 불가능하다.
+    //
+    // 심판은 레포 *이름*이 아니라 config *치수*로 한다. 이름이 틀리고 크기가 맞는 반대 사례가
+    // 실재하기 때문이다(z-lab/Qwen3.8-27B-DFlash2 = 이름 27B, 실제 1.9B 드래프트 헤드).
+    // 치수는 레이어 구조와 같은 출처라, 크기 메타데이터와 독립적인 제3의 앵커가 된다.
+    // 목적은 '정밀 검증'이 아니라 '자릿수 붕괴 검출'이라 배수 여유를 크게 둔다.
+    // 치수 추정이 성립할 때만 심판으로 쓴다 — FFN·임베딩 항이 빠지면 어텐션만 세어 심하게
+    // 과소평가되고, 그 상태로 비교하면 정상 모델을 거짓 거부한다.
+    // MoE일 때 paramsFromDims는 moe_intermediate_size로만 FFN을 센다. gpt_oss처럼 전문가 FFN 폭을
+    // intermediate_size에 담는 config는 FFN이 0으로 잡혀 추정이 자릿수째 무너지므로 심판으로 쓸 수 없다
+    // (실증: gpt-oss-120b 추정 ~2.1B vs 실제 32.6B → 거짓 거부).
+    const nExpDims = c.num_local_experts || c.num_experts || c.n_routed_experts || 0;
+    const dimsUsable =
+      c.hidden_size && c.vocab_size && (nExpDims ? c.moe_intermediate_size : c.intermediate_size);
+    const dims = dimsUsable ? paramsFromDims(c, layerCount) : null;
+    if (dims && (totalParams > dims * 4 || totalParams < dims / 4)) {
+      throw new Error(
+        `체크포인트 크기로 계산한 파라미터 수(${totalParams.toFixed(1)}B)가 config 구조 추정` +
+          `(~${dims.toFixed(1)}B)과 자릿수가 달라요 — 레포의 total_size 메타데이터를 믿을 수 없어 계산하지 않습니다`
+      );
+    }
   }
   if (!totalParams) {
     // 최후 수단인 이름 추정은 config 치수와 교차검증한다. 레포 이름이 *타깃* 모델을 가리키는
