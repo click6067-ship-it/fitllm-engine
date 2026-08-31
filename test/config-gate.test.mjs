@@ -3,7 +3,7 @@
 // 각 케이스에 실제로 이 동작을 요구한 실측 사례를 주석으로 남긴다.
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { parseHfConfig } from '../engine.js';
+import { parseHfConfig, simulate, gpuDevice, GPUS } from '../engine.js';
 
 // 표준 dense 모델 — 게이트를 그냥 통과해야 하는 기준선.
 const BASE = {
@@ -184,4 +184,106 @@ test('거부: 슬라이딩 레이어가 있는데 윈도우 크기를 못 읽으
     layer_types: [...Array(8).fill('full_attention'), ...Array(24).fill('sliding_attention')],
   };
   assert.throws(() => parseHfConfig('x/swa', cfg, 16e9), /윈도우 크기를 읽을 수 없어|구조를 알 수 없는/);
+});
+
+// ── 2차 Codex 리뷰 반영 (기형·악성 config에서 거짓 fits) ─────────────────────
+test('거부: 양자화 비트폭이 별칭 간에 어긋난다 (최상위 bits=4 + 중첩 quantization.bits=8)', () => {
+  // 같은 키끼리만 비교하면 이 우회를 놓친다 — 종래엔 8비트로 계산됐다.
+  const raw = {
+    quantization_config: { bits: 4, quant_method: 'gptq' },
+    text_config: { ...BASE, quantization: { bits: 8 } },
+  };
+  assert.throws(() => parseHfConfig('x/alias-conflict', raw, 16e9), /양자화 비트폭 선언이 서로 달라요/);
+});
+
+test('거부: dtype이 별칭 간에 어긋난다 (최상위 torch_dtype=float32 + 중첩 dtype=bfloat16)', () => {
+  const { torch_dtype, ...base } = BASE;
+  const raw = { torch_dtype: 'float32', text_config: { ...base, dtype: 'bfloat16' } };
+  assert.throws(() => parseHfConfig('x/dtype-conflict', raw, 16e9), /dtype 선언이 서로 달라요/);
+});
+
+test('거부: 음수 비트폭 (bits=-4 → totalParams가 음수가 되어 verdict yes)', () => {
+  assert.throws(
+    () => parseHfConfig('x/negbits', { ...BASE, quantization_config: { bits: -4 } }, 16e9),
+    /양수가 아니에요/
+  );
+});
+
+test('통과: 같은 양자화 선언이 키 순서만 다르면 거부하지 않는다', () => {
+  // JSON.stringify 비교는 프로퍼티 순서에 의존해 거짓 거부를 냈다 — 값 기반으로 바꿨다.
+  const raw = {
+    quantization_config: { bits: 4, quant_method: 'gptq' },
+    text_config: { ...BASE, quantization_config: { quant_method: 'gptq', bits: 4 } },
+  };
+  const m = parseHfConfig('x/order', raw, 8e9);
+  assert.ok(m.totalParams > 15, `totalParams ${m.totalParams}B — 4비트로 읽혀야 한다`);
+});
+
+test('거부: linear_num_key_heads 누락 (선형 상태가 NaN → verdict yes)', () => {
+  const cfg = {
+    ...BASE, model_type: 'qwen3_5',
+    layer_types: [...Array(8).fill('full_attention'), ...Array(24).fill('linear_attention')],
+    linear_num_value_heads: 32, linear_key_head_dim: 128, linear_value_head_dim: 128,
+  };
+  assert.throws(() => parseHfConfig('x/nolinearkey', cfg, 16e9), /linear\/recurrent/);
+});
+
+test('거부: global_head_dim 음수 (KV가 음수가 되어 verdict yes)', () => {
+  assert.throws(
+    () => parseHfConfig('x/negglobal', { ...BASE, global_head_dim: -1024 }, 16e9),
+    /양의 정수가 아니에요/
+  );
+});
+
+test('거부: layer_types가 배열이 아니면 타입·길이 검사를 우회한다', () => {
+  assert.throws(
+    () => parseHfConfig('x/strlayers', { ...BASE, layer_types: 'sliding_attention' }, 16e9),
+    /layer_types가 배열이 아니에요/
+  );
+});
+
+test('거부: 최상위 cross_attention_config (종래엔 text_config만 검사해 통과했다)', () => {
+  const raw = { cross_attention_config: { layers: [3, 8] }, text_config: { ...BASE } };
+  assert.throws(() => parseHfConfig('x/xattn', raw, 16e9), /cross-attention/);
+});
+
+test('거부: 구조 필드가 최상위에만 있어도 잡는다', () => {
+  const raw = { mhc_enabled: true, text_config: { ...BASE } };
+  assert.throws(() => parseHfConfig('x/outer-structural', raw, 16e9), /구조를 알 수 없는 config 필드/);
+});
+
+test('거부: 최상위와 text_config의 model_type 계열이 갈린다', () => {
+  // 래퍼만 qwen3_5고 본체가 미지 계열이면 linear 상태 공식을 허용해선 안 된다.
+  const raw = { model_type: 'qwen3_5', text_config: { ...BASE, model_type: 'llama' } };
+  assert.throws(() => parseHfConfig('x/family-conflict', raw, 16e9), /model_type 계열이 서로 달라요/);
+});
+
+test('거부: total_size가 유효한 양수가 아니면 계산하지 않는다', () => {
+  assert.throws(() => parseHfConfig('x/negsize', BASE, -16e9), /total_size.*양수가 아니에요/);
+  assert.throws(() => parseHfConfig('x/nansize', BASE, NaN), /total_size.*양수가 아니에요/);
+});
+
+test('통과: MoE 배치 필드가 있으면 치수 심판을 건너뛴다 (거짓 거부 방지)', () => {
+  // 추정식이 모든 레이어에 모든 전문가가 있다고 세어 과대 추정 → 정상 모델을 거부하던 경로.
+  const cfg = {
+    ...BASE, num_hidden_layers: 48, hidden_size: 2048, vocab_size: 151936,
+    num_attention_heads: 16, head_dim: 128,
+    num_experts: 128, moe_intermediate_size: 768, moe_layer_freq: 8,
+  };
+  const m = parseHfConfig('x/moe-placement', cfg, 105e9);
+  assert.ok(m.totalParams > 50, `totalParams ${m.totalParams}B — 거짓 거부되면 안 된다`);
+});
+
+test('최종 방어선: used/free가 비유한수면 verdict가 yes가 되지 않는다', () => {
+  // 상류 게이트가 모두 뚫려도 "모르는데 된다"고 답하지 않게 하는 마지막 가드.
+  // Codex가 재현한 실제 경로: linear_num_key_heads가 빠지면 numKHeads가 undefined가 되고
+  // calcLinearState의 곱셈이 NaN이 된다. parseHfConfig는 이제 막지만, 모델 객체가 다른 경로로
+  // 들어와도 'yes'가 나오면 안 된다.
+  const broken = {
+    name: 'broken', totalParams: 8, layerCount: 32, kvHeads: 8, kvHeadDim: 128,
+    attnHeads: 32, hiddenSize: 4096, maxContext: 8192,
+    linearAttn: { layers: 24, numVHeads: 32, headKDim: 128, headVDim: 128, convKernel: 4 }, // numKHeads 누락
+  };
+  const s = simulate(broken, gpuDevice(GPUS[0]), 8192, { weightBpw: 4, kvBits: 16 });
+  assert.notEqual(s.verdict, 'yes', `verdict ${s.verdict} — NaN인데 yes가 나왔다`);
 });

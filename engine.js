@@ -778,7 +778,10 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   const headroom = device.memoryGB * device.headroomRatio;
 
   let verdict;
-  if (free < 0) verdict = 'no';
+  // 최종 방어선: NaN·Infinity는 `free < 0`도 `free < headroom`도 false라 그대로 'yes'로 떨어진다.
+  // 상류 게이트가 다 뚫려도 "모르는데 된다"고 답하지는 않게 한다.
+  if (!Number.isFinite(used) || !Number.isFinite(free)) verdict = 'no';
+  else if (free < 0) verdict = 'no';
   else if (free < headroom) verdict = 'tight';
   else verdict = 'yes';
 
@@ -1116,14 +1119,19 @@ export function parseHfConfig(id, raw, totalSize) {
   // (반복 레이어·혼합 linear/GQA·압축/인덱스 어텐션·멀티모달 프로젝터)는 그럴듯한 오답을 만든다.
   // 숫자를 내지 않는 편이 틀린 fit보다 안전하다.
   const inner = raw.text_config || raw;
-  const isHybridLinear =
-    HYBRID_LINEAR_TYPES.has(String(raw.model_type || '')) || HYBRID_LINEAR_TYPES.has(String(inner.model_type || ''));
+  // 계열 판정은 *텍스트 본체*(inner)를 우선한다. 종래엔 OR라서 래퍼만 qwen3_5면 본체가 미지 계열이어도
+  // linear 상태 공식이 허용됐다. 양쪽이 다 선언돼 있고 계열이 갈리면 어느 쪽이 참인지 알 수 없어 거부한다.
+  if (raw !== inner && raw.model_type && inner.model_type &&
+      HYBRID_LINEAR_TYPES.has(String(raw.model_type)) !== HYBRID_LINEAR_TYPES.has(String(inner.model_type))) {
+    throw new Error('최상위와 text_config의 model_type 계열이 서로 달라요 — 계산하지 않습니다');
+  }
+  const isHybridLinear = HYBRID_LINEAR_TYPES.has(String(inner.model_type ?? raw.model_type ?? ''));
 
   // 멀티모달 래퍼(text_config) 자체는 막지 않는다 — 판정 대상은 *텍스트 본체의 메모리 레이아웃*이고,
   // 가중치는 safetensors 전체 크기(비전 타워 포함)로 잡히므로 전체 체크포인트 기준으로 정합하다.
   // 대신 텍스트 본체가 아래 게이트를 전부 통과해야 하고, 융합(cross-attention) 계열은 KV가
   // 이미지 토큰 쪽으로도 자라기 때문에 별도로 거부한다.
-  if (raw.cross_attention_layers || inner.cross_attention_layers || inner.cross_attention_config) {
+  if (raw.cross_attention_layers || raw.cross_attention_config || inner.cross_attention_layers || inner.cross_attention_config) {
     throw new Error('cross-attention 융합 멀티모달은 아직 지원하지 않아요');
   }
   const c = inner;
@@ -1158,7 +1166,9 @@ export function parseHfConfig(id, raw, totalSize) {
   // 미지 구조 필드 게이트(#87) — 구조에 영향 줄 수 있는 이름인데 의미를 모르는 키가 있으면 거부.
   // 특정 실패 패턴을 막는 위 검사들보다 뒤에 둔다(그쪽이 더 정확한 메시지를 준다).
   const familyKeys = FAMILY_STRUCTURAL_KEYS.get(familyOf(c.model_type || raw.model_type));
-  const unknownStructural = Object.keys(c).filter(
+  // 두 스코프를 모두 스캔한다 — 종래엔 text_config만 봐서 최상위에 구조 필드를 두면 그대로 통과했다.
+  const scanScopes = raw === inner ? [inner] : [inner, raw];
+  const unknownStructural = [...new Set(scanScopes.flatMap((s) => Object.keys(s)))].filter(
     (k) =>
       STRUCTURAL_KEY_RE.test(k) &&
       !ENGINE_READ_KEYS.has(k) &&
@@ -1184,10 +1194,21 @@ export function parseHfConfig(id, raw, totalSize) {
   if (!posInt(c.num_attention_heads)) {
     throw new Error('config에 num_attention_heads가 없거나 값이 양의 정수가 아니에요 — KV 치수를 추정하지 않습니다');
   }
-  for (const k of ['num_key_value_heads', 'head_dim', 'hidden_size', 'kv_lora_rank', 'qk_rope_head_dim']) {
+  // 계산에 산술로 들어가는 값은 전부 검증한다 — 하나라도 빠지면 음수·NaN이 그대로 흘러가
+  // KV가 음수가 되거나(예: global_head_dim: -1024 → KV -63.9 GiB) 상태가 NaN이 되어 'yes'가 나온다.
+  for (const k of [
+    'num_key_value_heads', 'head_dim', 'hidden_size', 'kv_lora_rank', 'qk_rope_head_dim',
+    'global_head_dim', 'max_position_embeddings',
+    'linear_num_key_heads', 'linear_num_value_heads', 'linear_key_head_dim',
+    'linear_value_head_dim', 'linear_conv_kernel_dim',
+  ]) {
     if (c[k] != null && !posInt(c[k])) {
       throw new Error(`config의 ${k} 값이 양의 정수가 아니에요 — 계산하지 않습니다`);
     }
+  }
+  // layer_types가 배열이 아니면 타입·길이 검사를 모두 우회한다(문자열이면 .filter가 없어 다른 경로로 샌다).
+  if (c.layer_types != null && !Array.isArray(c.layer_types)) {
+    throw new Error('layer_types가 배열이 아니에요 — 계산하지 않습니다');
   }
   // sliding_window만은 0을 허용한다 — "슬라이딩 비활성"의 관례적 표기다(아래 slidingActive가 판정).
   if (c.sliding_window != null && c.sliding_window !== 0 && !posInt(c.sliding_window)) {
@@ -1226,7 +1247,10 @@ export function parseHfConfig(id, raw, totalSize) {
     const linearCount = c.layer_types.filter((t) => String(t).includes('linear')).length;
     if (linearCount > 0) {
       // 선형/재귀 어텐션은 고정 상태 메모리를 갖는다 — 치수를 모르면 계산할 수 없다.
-      if (!isHybridLinear || !c.linear_num_value_heads || !c.linear_key_head_dim || !c.linear_value_head_dim) {
+      // linear_num_key_heads가 빠져도 통과하던 구멍이 있었다 — 그러면 상태 크기가 NaN이 되고,
+      // NaN은 free < 0 비교를 통과해 verdict가 'yes'로 떨어진다. 다섯 치수를 모두 요구한다.
+      if (!isHybridLinear || !c.linear_num_key_heads || !c.linear_num_value_heads ||
+          !c.linear_key_head_dim || !c.linear_value_head_dim) {
         throw new Error('linear/recurrent attention의 고정 상태 메모리는 HuggingFace 즉석 계산에서 지원하지 않아요');
       }
       linearAttn = {
@@ -1262,6 +1286,9 @@ export function parseHfConfig(id, raw, totalSize) {
 
   // 파라미터 수: safetensors total_size(저장 dtype 바이트)에서 역산, 없으면 이름 추정
   let totalParams = null;
+  if (totalSize != null && !(Number.isFinite(totalSize) && totalSize > 0)) {
+    throw new Error('체크포인트 크기(total_size)가 유효한 양수가 아니에요 — 계산하지 않습니다');
+  }
   if (totalSize) {
     // 선-양자화 레포(MLX/AWQ/bnb): 저장 비트폭의 진실은 quantization(.bits) — torch_dtype은 원본 정밀도라
     // ÷2 과소계산 → 거짓 "fits" (issue #2). 합성 재현: 8bit 레포에 qbits 무시 시 params 절반 (test/parsehf.test.mjs).
@@ -1271,28 +1298,41 @@ export function parseHfConfig(id, raw, totalSize) {
     // 실측: Qwen/Qwen3.5-397B-A17B-GPTQ-Int4 는 quantization_config.bits=4가 raw 최상위에 있고
     // text_config는 중첩이라, inner만 읽던 종래 코드가 397B 모델을 117.8B로 계산했다.
     // 양쪽에 다 있고 서로 다르면 어느 쪽이 참인지 알 수 없으므로 거부한다.
-    const pick = (key) => {
-      const a = inner[key], b = raw[key];
-      if (a != null && b != null && JSON.stringify(a) !== JSON.stringify(b)) {
-        throw new Error(`${key}가 text_config와 최상위에서 서로 달라요 — 계산하지 않습니다`);
-      }
-      return a ?? b;
+    // 저장 정보는 최상위·중첩 어디에나 있을 수 있고 별칭(torch_dtype/dtype, quantization/
+    // quantization_config)도 있다. 한 자리만 읽으면 다른 자리로 우회가 생기므로, **모든 선언을 모아**
+    // 정규화한 뒤 충돌을 판정한다. (같은 키끼리만 비교하면 최상위 bits=4 + 중첩 quantization.bits=8
+    // 같은 별칭 간 충돌을 놓친다.)
+    const scopes = raw === inner ? [inner] : [inner, raw];
+    const quantObjs = scopes.flatMap((s) => [s.quantization, s.quantization_config]).filter(Boolean);
+    const bitsOf = (q) => {
+      if (q.bits != null) return q.bits;
+      if (q.load_in_4bit) return 4;
+      if (q.load_in_8bit) return 8;
+      const meth = String(q.quant_method || q.fmt || '').toLowerCase();
+      return meth.includes('fp8') || meth.includes('int8') ? 8 : undefined;
     };
-    const qc = pick('quantization_config');
-    const quant = pick('quantization');
-    // bitsandbytes는 bits 필드 없이 load_in_4bit/8bit 불리언만 씀 — 누락 시 torch_dtype(2B) 경로로 ÷2~4 과소계산(거짓 fits)
-    const quantMethod = String(quant?.quant_method || qc?.quant_method || qc?.fmt || '').toLowerCase();
-    const qbits = quant?.bits ?? qc?.bits
-      ?? (qc?.load_in_4bit ? 4 : qc?.load_in_8bit ? 8 : quantMethod.includes('fp8') || quantMethod.includes('int8') ? 8 : undefined);
-    const dt = String(pick('torch_dtype') || pick('dtype') || '').toLowerCase();
+    const declaredBits = [...new Set(quantObjs.map(bitsOf).filter((b) => b !== undefined))];
+    if (declaredBits.length > 1) {
+      throw new Error(`양자화 비트폭 선언이 서로 달라요(${declaredBits.join(', ')}) — 계산하지 않습니다`);
+    }
+    const qbits = declaredBits[0];
+    if (qbits !== undefined && !(Number.isFinite(qbits) && qbits > 0)) {
+      throw new Error(`양자화 비트폭(${qbits})이 양수가 아니에요 — 계산하지 않습니다`);
+    }
+    const dtypes = [...new Set(
+      scopes.flatMap((s) => [s.torch_dtype, s.dtype]).filter((v) => v != null).map((v) => String(v).toLowerCase())
+    )];
+    if (dtypes.length > 1) {
+      throw new Error(`dtype 선언이 서로 달라요(${dtypes.join(', ')}) — 계산하지 않습니다`);
+    }
+    const dt = dtypes[0] || '';
     // 양자화를 *선언해놓고* 비트폭을 못 읽으면 2바이트로 추정하지 않는다 — 그 추정이 틀리는
     // 방향이 곧 거짓 fits다. 실측: gpt-oss는 dtype도 bits도 없이 quant_method만 "mxfp4"라
     // 종래엔 bf16으로 가정해 117B 모델을 32.6B로 계산했다(3.6배 과소, #98).
     // 반대로 양자화 선언이 아예 없으면 bf16이 HF 관례이므로 종래 기본값을 유지한다.
-    if ((qc || quant) && !qbits) {
-      throw new Error(
-        `선언된 양자화(${quantMethod || '방식 미상'})의 저장 비트폭을 확정할 수 없어 계산하지 않아요`
-      );
+    if (quantObjs.length && qbits === undefined) {
+      const meth = quantObjs.map((q) => q.quant_method || q.fmt).filter(Boolean).join(', ');
+      throw new Error(`선언된 양자화(${meth || '방식 미상'})의 저장 비트폭을 확정할 수 없어 계산하지 않아요`);
     }
     const dtypeBytes = qbits ? qbits / 8
       : dt.includes('float32') || dt.includes('fp32') ? 4 : dt.includes('fp8') || dt.includes('int8') ? 1 : 2;
@@ -1312,7 +1352,15 @@ export function parseHfConfig(id, raw, totalSize) {
     // intermediate_size에 담는 config는 FFN이 0으로 잡혀 추정이 자릿수째 무너지므로 심판으로 쓸 수 없다
     // (실증: gpt-oss-120b 추정 ~2.1B vs 실제 32.6B → 거짓 거부).
     const nExpDims = c.num_local_experts || c.num_experts || c.n_routed_experts || 0;
-    const dimsUsable =
+    // MoE 배치 필드(전문가가 *일부* 레이어에만 있음)를 추정식이 반영하지 않는다 — 모든 레이어에
+    // 모든 전문가가 있다고 세어 과대 추정하고, 그 추정으로 심판하면 정상 모델을 거짓 거부한다
+    // (moe_layer_freq=8 합성 구성에서 실제 52.5B를 ~363.2B로 추정해 거부한 재현 있음).
+    const hasMoePlacement = nExpDims && (
+      c.moe_layer_freq != null || c.decoder_sparse_step != null ||
+      c.mlp_only_layers != null || c.first_k_dense_replace != null ||
+      c.interleave_moe_layer_step != null || c.n_dense_first_layers != null
+    );
+    const dimsUsable = !hasMoePlacement &&
       c.hidden_size && c.vocab_size && (nExpDims ? c.moe_intermediate_size : c.intermediate_size);
     const dims = dimsUsable ? paramsFromDims(c, layerCount) : null;
     if (dims && (totalParams > dims * 4 || totalParams < dims / 4)) {
