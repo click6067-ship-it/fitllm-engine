@@ -20,7 +20,7 @@ If you changed any math (rare): add a vector to `vectors/fit-vectors-v1.json` wh
 ## Report a real measurement
 Ran a model and measured actual peak memory? Two ways:
 - **PR (preferred)**: add one object to [`fixtures/measured.json`](fixtures/measured.json) per [`fixtures/schema.json`](fixtures/schema.json) — it appears in the public [Fit Census](census/README.md) as a predicted-vs-measured row. Runtime + version required (reproducibility).
-- Or [open a measurement issue](../../issues/new?labels=measurement).
+- Or [open a measurement issue](../../issues/new?template=measurement.yml).
 
 ### Partial-residency / SSD expert offload reports (elastic MoE)
 "It runs under partial residency" observations are recorded in the ledger but **never change verdicts by themselves** — the promotion gates live in [issue #6](../../issues/6):
