@@ -1304,20 +1304,22 @@ export function parseHfConfig(id, raw, totalSize) {
     // 같은 별칭 간 충돌을 놓친다.)
     const scopes = raw === inner ? [inner] : [inner, raw];
     const quantObjs = scopes.flatMap((s) => [s.quantization, s.quantization_config]).filter(Boolean);
-    const bitsOf = (q) => {
-      if (q.bits != null) return q.bits;
-      if (q.load_in_4bit) return 4;
-      if (q.load_in_8bit) return 8;
+    const bitsIn = (q) => {
+      const declarations = [];
+      if (q.bits != null) declarations.push(q.bits);
+      if (q.load_in_4bit === true) declarations.push(4);
+      if (q.load_in_8bit === true) declarations.push(8);
       const meth = String(q.quant_method || q.fmt || '').toLowerCase();
-      return meth.includes('fp8') || meth.includes('int8') ? 8 : undefined;
+      if (meth.includes('fp8') || meth.includes('int8')) declarations.push(8);
+      return declarations;
     };
-    const declaredBits = [...new Set(quantObjs.map(bitsOf).filter((b) => b !== undefined))];
+    const declaredBits = [...new Set(quantObjs.flatMap(bitsIn))];
     if (declaredBits.length > 1) {
       throw new Error(`양자화 비트폭 선언이 서로 달라요(${declaredBits.join(', ')}) — 계산하지 않습니다`);
     }
     const qbits = declaredBits[0];
-    if (qbits !== undefined && !(Number.isFinite(qbits) && qbits > 0)) {
-      throw new Error(`양자화 비트폭(${qbits})이 양수가 아니에요 — 계산하지 않습니다`);
+    if (qbits !== undefined && !(Number.isInteger(qbits) && qbits >= 1 && qbits <= 64)) {
+      throw new Error(`양자화 비트폭(${qbits})이 1–64 사이 정수가 아니에요 — 계산하지 않습니다`);
     }
     const dtypes = [...new Set(
       scopes.flatMap((s) => [s.torch_dtype, s.dtype]).filter((v) => v != null).map((v) => String(v).toLowerCase())
@@ -1432,4 +1434,4 @@ export const DATA_UPDATED = '2026-08';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.8.0';
+export const ENGINE_VERSION = '2.8.1';

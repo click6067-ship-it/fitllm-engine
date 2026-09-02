@@ -17,7 +17,7 @@ Single ESM file, zero deps: `engine.js` (also `https://cdn.jsdelivr.net/npm/fitl
 import { simulate, LOCAL_MODELS, parseHfConfig, GPUS, gpuDevice, combineGpus, simulateStack } from './engine.js';
 simulate(model, 64, 131072, 8)                          // Mac 64GB, 128K ctx, 8-bit → {verdict, used, free, ...}
 simulate(model, gpuDevice(gpu), ctx, {weightBpw, kvBits}) // GPU path; combineGpus([a,b]) for rigs
-parseHfConfig(id, configJson, totalSizeBytes)            // any HF model → engine shape
+parseHfConfig(id, configJson, totalSizeBytes)            // modeled HF architecture → engine shape; unsupported configs fail closed
 ```
 
 ## Rules for agents modifying this repo

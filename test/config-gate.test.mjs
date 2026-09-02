@@ -205,8 +205,53 @@ test('거부: dtype이 별칭 간에 어긋난다 (최상위 torch_dtype=float32
 test('거부: 음수 비트폭 (bits=-4 → totalParams가 음수가 되어 verdict yes)', () => {
   assert.throws(
     () => parseHfConfig('x/negbits', { ...BASE, quantization_config: { bits: -4 } }, 16e9),
-    /양수가 아니에요/
+    /1–64 사이 정수가 아니에요/
   );
+});
+
+test('거부: 양수지만 비현실적인 비트폭 (bits=1e12 → totalParams 0 → verdict yes)', () => {
+  assert.throws(
+    () => parseHfConfig('x/hugebits', { ...BASE, quantization_config: { bits: 1e12 } }, 16e9),
+    /1–64 사이 정수가 아니에요/
+  );
+});
+
+test('거부: 한 객체 안의 bits와 load_in_4bit 선언이 어긋난다', () => {
+  assert.throws(
+    () => parseHfConfig(
+      'x/in-object-conflict',
+      { ...BASE, quantization_config: { bits: 8, load_in_4bit: true } },
+      8e9
+    ),
+    /양자화 비트폭 선언이 서로 달라요/
+  );
+});
+
+test('거부: load_in_4bit와 load_in_8bit가 동시에 선언된다', () => {
+  assert.throws(
+    () => parseHfConfig(
+      'x/load-flags-conflict',
+      { ...BASE, quantization_config: { load_in_4bit: true, load_in_8bit: true } },
+      8e9
+    ),
+    /양자화 비트폭 선언이 서로 달라요/
+  );
+});
+
+test('통과: 유효한 GPTQ 4-bit와 FP8 선언은 정확한 저장 비트폭을 쓴다', () => {
+  const gptq = parseHfConfig(
+    'x/gptq-4bit',
+    { ...BASE, quantization_config: { bits: 4, quant_method: 'gptq' } },
+    8e9
+  );
+  assert.equal(gptq.totalParams, 16);
+
+  const fp8 = parseHfConfig(
+    'x/fp8',
+    { ...BASE, quantization_config: { quant_method: 'fp8', fmt: 'e4m3' } },
+    8e9
+  );
+  assert.equal(fp8.totalParams, 8);
 });
 
 test('통과: 같은 양자화 선언이 키 순서만 다르면 거부하지 않는다', () => {
