@@ -23,6 +23,18 @@
       "downloads": 200
     },
     {
+      "id": "Qwen/Qwen3.8-Flash-Next-BF16",
+      "sha": "6666666666666666666666666666666666666666",
+      "pipeline_tag": "text-generation",
+      "createdAt": "2026-08-26T08:24:59.000Z"
+    },
+    {
+      "id": "Qwen/Qwen3.8-Flash-Next-F16",
+      "sha": "7777777777777777777777777777777777777777",
+      "pipeline_tag": "image-text-to-text",
+      "createdAt": "2026-08-25T08:24:59.000Z"
+    },
+    {
       "id": "Qwen/Qwen-TTS-Next",
       "sha": "2222222222222222222222222222222222222222",
       "pipeline_tag": "text-to-speech",
@@ -58,6 +70,14 @@
       "id": "Qwen/Qwen-TTS-Trending",
       "sha": "5555555555555555555555555555555555555555",
       "pipeline_tag": "text-to-speech",
+      "createdAt": "2026-08-25T08:24:59.000Z",
+      "likes": 1000,
+      "downloads": 100000
+    },
+    {
+      "id": "Qwen/Qwen-Trend-BF16",
+      "sha": "8888888888888888888888888888888888888888",
+      "pipeline_tag": "text-generation",
       "createdAt": "2026-08-25T08:24:59.000Z",
       "likes": 1000,
       "downloads": 100000

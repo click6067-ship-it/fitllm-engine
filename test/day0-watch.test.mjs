@@ -14,6 +14,7 @@ import {
   classifyCapability,
   detectCapabilityBlockers,
   discoverCandidates,
+  fetchAllGitHubIssues,
   fetchJsonWithRetry,
   loadSourcePolicy,
   mergeIssueBotBlock,
@@ -66,6 +67,14 @@ test('공식 namespace release와 global trend를 합치고 pipeline을 로컬 e
   assert.equal(result.candidates[2].checkpointKind, 'quantized_variant');
   assert.ok(!result.candidates.some(({ id }) => id.startsWith('AtomicChat/')));
   assert.ok(!result.candidates.some(({ pipelineTag }) => pipelineTag === 'text-to-speech'));
+  assert.ok(!result.candidates.some(({ id }) => /(?:BF16|F16)$/.test(id)));
+  assert.deepEqual(
+    result.droppedCandidates
+      .filter(({ reason }) => reason === 'FULL_PRECISION_VARIANT_EXCLUDED')
+      .map(({ candidateId }) => candidateId)
+      .sort(),
+    ['Qwen/Qwen3.8-Flash-Next-BF16', 'Qwen/Qwen3.8-Flash-Next-F16', 'Qwen/Qwen-Trend-BF16'].sort(),
+  );
 });
 
 test('candidate identity는 정확히 namespace/repo 두 segment만 허용한다', () => {
@@ -91,6 +100,37 @@ test('fetchJsonWithRetry는 non-JSON을 재시도하고 JSON array를 반환한�
   });
   assert.equal(calls, 2);
   assert.equal(value[0].id, 'Qwen/ok');
+});
+
+test('discovery fetch는 timeout과 content-length/stream byte cap을 강제한다', async () => {
+  await assert.rejects(
+    fetchJsonWithRetry('https://example.test/timeout', {
+      attempts: 1,
+      timeoutMs: 5,
+      fetchImpl: async () => new Promise(() => {}),
+    }),
+    /failed after 1 attempts/,
+  );
+  await assert.rejects(
+    fetchJsonWithRetry('https://example.test/declared-too-large', {
+      attempts: 1,
+      maxBytes: 16,
+      fetchImpl: async () => new Response('[]', {
+        headers: { 'content-type': 'application/json', 'content-length': '17' },
+      }),
+    }),
+    /byte limit/i,
+  );
+  await assert.rejects(
+    fetchJsonWithRetry('https://example.test/stream-too-large', {
+      attempts: 1,
+      maxBytes: 16,
+      fetchImpl: async () => new Response(JSON.stringify({ value: 'x'.repeat(32) }), {
+        headers: { 'content-type': 'application/json' },
+      }),
+    }),
+    /byte limit/i,
+  );
 });
 
 test('Qwen evidence는 revision URL, raw bytes, SHA-256, total_size를 고정한다', async () => {
@@ -134,6 +174,59 @@ test('Qwen evidence는 revision URL, raw bytes, SHA-256, total_size를 고정한
     assert.match(slot.url, new RegExp(`/resolve/${REVISION}/`));
     assert.ok(!slot.url.includes('/main/'));
   }
+});
+
+test('evidence fetch는 content-length byte cap을 body read 전에 차단한다', async () => {
+  let bodyReads = 0;
+  const candidate = {
+    id: 'Qwen/oversized', namespace: 'Qwen', identityEvidenceUrl: 'https://github.com/QwenLM',
+    revision: REVISION, pipelineTag: 'text-generation', discoverySources: ['hf_official_namespace_release'],
+    modelInfo: {
+      id: 'Qwen/oversized', sha: REVISION, cardData: { license: 'mit' },
+      siblings: [
+        { rfilename: 'config.json' },
+        { rfilename: 'model.safetensors.index.json' },
+        { rfilename: 'LICENSE' },
+      ],
+    },
+  };
+  const oversized = {
+    ok: true,
+    status: 200,
+    headers: new Headers({
+      'content-length': String(2 * 1024 * 1024),
+      'x-repo-commit': REVISION,
+      etag: '"oversized"',
+    }),
+    arrayBuffer: async () => { bodyReads += 1; return new ArrayBuffer(0); },
+  };
+  const evidence = await pinEvidence(candidate, {
+    fetchImpl: async (url) => {
+      if (url.endsWith('/config.json')) return oversized;
+      if (url.endsWith('/model.safetensors.index.json')) {
+        return new Response(JSON.stringify({ metadata: { total_size: 1_000_000 } }), {
+          headers: { 'x-repo-commit': REVISION, etag: '"index"' },
+        });
+      }
+      return new Response('MIT', { headers: { 'x-repo-commit': REVISION, etag: '"license"' } });
+    },
+  });
+  assert.equal(evidence.lifecycleState, 'INSUFFICIENT_EVIDENCE');
+  assert.ok(evidence.failureCodes.includes('CONFIG_PAYLOAD_TOO_LARGE'));
+  assert.equal(bodyReads, 0);
+});
+
+test('evidence fetch timeout은 non-cooperative fetch도 bounded SOURCE_UNAVAILABLE로 남긴다', async () => {
+  const evidence = await pinEvidence({
+    id: 'Qwen/timeout', namespace: 'Qwen', identityEvidenceUrl: 'https://github.com/QwenLM',
+    revision: REVISION, pipelineTag: 'text-generation', discoverySources: ['hf_official_namespace_release'],
+    modelInfo: {
+      id: 'Qwen/timeout', sha: REVISION, cardData: { license: 'mit' },
+      siblings: ['config.json', 'model.safetensors.index.json', 'LICENSE'].map((rfilename) => ({ rfilename })),
+    },
+  }, { fetchImpl: async () => new Promise(() => {}), timeoutMs: 5 });
+  assert.equal(evidence.lifecycleState, 'SOURCE_UNAVAILABLE');
+  assert.ok(evidence.failureCodes.includes('CONFIG_TIMEOUT'));
 });
 
 test('identity/evidence failure는 typed numeric-null manifest로 남고 parser를 호출하지 않는다', async () => {
@@ -193,6 +286,39 @@ test('Qwen official config는 five blocker와 numeric-null unsupported로 분류
     /구조를 알 수 없는|linear\/recurrent/,
   );
   for (const key of ['verdict', 'usedGB', 'maxContext']) assert.ok(!(key in capability));
+});
+
+test('inactive blocker fields는 supported 가능하고 ambiguous presence만 CAPABILITY_UNKNOWN이다', () => {
+  const base = {
+    model_type: 'llama', num_hidden_layers: 2, num_attention_heads: 2,
+    num_key_value_heads: 2, hidden_size: 128, head_dim: 64,
+    intermediate_size: 256, vocab_size: 1024, torch_dtype: 'bfloat16',
+  };
+  const inactiveConfigs = [
+    { ...base, mtp: false },
+    { ...base, mtp_num_hidden_layers: 0 },
+    { ...base, hc_count: 0 },
+  ];
+  const ambiguousConfigs = [
+    { ...base, indexer_budget: null },
+    { text_config: base, vision_config: {} },
+  ];
+  for (const rawConfig of inactiveConfigs) {
+    const capability = classifyCapability({
+      lifecycleState: 'EVIDENCE_PINNED', id: 'Qwen/inactive', pipelineTag: 'text-generation',
+      rawConfig, weightsIndex: { totalSizeBytes: 1_000_000 },
+    });
+    assert.notEqual(capability.state, 'UNSUPPORTED_ARCHITECTURE', JSON.stringify(rawConfig));
+    assert.equal(capability.numericResult, null);
+  }
+  for (const rawConfig of ambiguousConfigs) {
+    const capability = classifyCapability({
+      lifecycleState: 'EVIDENCE_PINNED', id: 'Qwen/inactive', pipelineTag: 'text-generation',
+      rawConfig, weightsIndex: { totalSizeBytes: 1_000_000 },
+    });
+    assert.equal(capability.state, 'CAPABILITY_UNKNOWN', JSON.stringify(rawConfig));
+    assert.equal(capability.numericResult, null);
+  }
 });
 
 test('parser 성공은 supported이되 AWAITING_GOLDEN_VECTOR에서 멈춘다', () => {
@@ -278,6 +404,33 @@ test('mutation은 최대 3개이며 dropped candidate가 결정적으로 기록�
   assert.deepEqual(plan.dropped, [{ candidateId: `Qwen/D@${'4'.repeat(40)}`, reason: 'MUTATION_LIMIT' }]);
 });
 
+test('invalid revision은 blocked이고 같은 plan의 valid create를 막지 않는다', async () => {
+  const invalidManifest = buildEvidenceManifest({
+    lifecycleState: 'UNVERIFIED_IDENTITY', id: 'Qwen/invalid', revision: null,
+    identityEvidenceUrl: 'https://github.com/QwenLM', pipelineTag: 'text-generation',
+    discoverySources: ['hf_official_namespace_release'], failureCodes: ['IDENTITY_OR_REVISION_INVALID'],
+  }, null, 'capability-v1');
+  const validManifest = manifestFor();
+  let plan = planIssueMutations([{ manifest: invalidManifest }, { manifest: validManifest }], []);
+  assert.deepEqual(plan.operations.map(({ action }) => action), ['blocked', 'create']);
+  assert.equal(plan.mutationCount, 1);
+
+  plan = attachArtifactRef(plan, {
+    url: 'https://github.com/example/repo/actions/runs/1/artifacts/2', digest: 'b'.repeat(64),
+  });
+  const mutations = [];
+  const ghClient = {
+    requestWithHeaders: async () => ({ data: [], headers: new Headers() }),
+    request: async (requestPath, init = {}) => {
+      if (init.method === 'POST') mutations.push(requestPath);
+      return requestPath === '/issues' ? { number: 92 } : { name: 'day0-candidate' };
+    },
+  };
+  const applied = await applyIssuePlan(plan, ghClient, async (modelId) => ({ id: modelId, sha: REVISION }));
+  assert.deepEqual(applied.results.map(({ status }) => status), ['BLOCKED', 'CREATED']);
+  assert.deepEqual(mutations, ['/issues']);
+});
+
 test('apply-time body/revision conflict는 PATCH 없이 중단된다', async () => {
   const manifest = manifestFor('e'.repeat(40));
   const existing = { number: 77, title: 'day0: Qwen/Qwen3.8-Flash-Next', body: 'old human body' };
@@ -299,10 +452,47 @@ test('apply-time stale HF revision은 POST/PATCH를 막는다', async () => {
   const manifest = manifestFor();
   const plan = planIssueMutations([{ manifest }], []);
   const mutations = [];
-  const ghClient = { request: async (path, init = {}) => mutations.push([path, init.method]) };
+  const ghClient = {
+    requestWithHeaders: async () => ({ data: [], headers: new Headers() }),
+    request: async (requestPath, init = {}) => mutations.push([requestPath, init.method]),
+  };
   const result = await applyIssuePlan(plan, ghClient, async () => ({ sha: 'f'.repeat(40) }));
   assert.equal(result.results[0].status, 'STALE_REVISION');
   assert.equal(mutations.length, 0);
+});
+
+test('existing issue scan은 label 제거된 exact marker/title도 찾도록 label filter를 쓰지 않는다', async () => {
+  const paths = [];
+  const issues = await fetchAllGitHubIssues({
+    requestWithHeaders: async (requestPath) => {
+      paths.push(requestPath);
+      if (paths.length > 1) return { data: [], headers: new Headers() };
+      return {
+        data: [{ number: 44, title: 'day0: Qwen/unlabelled', body: 'human', labels: [] }],
+        headers: new Headers({
+          link: '<https://api.github.com/repositories/123/issues?state=all&per_page=100&page=2&after=cursor>; rel="next"',
+        }),
+      };
+    },
+  });
+  assert.equal(issues.length, 1);
+  assert.ok(paths.every((requestPath) => !requestPath.includes('labels=')));
+  assert.match(paths[1], /^\/issues\?/);
+});
+
+test('create apply는 exact title/marker를 다시 조회해 concurrent duplicate를 만들지 않는다', async () => {
+  const manifest = manifestFor();
+  const plan = planIssueMutations([{ manifest }], []);
+  const ghClient = {
+    requestWithHeaders: async () => ({
+      data: [{ number: 90, title: 'day0: Qwen/Qwen3.8-Flash-Next', body: 'created concurrently', labels: [] }],
+      headers: new Headers(),
+    }),
+    request: async () => assert.fail('duplicate recheck must stop all mutation calls'),
+  };
+  const applied = await applyIssuePlan(plan, ghClient, async () => assert.fail('duplicate check runs before HF recheck'));
+  assert.equal(applied.results[0].status, 'ALREADY_EXISTS');
+  assert.equal(applied.mutationCount, 0);
 });
 
 test('explicit apply create는 pinned revision 재검사 뒤 issue endpoint만 쓴다', async () => {
@@ -313,6 +503,7 @@ test('explicit apply create는 pinned revision 재검사 뒤 issue endpoint만 �
   });
   const calls = [];
   const ghClient = {
+    requestWithHeaders: async () => ({ data: [], headers: new Headers() }),
     request: async (requestPath, init = {}) => {
       calls.push([requestPath, init.method || 'GET', init.body]);
       if (requestPath === '/issues') return { number: 91 };
@@ -362,4 +553,51 @@ test('runDay0Watch dry-run은 GET 외 GitHub 호출 없이 temp evidence만 쓴�
   assert.equal(result.records[0].manifest.lifecycleState, 'UNSUPPORTED_ARCHITECTURE');
   assert.deepEqual(githubCalls.map(([method]) => method), ['GET']);
   assert.equal(JSON.parse(await readFile(path.join(outputDir, 'summary.json'), 'utf8')).mode, 'dry-run');
+});
+
+test('run은 선두 3개 noop 뒤 네 번째 신규 후보까지 평가해 create를 계획한다', async () => {
+  const policy = await sourcePolicy();
+  policy.officialNamespaces = policy.officialNamespaces.slice(0, 1);
+  const baseConfig = {
+    model_type: 'llama', num_hidden_layers: 2, num_attention_heads: 2,
+    num_key_value_heads: 2, hidden_size: 128, head_dim: 64,
+    intermediate_size: 256, vocab_size: 1024, torch_dtype: 'bfloat16',
+  };
+  const bytesByName = {
+    'config.json': Buffer.from(JSON.stringify(baseConfig)),
+    'model.safetensors.index.json': Buffer.from(JSON.stringify({ metadata: { total_size: 1_000_000 } })),
+    LICENSE: Buffer.from('MIT'),
+  };
+  const models = ['A', 'B', 'C', 'D'].map((name, index) => ({
+    id: `Qwen/${name}`,
+    sha: String(index + 1).repeat(40),
+    pipeline_tag: 'text-generation',
+    createdAt: `2026-09-0${4 - index}T00:00:00.000Z`,
+    tags: ['license:mit'],
+    siblings: Object.keys(bytesByName).map((rfilename) => ({ rfilename })),
+  }));
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/models') return jsonResponse(parsed.searchParams.has('author') ? models : []);
+    const [, revision, filename] = parsed.pathname.match(/\/resolve\/([0-9a-f]{40})\/(.+)$/);
+    return new Response(bytesByName[filename], { headers: { 'x-repo-commit': revision, etag: `"${filename}"` } });
+  };
+  const discovery = await discoverCandidates({ policy, fetchImpl, now: new Date('2026-09-05T12:00:00Z') });
+  const existingIssues = [];
+  for (const candidate of discovery.candidates.slice(0, 3)) {
+    const evidence = await pinEvidence(candidate, { fetchImpl });
+    const manifest = buildEvidenceManifest(evidence, classifyCapability(evidence), 'capability-v1');
+    existingIssues.push({
+      number: existingIssues.length + 1,
+      title: `day0: ${candidate.id}`,
+      body: buildIssueBotBlock(manifest, null),
+    });
+  }
+  const outputDir = await mkdtemp(path.join(tmpdir(), 'fitllm-day0-starvation-'));
+  const result = await runDay0Watch({
+    policy, fetchImpl, existingIssues, now: new Date('2026-09-05T12:00:00Z'),
+  }, { outputDir, sourceRoot: new URL('..', import.meta.url).pathname, mode: 'dry-run' });
+  assert.equal(result.summary.evaluated, 4);
+  assert.deepEqual(result.issuePlan.operations.map(({ action }) => action), ['noop', 'noop', 'noop', 'create']);
+  assert.equal(result.issuePlan.mutationCount, 1);
 });
