@@ -50,6 +50,10 @@ for (const m of LOCAL_MODELS) {
 }
 
 // CENSUS_DATE 명시 시 그 날짜로 고정(결정적 재생성·byte-identical 검증용). 미지정 = 오늘(신규 릴리스 생성).
+if (process.env.CENSUS_DATE && !/^\d{4}-\d{2}-\d{2}$/.test(process.env.CENSUS_DATE)) {
+  console.error(`CENSUS_DATE must be YYYY-MM-DD (got "${process.env.CENSUS_DATE}")`);
+  process.exit(2);
+}
 const generated = process.env.CENSUS_DATE || new Date().toISOString().slice(0, 10);
 const header = {
   version: 1, schema_version: 2, generated, engine_data: DATA_UPDATED, verdicts: rows.length,

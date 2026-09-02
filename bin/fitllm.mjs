@@ -97,11 +97,20 @@ const kvRaw = parseInt(flag('--kv'), 10);
 const kvBits = [16, 8, 4].includes(kvRaw) ? kvRaw : 16;
 const rawQ = flag('--quant');
 
+// --ctx 지정 시 16 이상의 정수만 — 음수/0/비수치는 KV를 0으로 만들어 거짓 FITS와 파싱 불가 영수증을 낸다.
+// (v2 API는 하한 16으로 클램프; CLI는 스크립트 가드 용도라 조용한 보정 대신 명시 오류 exit 2)
+const ctxFlagRaw = flag('--ctx');
+if (ctxFlagRaw != null && (!/^\d+$/.test(String(ctxFlagRaw)) || parseInt(ctxFlagRaw, 10) < 16)) {
+  console.error(`--ctx must be an integer >= 16 (got "${ctxFlagRaw}")`);
+  process.exit(2);
+}
+const ctxRequested = ctxFlagRaw != null ? parseInt(ctxFlagRaw, 10) : 8192;
+
 // ── --top: "이 하드웨어에서 뭘 돌릴 수 있나" — 모델별 최고 quant 티어로 fit 스캔 ──
 if (TOP) {
   const nRaw = flag('--top');
   const n = /^\d+$/.test(nRaw || '') ? Math.max(1, parseInt(nRaw, 10)) : Infinity; // --top 뒤가 플래그면 전체
-  const ctxReq = parseInt(flag('--ctx'), 10) || 8192;
+  const ctxReq = ctxRequested; // 검증 완료된 공용 값 — TOP 경로도 동일 가드 적용
   // 티어는 최고 정밀도부터 시도 (fit되는 가장 좋은 quant를 그 모델의 대표로). --quant 지정 시 그 티어만.
   let tiers;
   if (isGpu) {
@@ -163,7 +172,7 @@ if (isGpu) {
   weightBpw = [4, 8, 16].includes(bits) ? bits : 8;
   quantLabel = `${weightBpw}-bit`;
 }
-const ctx = Math.min(parseInt(flag('--ctx'), 10) || 8192, model.maxContext);
+const ctx = Math.min(ctxRequested, model.maxContext);
 
 // ── verdict ──
 const EN = (ko, en) => en; // CLI output is English
