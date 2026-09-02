@@ -2,6 +2,7 @@
 // fitllm — "will it run?" in one line. Zero deps. MIT. https://fitllm.run
 import { execFileSync } from 'node:child_process';
 import { canonicalReceiptSlug, receiptRepresentable } from './receipt-slug.mjs';
+import { resolveDetectedGpu } from './detect-resolver.mjs';
 import {
   LOCAL_MODELS, GPUS, GPU_QUANTS, MACBOOK_RAM_GROUPS,
   gpuDevice, combineGpus, simulate, calcMaxContext, suggestFix, suggestFixGpu, formatTokens, fmtGB,
@@ -82,7 +83,8 @@ if (gpuName) {
     const out = execFileSync('nvidia-smi', ['--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], { encoding: 'utf8' }).trim().split('\n')[0];
     const [name, mem] = out.split(',').map((s) => s.trim());
     const vram = Math.round(parseInt(mem, 10) / 1024);
-    const g = GPUS.find((x) => name.toLowerCase().includes(x.name.toLowerCase())) || { name: `${name} (detected)`, vramGB: vram, bandwidthGBs: 0, series: 'detected' };
+    // 최장 신원 + VRAM 일치 요구(Laptop/Ti 변형 오인 차단) — 불일치는 감지된 실제 이름·VRAM으로 계산
+    const g = resolveDetectedGpu(name, vram, GPUS) || { name: `${name} (detected)`, vramGB: vram, bandwidthGBs: 0, series: 'detected' };
     if (g.series === 'detected') receiptCatalogGpu = false; // v2 카탈로그 밖 — 영수증 발급 불가(계산은 계속)
     device = gpuDevice(g, 'windows-display'); isGpu = true; hwLabel = `${g.name} (${g.vramGB}GB, detected)`;
   } catch {
