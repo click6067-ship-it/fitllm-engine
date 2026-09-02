@@ -3,7 +3,7 @@
   "name": "run.fitllm/fitllm",
   "title": "FitLLM",
   "description": "Will this LLM fit on your GPU, multi-GPU rig or Mac? Exact VRAM & KV-cache math. Read-only.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "repository": {
     "url": "https://github.com/click6067-ship-it/fitllm-engine",
     "source": "github"

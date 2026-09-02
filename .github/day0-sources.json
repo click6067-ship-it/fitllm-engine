@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "officialNamespaces": [
+    { "namespace": "Qwen", "identityEvidenceUrl": "https://github.com/QwenLM" },
+    { "namespace": "zai-org", "identityEvidenceUrl": "https://github.com/zai-org" },
+    { "namespace": "deepseek-ai", "identityEvidenceUrl": "https://github.com/deepseek-ai" },
+    { "namespace": "google", "identityEvidenceUrl": "https://ai.google.dev/gemma" },
+    { "namespace": "meta-llama", "identityEvidenceUrl": "https://github.com/meta-llama" },
+    { "namespace": "mistralai", "identityEvidenceUrl": "https://docs.mistral.ai/" },
+    { "namespace": "openai", "identityEvidenceUrl": "https://github.com/openai/gpt-oss" }
+  ],
+  "pipelineTags": ["text-generation", "image-text-to-text"],
+  "trustedIssueAuthors": ["click6067-ship-it", "github-actions[bot]"],
+  "releaseLookbackDays": 14,
+  "priorityThresholds": { "likes": 100, "downloads": 10000 },
+  "maxIssueMutationsPerRun": 3
+}

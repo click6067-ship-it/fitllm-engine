@@ -21,7 +21,8 @@
   "scripts": {
     "test": "node --test test/*.test.mjs && node vectors/run.mjs",
     "census": "node census/generate.mjs",
-    "alias:dry-run": "node scripts/publish-alias.mjs --dry-run"
+    "alias:dry-run": "node scripts/publish-alias.mjs --dry-run",
+    "day0:dry-run": "node .github/scripts/day0-watch.mjs --dry-run"
   },
   "keywords": [
     "llm",

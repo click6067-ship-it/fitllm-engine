@@ -1,0 +1,12 @@
+{
+  "id": "Qwen/Qwen3.8-Flash-Next",
+  "sha": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+  "pipeline_tag": "image-text-to-text",
+  "createdAt": "2026-08-24T08:24:59.000Z",
+  "cardData": { "license": "other", "license_name": "qwen-community-1.0", "license_link": "LICENSE" },
+  "siblings": [
+    { "rfilename": "config.json" },
+    { "rfilename": "model.safetensors.index.json" },
+    { "rfilename": "LICENSE" }
+  ]
+}
