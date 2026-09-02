@@ -14,3 +14,4 @@ jobs:
         with:
           node-version: 20 # node --test <dir>/ 인자 호환 — 로컬 검증 환경(v20)과 동일 고정 (22에서 module-not-found 실패 확인)
       - run: npm test # node --test test/ (invariants·CLI·parseHfConfig) + vectors/run.mjs (conformance 14) — 커밋된 census 정합성은 invariants가 검증
+      - run: npm run alias:dry-run # 공개 CTA인 npx fitllm용 별칭 tarball과 bin을 CI에서 검증

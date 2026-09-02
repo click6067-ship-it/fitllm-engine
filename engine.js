@@ -778,7 +778,10 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   const headroom = device.memoryGB * device.headroomRatio;
 
   let verdict;
-  if (free < 0) verdict = 'no';
+  // 최종 방어선: NaN·Infinity는 `free < 0`도 `free < headroom`도 false라 그대로 'yes'로 떨어진다.
+  // 상류 게이트가 다 뚫려도 "모르는데 된다"고 답하지는 않게 한다.
+  if (!Number.isFinite(used) || !Number.isFinite(free)) verdict = 'no';
+  else if (free < 0) verdict = 'no';
   else if (free < headroom) verdict = 'tight';
   else verdict = 'yes';
 
@@ -1014,6 +1017,84 @@ const HYBRID_LINEAR_TYPES = new Set(['qwen3_5', 'qwen3_5_text', 'qwen3_5_moe', '
 // 예: lfm2의 'conv'는 어텐션이 아니라 고정 conv 캐시라 KV 공식이 성립하지 않는다.
 const KNOWN_LAYER_TYPES = new Set(['full_attention', 'sliding_attention', 'linear_attention']);
 
+// ── 미지 구조 필드 게이트 (issue #87) ────────────────────────────────────────
+// 종래 게이트는 "알려진 나쁜 필드"를 하나씩 막는 블랙리스트였다. 그래서 처음 보는 architectures라도
+// num_hidden_layers/num_key_value_heads/head_dim만 표준처럼 생겼으면 통과했다 — 필드 *이름*만 보고
+// 아키텍처 *정체*는 안 본 것이다. 실증(2026-08-31 day0 28건 전수): TTS 모델(Breeze-TTS-2)이
+// 3.5B LLM으로 통과했고, MHC+MLA+sliding 혼합(Motif-3)이 MLA 균일 경로로 통과했다.
+// → 화이트리스트로 뒤집는다. 구조에 영향 줄 수 있는 이름의 키가 있는데 우리가 그 의미를 모르면 거부.
+//
+// 판정 원칙: "이 키가 KV 레이아웃 또는 파라미터 산출을 바꿀 수 있는가?"
+// 파라미터는 safetensors total_size(실측)에서 나오므로, 가중치만 늘리는 키는 무해로 본다.
+const STRUCTURAL_KEY_RE =
+  /attn|attention|kv|head|sliding|window|state|conv|expert|latent|lora|compress|sparse|index|mhc|hybrid|linear|block|mamba|ssm|nope|layer/i;
+
+// 엔진이 실제로 읽어서 계산에 쓰는 키 — 의미를 아는 것들이다.
+// (cross_attention_layers·layers_block_type·index_topk 등 "보면 즉시 거부"하는 키는 위쪽 검사에서
+//  이미 throw되므로 여기 넣지 않는다. 넣으면 검사 순서가 바뀔 때 조용히 통과할 수 있다.)
+const ENGINE_READ_KEYS = new Set([
+  'num_hidden_layers', 'num_attention_heads', 'num_key_value_heads', 'head_dim', 'global_head_dim',
+  'sliding_window', 'use_sliding_window', 'layer_types',
+  'num_local_experts', 'num_experts', 'n_routed_experts',
+  'kv_lora_rank', 'qk_rope_head_dim',
+  'vocab_size_per_layer_input', 'hidden_size_per_layer_input',
+  'linear_num_key_heads', 'linear_num_value_heads', 'linear_key_head_dim',
+  'linear_value_head_dim', 'linear_conv_kernel_dim',
+]);
+
+// 계열 무관 무해 — 계산 방식은 바꾸지만 메모리 레이아웃은 안 바꾼다.
+const BENIGN_STRUCTURAL_KEYS = new Set([
+  // RoPE 계열: 위치 인코딩이라 KV *텐서 크기*와 무관 (θ·스케일링·인터리브 모두)
+  'rope_theta', 'rope_scaling', 'rope_parameters', 'rope_interleave', 'rope_factor',
+  'partial_rotary_factor',
+  // 정규화·드롭아웃·바이어스: 학습/수치 안정화용, 캐시 크기 불변
+  'attention_dropout', 'attention_bias', 'qk_layernorm', 'layer_norm_epsilon',
+  // Granite: 어텐션 스코어에 곱하는 스칼라. 텐서 치수 불변
+  'attention_multiplier',
+  // FFN/MoE 배치: 어텐션이 아니라 MLP 쪽 구조라 KV 불변. 가중치 증감은 total_size에 이미 반영됨
+  'moe_intermediate_size', 'moe_layer_freq', 'shared_expert_intermediate_size',
+  'n_shared_experts', 'num_shared_experts', 'norm_topk_prob', 'output_router_logits',
+  'router_aux_loss_coef', 'first_k_dense_replace', 'interleave_moe_layer_step',
+  'moe_router_enable_expert_bias', 'num_experts_per_tok', 'experts_top_k',
+  'experts_per_token', 'decoder_sparse_step', 'mlp_only_layers',
+  // MTP(Multi-Token Prediction) 헤드 레이어 — 디코더 본체 밖이라 KV 불변.
+  // 가중치는 total_size에 포함돼 파라미터가 소폭 과대되지만 보수적(과대) 방향이라 허용.
+  'num_nextn_predict_layers',
+  // Qwen 계열 레거시 필드. 슬라이딩이 실제로 쓰이는지는 slidingActive가 따로 판정하므로
+  // 이 값 자체는 캐시 크기에 영향이 없다.
+  'max_window_layers',
+]);
+
+// MLA(kv_lora_rank) 경로에서만 무해한 키 — 압축 latent가 캐시되므로 아래 치수들은 캐시 크기와 무관하다.
+// MLA가 아닐 때는 같은 이름이라도 K/V 텐서 치수를 직접 바꿀 수 있어 허용하지 않는다.
+// (예: v_head_dim은 비-MLA에서 V의 head_dim이 K와 다르다는 뜻이 되어 2×kvHeads×headDim 공식이 깨진다.)
+const MLA_ONLY_KEYS = new Set([
+  'q_lora_rank',      // 쿼리 압축 — 캐시되는 건 KV latent라 무관
+  'qk_nope_head_dim', // 비-RoPE 성분. 캐시는 kv_lora_rank + qk_rope_head_dim
+  'v_head_dim',       // MLA에선 V도 latent에서 복원 — 별도 캐시 없음
+]);
+
+// 계열 전용 — 해당 model_type을 실제로 모델링·테스트했을 때만 허용한다.
+// 같은 키라도 미검증 계열에서 나오면 의미가 같다는 보장이 없으므로 거부한다(이게 #87의 요지).
+const FAMILY_STRUCTURAL_KEYS = new Map([
+  // qwen3_5 = Gated DeltaNet 하이브리드. full/linear 분리와 고정 순환 상태를 엔진이 계산하고
+  // 벡터로 검증돼 있다(v-qwen38-*). 아래 키들은 그 계열에서 의미가 확인된 것들.
+  ['qwen3_5', new Set([
+    'attn_output_gate',        // 출력 게이팅 — 가중치만 늘고 KV 불변
+    'full_attention_interval', // layer_types와 중복 정보. 엔진은 layer_types를 쓴다
+    'mlp_only_layers',         // MoE 대신 dense MLP인 레이어 — FFN 구조, KV 불변
+    'mtp_num_hidden_layers',   // Multi-Token Prediction 추가 레이어. 디코더 본체 밖(가중치만)
+    'mamba_ssm_dtype',         // dtype 힌트. 실제 SSM 스케줄은 layers_block_type 게이트가 따로 본다
+  ])],
+]);
+
+// model_type을 계열 키로 정규화 — qwen3_5 / qwen3_5_moe / qwen3_5_moe_text 를 한 계열로 본다.
+function familyOf(modelType) {
+  const t = String(modelType || '');
+  if (HYBRID_LINEAR_TYPES.has(t)) return 'qwen3_5';
+  return t;
+}
+
 // config 치수로 파라미터 수의 자릿수를 재구성한다(이름 추정 교차검증용, 정밀 산출 아님).
 function paramsFromDims(c, layerCount) {
   const h = c.hidden_size;
@@ -1038,14 +1119,19 @@ export function parseHfConfig(id, raw, totalSize) {
   // (반복 레이어·혼합 linear/GQA·압축/인덱스 어텐션·멀티모달 프로젝터)는 그럴듯한 오답을 만든다.
   // 숫자를 내지 않는 편이 틀린 fit보다 안전하다.
   const inner = raw.text_config || raw;
-  const isHybridLinear =
-    HYBRID_LINEAR_TYPES.has(String(raw.model_type || '')) || HYBRID_LINEAR_TYPES.has(String(inner.model_type || ''));
+  // 계열 판정은 *텍스트 본체*(inner)를 우선한다. 종래엔 OR라서 래퍼만 qwen3_5면 본체가 미지 계열이어도
+  // linear 상태 공식이 허용됐다. 양쪽이 다 선언돼 있고 계열이 갈리면 어느 쪽이 참인지 알 수 없어 거부한다.
+  if (raw !== inner && raw.model_type && inner.model_type &&
+      HYBRID_LINEAR_TYPES.has(String(raw.model_type)) !== HYBRID_LINEAR_TYPES.has(String(inner.model_type))) {
+    throw new Error('최상위와 text_config의 model_type 계열이 서로 달라요 — 계산하지 않습니다');
+  }
+  const isHybridLinear = HYBRID_LINEAR_TYPES.has(String(inner.model_type ?? raw.model_type ?? ''));
 
   // 멀티모달 래퍼(text_config) 자체는 막지 않는다 — 판정 대상은 *텍스트 본체의 메모리 레이아웃*이고,
   // 가중치는 safetensors 전체 크기(비전 타워 포함)로 잡히므로 전체 체크포인트 기준으로 정합하다.
   // 대신 텍스트 본체가 아래 게이트를 전부 통과해야 하고, 융합(cross-attention) 계열은 KV가
   // 이미지 토큰 쪽으로도 자라기 때문에 별도로 거부한다.
-  if (raw.cross_attention_layers || inner.cross_attention_layers || inner.cross_attention_config) {
+  if (raw.cross_attention_layers || raw.cross_attention_config || inner.cross_attention_layers || inner.cross_attention_config) {
     throw new Error('cross-attention 융합 멀티모달은 아직 지원하지 않아요');
   }
   const c = inner;
@@ -1071,8 +1157,67 @@ export function parseHfConfig(id, raw, totalSize) {
       throw new Error(`알 수 없는 어텐션 레이어 타입(${unknown.join(', ')})은 아직 지원하지 않아요`);
     }
   }
+  // 레이어별로 *다른* 윈도우 크기(sliding_windows 복수형, ExaoneMoe류). 단수 sliding_window 하나로
+  // 표현할 수 없다. 이걸 못 보면 sliding=0이 되어 아래 분기가 슬라이딩 레이어를 'KV 없는 linear'로
+  // 취급한다 → KV 과소계산 = 거짓 "fits"(실증: K-EXAONE-2.0 78레이어 중 20레이어만 KV 보유로 산출).
+  if (c.sliding_windows || c.mtp_sliding_windows) {
+    throw new Error('레이어별로 다른 슬라이딩 윈도우(sliding_windows)는 아직 지원하지 않아요');
+  }
+  // 미지 구조 필드 게이트(#87) — 구조에 영향 줄 수 있는 이름인데 의미를 모르는 키가 있으면 거부.
+  // 특정 실패 패턴을 막는 위 검사들보다 뒤에 둔다(그쪽이 더 정확한 메시지를 준다).
+  const familyKeys = FAMILY_STRUCTURAL_KEYS.get(familyOf(c.model_type || raw.model_type));
+  // 두 스코프를 모두 스캔한다 — 종래엔 text_config만 봐서 최상위에 구조 필드를 두면 그대로 통과했다.
+  const scanScopes = raw === inner ? [inner] : [inner, raw];
+  const unknownStructural = [...new Set(scanScopes.flatMap((s) => Object.keys(s)))].filter(
+    (k) =>
+      STRUCTURAL_KEY_RE.test(k) &&
+      !ENGINE_READ_KEYS.has(k) &&
+      !BENIGN_STRUCTURAL_KEYS.has(k) &&
+      !(c.kv_lora_rank && MLA_ONLY_KEYS.has(k)) &&
+      !(familyKeys && familyKeys.has(k))
+  );
+  if (unknownStructural.length) {
+    throw new Error(
+      `구조를 알 수 없는 config 필드(${unknownStructural.slice(0, 4).join(', ')}` +
+        `${unknownStructural.length > 4 ? ` 외 ${unknownStructural.length - 4}개` : ''})가 있어 계산하지 않아요`
+    );
+  }
   const layerCount = c.num_hidden_layers;
   if (!layerCount) throw new Error('config에 num_hidden_layers 없음');
+
+  // 값 검증 — 종래엔 필드가 "있는지"만 보고 값은 안 봤다. 그래서 0·음수·소수·문자열이 그대로
+  // 계산에 들어갔다. num_key_value_heads: 0 이면 calcKVCache의 falsy 가드가 KV를 0으로 돌려주고,
+  // num_attention_heads가 아예 없으면 kvHeads가 1로 떨어져 32-head MHA를 32배 과소계산한다.
+  // 둘 다 거짓 "fits" 방향이다.
+  const posInt = (v) => Number.isInteger(v) && v > 0;
+  if (!posInt(layerCount)) throw new Error('num_hidden_layers 값이 양의 정수가 아니에요');
+  if (!posInt(c.num_attention_heads)) {
+    throw new Error('config에 num_attention_heads가 없거나 값이 양의 정수가 아니에요 — KV 치수를 추정하지 않습니다');
+  }
+  // 계산에 산술로 들어가는 값은 전부 검증한다 — 하나라도 빠지면 음수·NaN이 그대로 흘러가
+  // KV가 음수가 되거나(예: global_head_dim: -1024 → KV -63.9 GiB) 상태가 NaN이 되어 'yes'가 나온다.
+  for (const k of [
+    'num_key_value_heads', 'head_dim', 'hidden_size', 'kv_lora_rank', 'qk_rope_head_dim',
+    'global_head_dim', 'max_position_embeddings',
+    'linear_num_key_heads', 'linear_num_value_heads', 'linear_key_head_dim',
+    'linear_value_head_dim', 'linear_conv_kernel_dim',
+  ]) {
+    if (c[k] != null && !posInt(c[k])) {
+      throw new Error(`config의 ${k} 값이 양의 정수가 아니에요 — 계산하지 않습니다`);
+    }
+  }
+  // layer_types가 배열이 아니면 타입·길이 검사를 모두 우회한다(문자열이면 .filter가 없어 다른 경로로 샌다).
+  if (c.layer_types != null && !Array.isArray(c.layer_types)) {
+    throw new Error('layer_types가 배열이 아니에요 — 계산하지 않습니다');
+  }
+  // sliding_window만은 0을 허용한다 — "슬라이딩 비활성"의 관례적 표기다(아래 slidingActive가 판정).
+  if (c.sliding_window != null && c.sliding_window !== 0 && !posInt(c.sliding_window)) {
+    throw new Error('config의 sliding_window 값이 양의 정수가 아니에요 — 계산하지 않습니다');
+  }
+  // 두 메타데이터가 어긋나면 어느 쪽이 참인지 알 수 없다.
+  if (Array.isArray(c.layer_types) && c.layer_types.length !== layerCount) {
+    throw new Error('layer_types 길이가 num_hidden_layers와 달라요 — 계산하지 않습니다');
+  }
 
   const attnHeads = c.num_attention_heads;
   const kvHeads = c.num_key_value_heads ?? attnHeads ?? 1;
@@ -1088,6 +1233,13 @@ export function parseHfConfig(id, raw, totalSize) {
   if (sliding && !Array.isArray(c.layer_types) && !c.kv_lora_rank) {
     throw new Error('레이어별 sliding/full 구성이 없는 모델은 정확히 계산할 수 없어요');
   }
+  // 슬라이딩 레이어가 있는데 쓸 수 있는 윈도우 크기를 못 읽으면, 아래 분기가 sliding 레이어를
+  // 'KV 없는 linear'로 해석해 그 레이어들의 KV를 통째로 삭제한다 — 거짓 "fits"의 직행로다.
+  // sliding_windows(복수형) 말고도 swa_size 등 이름이 다른 경우가 있어 개별 필드명이 아니라
+  // "윈도우를 못 읽었다"는 상태 자체로 막는다.
+  if (hasSlidingLayers && !(sliding > 0)) {
+    throw new Error('슬라이딩 어텐션 레이어가 있는데 윈도우 크기를 읽을 수 없어 계산하지 않아요');
+  }
 
   // layer_types로 full attention 레이어 수 파악 (하이브리드/슬라이딩 정확도)
   let fullAttnLayers, globalAttnLayers, linearAttn;
@@ -1095,7 +1247,10 @@ export function parseHfConfig(id, raw, totalSize) {
     const linearCount = c.layer_types.filter((t) => String(t).includes('linear')).length;
     if (linearCount > 0) {
       // 선형/재귀 어텐션은 고정 상태 메모리를 갖는다 — 치수를 모르면 계산할 수 없다.
-      if (!isHybridLinear || !c.linear_num_value_heads || !c.linear_key_head_dim || !c.linear_value_head_dim) {
+      // linear_num_key_heads가 빠져도 통과하던 구멍이 있었다 — 그러면 상태 크기가 NaN이 되고,
+      // NaN은 free < 0 비교를 통과해 verdict가 'yes'로 떨어진다. 다섯 치수를 모두 요구한다.
+      if (!isHybridLinear || !c.linear_num_key_heads || !c.linear_num_value_heads ||
+          !c.linear_key_head_dim || !c.linear_value_head_dim) {
         throw new Error('linear/recurrent attention의 고정 상태 메모리는 HuggingFace 즉석 계산에서 지원하지 않아요');
       }
       linearAttn = {
@@ -1131,19 +1286,91 @@ export function parseHfConfig(id, raw, totalSize) {
 
   // 파라미터 수: safetensors total_size(저장 dtype 바이트)에서 역산, 없으면 이름 추정
   let totalParams = null;
+  if (totalSize != null && !(Number.isFinite(totalSize) && totalSize > 0)) {
+    throw new Error('체크포인트 크기(total_size)가 유효한 양수가 아니에요 — 계산하지 않습니다');
+  }
   if (totalSize) {
     // 선-양자화 레포(MLX/AWQ/bnb): 저장 비트폭의 진실은 quantization(.bits) — torch_dtype은 원본 정밀도라
     // ÷2 과소계산 → 거짓 "fits" (issue #2). 합성 재현: 8bit 레포에 qbits 무시 시 params 절반 (test/parsehf.test.mjs).
     // 혼합 정밀도(일부 레이어 상위 bit)는 params 과대 방향으로만 틀림 — 보수적이라 허용.
-    const qc = c.quantization_config;
-    // bitsandbytes는 bits 필드 없이 load_in_4bit/8bit 불리언만 씀 — 누락 시 torch_dtype(2B) 경로로 ÷2~4 과소계산(거짓 fits)
-    const quantMethod = String(c.quantization?.quant_method || qc?.quant_method || qc?.fmt || '').toLowerCase();
-    const qbits = c.quantization?.bits ?? qc?.bits
-      ?? (qc?.load_in_4bit ? 4 : qc?.load_in_8bit ? 8 : quantMethod.includes('fp8') || quantMethod.includes('int8') ? 8 : undefined);
-    const dt = String(c.torch_dtype || '').toLowerCase();
+    // 저장 정보는 멀티모달 래퍼의 *최상위*에만 있는 경우가 있다. inner(text_config)만 보면
+    // 4비트를 못 읽고 2바이트로 나눠 4배 과소계산 = 거짓 "fits"가 된다.
+    // 실측: Qwen/Qwen3.5-397B-A17B-GPTQ-Int4 는 quantization_config.bits=4가 raw 최상위에 있고
+    // text_config는 중첩이라, inner만 읽던 종래 코드가 397B 모델을 117.8B로 계산했다.
+    // 양쪽에 다 있고 서로 다르면 어느 쪽이 참인지 알 수 없으므로 거부한다.
+    // 저장 정보는 최상위·중첩 어디에나 있을 수 있고 별칭(torch_dtype/dtype, quantization/
+    // quantization_config)도 있다. 한 자리만 읽으면 다른 자리로 우회가 생기므로, **모든 선언을 모아**
+    // 정규화한 뒤 충돌을 판정한다. (같은 키끼리만 비교하면 최상위 bits=4 + 중첩 quantization.bits=8
+    // 같은 별칭 간 충돌을 놓친다.)
+    const scopes = raw === inner ? [inner] : [inner, raw];
+    const quantObjs = scopes.flatMap((s) => [s.quantization, s.quantization_config]).filter(Boolean);
+    const bitsIn = (q) => {
+      const declarations = [];
+      if (q.bits != null) declarations.push(q.bits);
+      if (q.load_in_4bit === true) declarations.push(4);
+      if (q.load_in_8bit === true) declarations.push(8);
+      const meth = String(q.quant_method || q.fmt || '').toLowerCase();
+      if (meth.includes('fp8') || meth.includes('int8')) declarations.push(8);
+      return declarations;
+    };
+    const declaredBits = [...new Set(quantObjs.flatMap(bitsIn))];
+    if (declaredBits.length > 1) {
+      throw new Error(`양자화 비트폭 선언이 서로 달라요(${declaredBits.join(', ')}) — 계산하지 않습니다`);
+    }
+    const qbits = declaredBits[0];
+    if (qbits !== undefined && !(Number.isInteger(qbits) && qbits >= 1 && qbits <= 64)) {
+      throw new Error(`양자화 비트폭(${qbits})이 1–64 사이 정수가 아니에요 — 계산하지 않습니다`);
+    }
+    const dtypes = [...new Set(
+      scopes.flatMap((s) => [s.torch_dtype, s.dtype]).filter((v) => v != null).map((v) => String(v).toLowerCase())
+    )];
+    if (dtypes.length > 1) {
+      throw new Error(`dtype 선언이 서로 달라요(${dtypes.join(', ')}) — 계산하지 않습니다`);
+    }
+    const dt = dtypes[0] || '';
+    // 양자화를 *선언해놓고* 비트폭을 못 읽으면 2바이트로 추정하지 않는다 — 그 추정이 틀리는
+    // 방향이 곧 거짓 fits다. 실측: gpt-oss는 dtype도 bits도 없이 quant_method만 "mxfp4"라
+    // 종래엔 bf16으로 가정해 117B 모델을 32.6B로 계산했다(3.6배 과소, #98).
+    // 반대로 양자화 선언이 아예 없으면 bf16이 HF 관례이므로 종래 기본값을 유지한다.
+    if (quantObjs.length && qbits === undefined) {
+      const meth = quantObjs.map((q) => q.quant_method || q.fmt).filter(Boolean).join(', ');
+      throw new Error(`선언된 양자화(${meth || '방식 미상'})의 저장 비트폭을 확정할 수 없어 계산하지 않아요`);
+    }
     const dtypeBytes = qbits ? qbits / 8
       : dt.includes('float32') || dt.includes('fp32') ? 4 : dt.includes('fp8') || dt.includes('int8') ? 1 : 2;
     totalParams = totalSize / dtypeBytes / 1e9;
+    // total_size sanity check — 종래엔 아래 fallback 경로에만 교차검증이 있어서, total_size가
+    // 있기만 하면 그 값을 무조건 믿었다. 그런데 index의 metadata.total_size가 아예 틀린 레포가 있다.
+    // 실증: InternScience/Agents-A1-4B는 shard 2개(텍스트 32L·hidden 2560 = ~4B급 멀티모달)인데
+    // total_size가 550.7GB로 적혀 있어 275.3B가 산출됐다 — 2개 샤드에 550GB는 물리적으로 불가능하다.
+    //
+    // 심판은 레포 *이름*이 아니라 config *치수*로 한다. 이름이 틀리고 크기가 맞는 반대 사례가
+    // 실재하기 때문이다(z-lab/Qwen3.8-27B-DFlash2 = 이름 27B, 실제 1.9B 드래프트 헤드).
+    // 치수는 레이어 구조와 같은 출처라, 크기 메타데이터와 독립적인 제3의 앵커가 된다.
+    // 목적은 '정밀 검증'이 아니라 '자릿수 붕괴 검출'이라 배수 여유를 크게 둔다.
+    // 치수 추정이 성립할 때만 심판으로 쓴다 — FFN·임베딩 항이 빠지면 어텐션만 세어 심하게
+    // 과소평가되고, 그 상태로 비교하면 정상 모델을 거짓 거부한다.
+    // MoE일 때 paramsFromDims는 moe_intermediate_size로만 FFN을 센다. gpt_oss처럼 전문가 FFN 폭을
+    // intermediate_size에 담는 config는 FFN이 0으로 잡혀 추정이 자릿수째 무너지므로 심판으로 쓸 수 없다
+    // (실증: gpt-oss-120b 추정 ~2.1B vs 실제 32.6B → 거짓 거부).
+    const nExpDims = c.num_local_experts || c.num_experts || c.n_routed_experts || 0;
+    // MoE 배치 필드(전문가가 *일부* 레이어에만 있음)를 추정식이 반영하지 않는다 — 모든 레이어에
+    // 모든 전문가가 있다고 세어 과대 추정하고, 그 추정으로 심판하면 정상 모델을 거짓 거부한다
+    // (moe_layer_freq=8 합성 구성에서 실제 52.5B를 ~363.2B로 추정해 거부한 재현 있음).
+    const hasMoePlacement = nExpDims && (
+      c.moe_layer_freq != null || c.decoder_sparse_step != null ||
+      c.mlp_only_layers != null || c.first_k_dense_replace != null ||
+      c.interleave_moe_layer_step != null || c.n_dense_first_layers != null
+    );
+    const dimsUsable = !hasMoePlacement &&
+      c.hidden_size && c.vocab_size && (nExpDims ? c.moe_intermediate_size : c.intermediate_size);
+    const dims = dimsUsable ? paramsFromDims(c, layerCount) : null;
+    if (dims && (totalParams > dims * 4 || totalParams < dims / 4)) {
+      throw new Error(
+        `체크포인트 크기로 계산한 파라미터 수(${totalParams.toFixed(1)}B)가 config 구조 추정` +
+          `(~${dims.toFixed(1)}B)과 자릿수가 달라요 — 레포의 total_size 메타데이터를 믿을 수 없어 계산하지 않습니다`
+      );
+    }
   }
   if (!totalParams) {
     // 최후 수단인 이름 추정은 config 치수와 교차검증한다. 레포 이름이 *타깃* 모델을 가리키는
@@ -1207,4 +1434,4 @@ export const DATA_UPDATED = '2026-08';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.8.0';
+export const ENGINE_VERSION = '2.8.1';

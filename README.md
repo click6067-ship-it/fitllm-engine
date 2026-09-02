@@ -76,7 +76,7 @@ Total = Parameters (quantization-adjusted)
       + macOS base (Apple Silicon unified memory)
 ```
 
-Plus a `parseHfConfig()` that turns any HuggingFace config into the model shape above. (No token/s prediction — deliberately: speed depends on runtime/backend in ways a static model can't claim honestly. Fit is a verifiable claim; speed is not.)
+Plus a `parseHfConfig()` that turns configs from verified, modeled Hugging Face architecture families into the model shape above; unsupported structures fail closed instead of returning a guess. (No token/s prediction — deliberately: speed depends on runtime/backend in ways a static model can't claim honestly. Fit is a verifiable claim; speed is not.)
 
 ## Usage
 
@@ -87,7 +87,7 @@ const model = LOCAL_MODELS.find((m) => m.name === 'Gemma 4 31b');
 const sim = simulate(model, /*ram*/ 64, /*ctx*/ 131072, /*bits*/ 8);
 // → { used, free, verdict: 'yes'|'tight'|'no', param, kv, rt, os, maxContext, ... }
 
-// any HuggingFace model:
+// a config from a modeled Hugging Face architecture family:
 const m = parseHfConfig('Qwen/Qwen3-32B', configJson, totalSizeBytes);
 ```
 
