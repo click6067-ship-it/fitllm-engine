@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // fitllm — "will it run?" in one line. Zero deps. MIT. https://fitllm.run
 import { execFileSync } from 'node:child_process';
+import { canonicalReceiptSlug, receiptRepresentable } from './receipt-slug.mjs';
 import {
   LOCAL_MODELS, GPUS, GPU_QUANTS, MACBOOK_RAM_GROUPS,
   gpuDevice, combineGpus, simulate, calcMaxContext, suggestFix, suggestFixGpu, formatTokens, fmtGB,
@@ -52,6 +53,8 @@ if (!TOP) {
 
 // ── device: --gpu | --mac | --detect ──
 let device, isGpu, hwLabel;
+let receiptCards = 1;      // 물리 카드 총수 — v2 영수증 한계(≤8) 판정용
+let receiptCatalogGpu = true; // --detect 미등록 GPU는 v2 카탈로그에 없어 영수증 표현 불가
 const gpuName = flag('--gpu');
 const macRam = flag('--mac');
 if (gpuName) {
@@ -68,6 +71,7 @@ if (gpuName) {
   const list = [];
   for (let i = 0; i < count; i++) list.push(...found);
   device = combineGpus(list, 'windows-display'); isGpu = true;
+  receiptCards = list.reduce((s, g) => s + (g.count || 1), 0);
   hwLabel = `${device.gpu.name} (${device.memoryGB}GB${list.length > 1 ? ' pooled' : ''})`;
 } else if (macRam) {
   const ram = parseInt(macRam, 10);
@@ -79,6 +83,7 @@ if (gpuName) {
     const [name, mem] = out.split(',').map((s) => s.trim());
     const vram = Math.round(parseInt(mem, 10) / 1024);
     const g = GPUS.find((x) => name.toLowerCase().includes(x.name.toLowerCase())) || { name: `${name} (detected)`, vramGB: vram, bandwidthGBs: 0, series: 'detected' };
+    if (g.series === 'detected') receiptCatalogGpu = false; // v2 카탈로그 밖 — 영수증 발급 불가(계산은 계속)
     device = gpuDevice(g, 'windows-display'); isGpu = true; hwLabel = `${g.name} (${g.vramGB}GB, detected)`;
   } catch {
     if (process.platform === 'darwin') {
@@ -96,11 +101,20 @@ const kvRaw = parseInt(flag('--kv'), 10);
 const kvBits = [16, 8, 4].includes(kvRaw) ? kvRaw : 16;
 const rawQ = flag('--quant');
 
+// --ctx 지정 시 16 이상의 정수만 — 음수/0/비수치는 KV를 0으로 만들어 거짓 FITS와 파싱 불가 영수증을 낸다.
+// (v2 API는 하한 16으로 클램프; CLI는 스크립트 가드 용도라 조용한 보정 대신 명시 오류 exit 2)
+const ctxFlagRaw = flag('--ctx');
+if (ctxFlagRaw != null && (!/^\d+$/.test(String(ctxFlagRaw)) || parseInt(ctxFlagRaw, 10) < 16)) {
+  console.error(`--ctx must be an integer >= 16 (got "${ctxFlagRaw}")`);
+  process.exit(2);
+}
+const ctxRequested = ctxFlagRaw != null ? parseInt(ctxFlagRaw, 10) : 8192;
+
 // ── --top: "이 하드웨어에서 뭘 돌릴 수 있나" — 모델별 최고 quant 티어로 fit 스캔 ──
 if (TOP) {
   const nRaw = flag('--top');
   const n = /^\d+$/.test(nRaw || '') ? Math.max(1, parseInt(nRaw, 10)) : Infinity; // --top 뒤가 플래그면 전체
-  const ctxReq = parseInt(flag('--ctx'), 10) || 8192;
+  const ctxReq = ctxRequested; // 검증 완료된 공용 값 — TOP 경로도 동일 가드 적용
   // 티어는 최고 정밀도부터 시도 (fit되는 가장 좋은 quant를 그 모델의 대표로). --quant 지정 시 그 티어만.
   let tiers;
   if (isGpu) {
@@ -147,7 +161,7 @@ if (TOP) {
         const mark = s.verdict === 'tight' ? '△' : '✓';
         console.log(`  ${String(i + 1).padStart(2)}. ${m.name.padEnd(W)}  ${String(m.totalParams).padStart(6)}B  ${t.label.padEnd(6)}  ${mark} ${fmtGB(s.used)}/${s.memoryGB} GB${maxCtx >= 1024 ? `  max ctx ~${formatTokens(maxCtx, EN)}` : ''}`);
       });
-      console.log(`  every number from official config.json — audit: github.com/click6067-ship-it/fitllm-engine`);
+      console.log(`  every number curated from pinned official configs — audit: github.com/click6067-ship-it/fitllm-engine`);
     }
   }
   process.exit(top.length ? 0 : 1);
@@ -162,7 +176,7 @@ if (isGpu) {
   weightBpw = [4, 8, 16].includes(bits) ? bits : 8;
   quantLabel = `${weightBpw}-bit`;
 }
-const ctx = Math.min(parseInt(flag('--ctx'), 10) || 8192, model.maxContext);
+const ctx = Math.min(ctxRequested, model.maxContext);
 
 // ── verdict ──
 const EN = (ko, en) => en; // CLI output is English
@@ -187,8 +201,18 @@ if (has('--json')) {
     console.log(`  → ${fix.text}`);
     console.log(`  (this just saved you a ~${fmtGB(s.param)} GB download that would have OOM'd)`); // 절약 영수증
   }
-  const slug = `${model.name}-${quantLabel}-on-${hwLabel.split(' (')[0].replace(/ \+ /g, '-plus-')}`.toLowerCase().replace(/[^a-z0-9._+-]+/g, '-').replace(/-+/g, '-');
-  console.log(`  receipt: https://fitllm.run/r/${slug}`);
-  console.log('  every number from official config.json — audit: github.com/click6067-ship-it/fitllm-engine');
+  // canonical 슬러그(v2 /r 파서와 동일 규칙) — 비기본 ctx/kv도 영수증이 같은 조건으로 재계산하게 토큰 포함.
+  // v2가 표현 못 하는 입력(카탈로그 밖 GPU·9카드+·Mac 2048GB 초과)은 깨진 URL 대신 명시 안내만.
+  if (receiptRepresentable({ isGpu, ramGB: isGpu ? 0 : device, totalCards: receiptCards, catalogGpu: receiptCatalogGpu })) {
+    const slug = canonicalReceiptSlug({
+      modelName: model.name, quantLabel, isGpu,
+      hwLabel: hwLabel.split(' (')[0], ramGB: isGpu ? 0 : device,
+      ctx, kvBits, maxContext: model.maxContext,
+    });
+    console.log(`  receipt: https://fitllm.run/r/${slug}`);
+  } else {
+    console.log('  receipt: n/a — fitllm.run receipts cover catalog GPUs, up to 8 cards, Macs 8–2048GB (the calculation above is still valid)');
+  }
+  console.log('  every number curated from pinned official configs — audit: github.com/click6067-ship-it/fitllm-engine');
 }
 process.exit(s.verdict === 'no' ? 1 : 0);
