@@ -1,0 +1,66 @@
+{
+  "release": [
+    {
+      "id": "Qwen/Qwen3.8-Flash-Next",
+      "sha": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+      "pipeline_tag": "image-text-to-text",
+      "createdAt": "2026-08-24T08:24:59.000Z",
+      "likes": 4709,
+      "downloads": 207941,
+      "cardData": { "license": "other", "license_name": "qwen-community-1.0", "license_link": "LICENSE" },
+      "siblings": [
+        { "rfilename": "config.json" },
+        { "rfilename": "model.safetensors.index.json" },
+        { "rfilename": "LICENSE" }
+      ]
+    },
+    {
+      "id": "Qwen/Qwen3.8-Flash-Next-FP8",
+      "sha": "1111111111111111111111111111111111111111",
+      "pipeline_tag": "text-generation",
+      "createdAt": "2026-08-23T08:24:59.000Z",
+      "likes": 20,
+      "downloads": 200
+    },
+    {
+      "id": "Qwen/Qwen-TTS-Next",
+      "sha": "2222222222222222222222222222222222222222",
+      "pipeline_tag": "text-to-speech",
+      "createdAt": "2026-08-25T08:24:59.000Z"
+    }
+  ],
+  "trending": [
+    {
+      "id": "Qwen/Qwen3.8-Flash-Next",
+      "sha": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+      "pipeline_tag": "image-text-to-text",
+      "createdAt": "2026-08-24T08:24:59.000Z",
+      "likes": 4709,
+      "downloads": 207941
+    },
+    {
+      "id": "AtomicChat/Qwen3.8-Flash-Next-GGUF",
+      "sha": "3333333333333333333333333333333333333333",
+      "pipeline_tag": "text-generation",
+      "createdAt": "2026-08-25T08:24:59.000Z",
+      "likes": 999,
+      "downloads": 999999
+    },
+    {
+      "id": "Qwen/Qwen-Unclassified",
+      "sha": "4444444444444444444444444444444444444444",
+      "pipeline_tag": null,
+      "createdAt": "2026-08-22T08:24:59.000Z",
+      "likes": 101,
+      "downloads": 50
+    },
+    {
+      "id": "Qwen/Qwen-TTS-Trending",
+      "sha": "5555555555555555555555555555555555555555",
+      "pipeline_tag": "text-to-speech",
+      "createdAt": "2026-08-25T08:24:59.000Z",
+      "likes": 1000,
+      "downloads": 100000
+    }
+  ]
+}

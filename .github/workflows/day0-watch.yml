@@ -1,28 +1,70 @@
 name: day0-watch
-# HF 트렌딩 감시 → 카탈로그 밖 신규 모델을 day0-candidate 이슈로 (Day-0 플레이북 기계 트리거)
+
 on:
   schedule:
-    - cron: '17 */6 * * *' # 6시간마다 — 발견→라이브 ≤24h 목표의 상류
+    - cron: '17 */6 * * *'
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: 'DRY_RUN=1 (이슈 생성 없이 출력만)'
-        default: ''
+      mode:
+        description: 'dry-run은 읽기 전용, apply-issues만 최대 3개 issue create/update'
+        required: true
+        type: choice
+        options:
+          - dry-run
+          - apply-issues
+        default: dry-run
 
-permissions:
-  issues: write
-  contents: read
+concurrency:
+  group: day0-watch-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
-  watch:
+  dry-run:
+    if: github.event_name == 'schedule' || inputs.mode != 'apply-issues'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: scan trending vs catalog vs issues
+      - name: Read-only freshness scan
         env:
           GH_TOKEN: ${{ github.token }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: node .github/scripts/day0-watch.mjs
+        run: npm run day0:dry-run
+
+  apply-issues:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-issues'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build pure evidence and issue plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/day0-watch.mjs --plan --output-dir "$RUNNER_TEMP/day0"
+      - name: Upload immutable review evidence
+        id: evidence
+        if: steps.plan.outputs.mutations != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fitllm-day0-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/day0
+          retention-days: 30
+          overwrite: false
+      - name: Apply issue-only plan after upload
+        if: steps.plan.outputs.mutations != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DAY0_MODE: apply-issues
+          DAY0_ARTIFACT_URL: ${{ steps.evidence.outputs.artifact-url }}
+          DAY0_ARTIFACT_DIGEST: ${{ steps.evidence.outputs.artifact-digest }}
+        run: node .github/scripts/day0-watch.mjs --apply-issues --plan "$RUNNER_TEMP/day0/issue-plan.json"

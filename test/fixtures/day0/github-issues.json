@@ -1,0 +1,15 @@
+[
+  {
+    "number": 77,
+    "title": "day0: Qwen/Qwen3.8-Flash-Next",
+    "state": "closed",
+    "body": "Human triage notes. Keep this exact.\n\n<!-- fitllm-day0:begin -->\nold bot data\n<!-- fitllm-day0:end -->\n\nHuman footer.",
+    "labels": [{ "name": "day0-candidate" }]
+  },
+  {
+    "number": 78,
+    "title": "not an issue",
+    "body": "pull request",
+    "pull_request": { "url": "https://api.github.test/pulls/78" }
+  }
+]
