@@ -1,0 +1,112 @@
+# npm Trusted Publishing(OIDC) 릴리스 — 웹 2FA 승인 없이 발행, provenance 자동.
+# ⚠️ 선행 조건(사람, 1회): npmjs.com에서 fitllm-engine·fitllm **두 패키지 각각** trusted publisher를
+#    이 repo/워크플로(publish.yml)로 연결해야 한다(보안키 필요). 연결 완료 전 실행을 기계적으로 막기 위해
+#    repo Actions variable `NPM_TRUSTED_PUBLISHING_READY=true` 를 사람이 설정해야만 진행된다.
+# 요구: npm >= 11.5.1, Node >= 22.14 (버전 게이트가 검증). 기존 발행 버전은 절대 덮어쓰지 않는다(멱등 skip).
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '발행할 exact 태그 (예: v2.8.2)'
+        required: true
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate — trusted publisher 연결 완료 플래그(사람이 설정) 없으면 중단
+        run: |
+          set -euo pipefail
+          if [ "${READY}" != "true" ]; then
+            echo "::error::NPM_TRUSTED_PUBLISHING_READY != true — npmjs.com에서 두 패키지의 trusted publisher를 이 워크플로로 연결한 뒤 repo variable을 설정하세요. 연결 전 dispatch 금지."
+            exit 1
+          fi
+        env:
+          READY: ${{ vars.NPM_TRUSTED_PUBLISHING_READY }}
+
+      - name: Resolve exact tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then TAG="${{ inputs.tag }}"; else TAG="${GITHUB_REF_NAME}"; fi
+          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::exact vX.Y.Z 태그만 허용: $TAG"; exit 1;; esac
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # actions/checkout v4.x — exact SHA 핀(태그 재지정 공급망 방어)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+          persist-credentials: false
+
+      - name: Verify tag commit == checkout && version == tag == ENGINE_VERSION
+        run: |
+          set -euo pipefail
+          TAG_SHA=$(git rev-parse "refs/tags/${TAG}^{commit}")
+          HEAD_SHA=$(git rev-parse HEAD)
+          [ "$TAG_SHA" = "$HEAD_SHA" ] || { echo "::error::tag commit($TAG_SHA) != checkout($HEAD_SHA)"; exit 1; }
+          PKG=$(node -p "require('./package.json').version")
+          ENG=$(node --input-type=module -e "import('./engine.js').then(m => console.log(m.ENGINE_VERSION))")
+          [ "$PKG" = "$VER" ] || { echo "::error::package.json($PKG) != tag($VER)"; exit 1; }
+          [ "$ENG" = "$VER" ] || { echo "::error::ENGINE_VERSION($ENG) != tag($VER)"; exit 1; }
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VER: ${{ steps.tag.outputs.version }}
+
+      - name: Version gate — Node >= 22.14, npm >= 11.5.1 (trusted publishing 최소 요건)
+        run: |
+          set -euo pipefail
+          node -e "const [a,b]=process.versions.node.split('.').map(Number); if (a<22 || (a===22&&b<14)) { console.error('Node >=22.14 필요: '+process.version); process.exit(1); }"
+          npm install -g npm@^11.5.1
+          npm -v
+          node -e "const [a,b,c]=require('child_process').execSync('npm -v').toString().trim().split('.').map(Number); if (a<11 || (a===11&&b<5) || (a===11&&b===5&&c<1)) { console.error('npm >=11.5.1 필요'); process.exit(1); }"
+
+      - name: Test + census determinism
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm test
+          npm run census:check
+
+      - name: Publish canonical fitllm-engine (existing version은 멱등 skip — 덮어쓰기 금지)
+        run: |
+          set -euo pipefail
+          if npm view "fitllm-engine@${VER}" version >/dev/null 2>&1; then
+            echo "fitllm-engine@${VER} 이미 발행됨 — skip(idempotent)"
+          else
+            npm publish   # trusted publishing: OIDC 교환·provenance 자동
+          fi
+        env:
+          VER: ${{ steps.tag.outputs.version }}
+
+      - name: Publish alias fitllm (동일 바이트, 멱등 skip)
+        run: |
+          set -euo pipefail
+          if npm view "fitllm@${VER}" version >/dev/null 2>&1; then
+            echo "fitllm@${VER} 이미 발행됨 — skip(idempotent)"
+          else
+            node scripts/publish-alias.mjs
+          fi
+        env:
+          VER: ${{ steps.tag.outputs.version }}
+
+      - name: Verify both packages resolve at exact version + report shasums
+        run: |
+          set -euo pipefail
+          npm view "fitllm-engine@${VER}" version dist.shasum
+          npm view "fitllm@${VER}" version dist.shasum
+        env:
+          VER: ${{ steps.tag.outputs.version }}
