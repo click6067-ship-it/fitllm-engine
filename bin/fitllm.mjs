@@ -161,7 +161,7 @@ if (TOP) {
         const mark = s.verdict === 'tight' ? '△' : '✓';
         console.log(`  ${String(i + 1).padStart(2)}. ${m.name.padEnd(W)}  ${String(m.totalParams).padStart(6)}B  ${t.label.padEnd(6)}  ${mark} ${fmtGB(s.used)}/${s.memoryGB} GB${maxCtx >= 1024 ? `  max ctx ~${formatTokens(maxCtx, EN)}` : ''}`);
       });
-      console.log(`  every number from official config.json — audit: github.com/click6067-ship-it/fitllm-engine`);
+      console.log(`  every number curated from pinned official configs — audit: github.com/click6067-ship-it/fitllm-engine`);
     }
   }
   process.exit(top.length ? 0 : 1);
@@ -213,6 +213,6 @@ if (has('--json')) {
   } else {
     console.log('  receipt: n/a — fitllm.run receipts cover catalog GPUs, up to 8 cards, Macs 8–2048GB (the calculation above is still valid)');
   }
-  console.log('  every number from official config.json — audit: github.com/click6067-ship-it/fitllm-engine');
+  console.log('  every number curated from pinned official configs — audit: github.com/click6067-ship-it/fitllm-engine');
 }
 process.exit(s.verdict === 'no' ? 1 : 0);

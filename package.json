@@ -1,6 +1,6 @@
 {
   "name": "fitllm-engine",
-  "version": "2.8.1",
+  "version": "2.8.2",
   "description": "Accurate local-LLM memory math — will this model fit your GPU or Mac? Models sliding-window, hybrid/linear, MLA compressed-KV and MoE architectures that naive VRAM calculators get wrong by up to ~18x. Zero deps, single file, conformance-vector tested.",
   "type": "module",
   "main": "engine.js",
