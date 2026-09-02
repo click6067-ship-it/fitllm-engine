@@ -1,5 +1,7 @@
 # FitLLM Engine
 
+FitLLM is an open-source, zero-dependency engine that checks whether a local LLM fits on a GPU or Apple Silicon Mac using architecture-aware memory math.
+
 [![npm](https://img.shields.io/npm/v/fitllm-engine?color=cb3837&label=npm)](https://www.npmjs.com/package/fitllm-engine)
 [![conformance](https://img.shields.io/badge/conformance_vectors-16%2F16-brightgreen)](vectors/fit-vectors-v1.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -12,6 +14,28 @@
 > **Open engine:** [fitllm-engine](https://github.com/click6067-ship-it/fitllm-engine) (MIT · npm `fitllm-engine` · `npx fitllm`)
 > 
 > Zero dependencies. One readable file: [`engine.js`](engine.js). Conformance-vector tested. MIT.
+
+## Remote MCP server
+
+Connect any Streamable HTTP MCP client to `https://fitllm.run/api/mcp`:
+
+```json
+{
+  "mcpServers": {
+    "fitllm": {
+      "url": "https://fitllm.run/api/mcp"
+    }
+  }
+}
+```
+
+## Tools
+
+- `check_llm_fit` — check one model against a GPU, multi-GPU rig, or Mac and return the verdict, memory breakdown, and a fix when it does not fit.
+- `what_fits_on_hardware` — rank the supported local models that fit the given GPU, multi-GPU rig, or Mac.
+- `list_supported` — list the built-in model and hardware names accepted by the fit checker.
+
+The server is read-only, stateless, and requires no authentication.
 
 ```bash
 npx fitllm "GLM-4.7-Flash" --gpu 4090     # ✓ FITS — 21.9/24 GB, free 2.1 GB
