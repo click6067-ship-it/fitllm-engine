@@ -10,6 +10,7 @@
     { "namespace": "openai", "identityEvidenceUrl": "https://github.com/openai/gpt-oss" }
   ],
   "pipelineTags": ["text-generation", "image-text-to-text"],
+  "trustedIssueAuthors": ["click6067-ship-it", "github-actions[bot]"],
   "releaseLookbackDays": 14,
   "priorityThresholds": { "likes": 100, "downloads": 10000 },
   "maxIssueMutationsPerRun": 3

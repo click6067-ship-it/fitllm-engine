@@ -28,6 +28,7 @@ const FIXTURES = new URL('./fixtures/day0/', import.meta.url);
 const REVISION = 'de4b8e4d43b917e7706784d8bb445c9af86a3540';
 const CONFIG_SHA = '889658f2508e8c61d409b02e70e0d78d8d4452ec65aaafbe129805d213d2e74b';
 const INDEX_SHA = '99e815241ef03325536b0aaa4441deea45174c17fae31e10f0bb456410c590de';
+const TRUSTED_ISSUE_AUTHORS = ['click6067-ship-it', 'github-actions[bot]'];
 
 async function fixture(name, encoding = 'utf8') {
   return readFile(new URL(name, FIXTURES), encoding);
@@ -44,9 +45,23 @@ async function sourcePolicy() {
   return loadSourcePolicy(await readFile(new URL('../.github/day0-sources.json', import.meta.url), 'utf8'));
 }
 
+function planMutations(records, issues, options = {}) {
+  return planIssueMutations(records, issues, { ...options, trustedIssueAuthors: TRUSTED_ISSUE_AUTHORS });
+}
+
+test('source policy는 explicit unique trusted issue author allowlist를 요구한다', async () => {
+  const raw = JSON.parse(await readFile(new URL('../.github/day0-sources.json', import.meta.url), 'utf8'));
+  assert.throws(() => loadSourcePolicy({ ...raw, trustedIssueAuthors: undefined }), /trustedIssueAuthors/);
+  assert.throws(
+    () => loadSourcePolicy({ ...raw, trustedIssueAuthors: ['github-actions[bot]', 'GITHUB-ACTIONS[BOT]'] }),
+    /duplicate trusted issue author/,
+  );
+});
+
 test('공식 namespace release와 global trend를 합치고 pipeline을 로컬 exact filter한다', async () => {
   const feeds = JSON.parse(await fixture('hf-qwen-models.json'));
   const policy = await sourcePolicy();
+  assert.deepEqual(policy.trustedIssueAuthors, TRUSTED_ISSUE_AUTHORS);
   const fetchImpl = async (url) => {
     const parsed = new URL(url);
     if (parsed.searchParams.get('author') === 'Qwen') return jsonResponse(feeds.release);
@@ -373,17 +388,17 @@ test('manifest digest는 결정적이고 create/noop/update는 human text를 보
   assert.ok(merged.startsWith('Human triage notes. Keep this exact.'));
   assert.ok(merged.endsWith('Human footer.'));
 
-  const create = planIssueMutations([{ manifest }], []);
+  const create = planMutations([{ manifest }], []);
   assert.equal(create.mutationCount, 1);
   assert.equal(create.operations[0].action, 'create');
 
   const sameIssue = [{ ...issues[0], body: `human\n\n${buildIssueBotBlock(manifest, null)}\n\nfooter` }];
-  const noop = planIssueMutations([{ manifest }], sameIssue);
+  const noop = planMutations([{ manifest }], sameIssue);
   assert.equal(noop.mutationCount, 0);
   assert.equal(noop.operations[0].action, 'noop');
 
   const nextManifest = manifestFor('e'.repeat(40));
-  const update = planIssueMutations([{ manifest: nextManifest }], sameIssue);
+  const update = planMutations([{ manifest: nextManifest }], sameIssue);
   assert.equal(update.operations[0].action, 'update');
   assert.ok(update.operations[0].body.startsWith('human'));
   assert.ok(update.operations[0].body.endsWith('footer'));
@@ -397,6 +412,7 @@ test('noop은 label + 단일 정상 managed block 내부의 exact model/digest�
   const baseIssue = {
     number: 80,
     title: 'day0: Qwen/Qwen3.8-Flash-Next',
+    user: { login: 'github-actions[bot]' },
     labels: [{ name: 'day0-candidate' }],
   };
   const forgedUnlabelled = {
@@ -411,12 +427,49 @@ test('noop은 label + 단일 정상 managed block 내부의 exact model/digest�
   const multipleBlocks = { ...baseIssue, body: `${validBlock}\n\n${validBlock}` };
 
   for (const issue of [forgedUnlabelled, digestOutsideMalformedBlock, multipleBlocks]) {
-    const plan = planIssueMutations([{ manifest }], [issue]);
+    const plan = planMutations([{ manifest }], [issue]);
     assert.equal(plan.operations[0].action, 'update');
   }
-  const repaired = planIssueMutations([{ manifest }], [multipleBlocks]).operations[0].body;
-  const secondPlan = planIssueMutations([{ manifest }], [{ ...baseIssue, body: repaired }]);
+  const repaired = planMutations([{ manifest }], [multipleBlocks]).operations[0].body;
+  const secondPlan = planMutations([{ manifest }], [{ ...baseIssue, body: repaired }]);
   assert.equal(secondPlan.operations[0].action, 'noop');
+});
+
+test('untrusted author의 완벽히 위조된 labelled block은 noop/update/duplicate blocker가 아니다', async () => {
+  const manifest = manifestFor();
+  const forgedIssue = {
+    number: 82,
+    title: 'day0: Qwen/Qwen3.8-Flash-Next',
+    user: { login: 'public-attacker' },
+    labels: [{ name: 'day0-candidate' }],
+    body: buildIssueBotBlock(manifest, null).replace(
+      '- Run artifact: pending explicit apply workflow upload',
+      `- Run artifact: <https://evil.example/forged-artifact>\n- Artifact digest: \`${'e'.repeat(64)}\``,
+    ),
+  };
+  let plan = planMutations([{ manifest }], [forgedIssue]);
+  assert.equal(plan.operations[0].action, 'create');
+  assert.equal(plan.operations[0].issueNumber, undefined);
+
+  plan = attachArtifactRef(plan, {
+    url: 'https://github.com/example/repo/actions/runs/1/artifacts/4', digest: 'd'.repeat(64),
+  });
+  const calls = [];
+  const ghClient = {
+    requestWithHeaders: async () => ({ data: [forgedIssue], headers: new Headers() }),
+    request: async (requestPath, init = {}) => {
+      calls.push([requestPath, init.method || 'GET']);
+      if (requestPath === '/labels/day0-candidate') return { name: 'day0-candidate' };
+      if (requestPath === '/issues' && init.method === 'POST') return { number: 83 };
+      assert.fail(`untrusted issue must never be touched: ${init.method || 'GET'} ${requestPath}`);
+    },
+  };
+  const applied = await applyIssuePlan(plan, ghClient, async (modelId) => ({ id: modelId, sha: REVISION }));
+  assert.equal(applied.results[0].status, 'CREATED');
+  assert.deepEqual(calls, [
+    ['/labels/day0-candidate', 'GET'],
+    ['/issues', 'POST'],
+  ]);
 });
 
 test('unlabelled update apply는 현재 human labels/text/state를 보존하며 managed label을 복원한다', async () => {
@@ -424,11 +477,12 @@ test('unlabelled update apply는 현재 human labels/text/state를 보존하며 
   const currentIssue = {
     number: 81,
     title: 'day0: Qwen/Qwen3.8-Flash-Next',
+    user: { login: 'click6067-ship-it' },
     state: 'closed',
     labels: [{ name: 'human-label' }],
     body: 'human prefix\n\nold body\n\nhuman footer',
   };
-  const plan = attachArtifactRef(planIssueMutations([{ manifest }], [currentIssue]), {
+  const plan = attachArtifactRef(planMutations([{ manifest }], [currentIssue]), {
     url: 'https://github.com/example/repo/actions/runs/1/artifacts/3', digest: 'c'.repeat(64),
   });
   let patchBody;
@@ -457,7 +511,7 @@ test('mutation은 최대 3개이며 dropped candidate가 결정적으로 기록�
       officialModelUrl: `https://huggingface.co/Qwen/${name}`,
     },
   }));
-  const plan = planIssueMutations(records, [], { maxMutations: 3 });
+  const plan = planMutations(records, [], { maxMutations: 3 });
   assert.equal(plan.mutationCount, 3);
   assert.deepEqual(plan.dropped, [{ candidateId: `Qwen/D@${'4'.repeat(40)}`, reason: 'MUTATION_LIMIT' }]);
 });
@@ -469,7 +523,7 @@ test('invalid revision은 blocked이고 같은 plan의 valid create를 막지 �
     discoverySources: ['hf_official_namespace_release'], failureCodes: ['IDENTITY_OR_REVISION_INVALID'],
   }, null, 'capability-v1');
   const validManifest = manifestFor();
-  let plan = planIssueMutations([{ manifest: invalidManifest }, { manifest: validManifest }], []);
+  let plan = planMutations([{ manifest: invalidManifest }, { manifest: validManifest }], []);
   assert.deepEqual(plan.operations.map(({ action }) => action), ['blocked', 'create']);
   assert.equal(plan.mutationCount, 1);
 
@@ -491,8 +545,11 @@ test('invalid revision은 blocked이고 같은 plan의 valid create를 막지 �
 
 test('apply-time body/revision conflict는 PATCH 없이 중단된다', async () => {
   const manifest = manifestFor('e'.repeat(40));
-  const existing = { number: 77, title: 'day0: Qwen/Qwen3.8-Flash-Next', body: 'old human body' };
-  const plan = planIssueMutations([{ manifest }], [existing]);
+  const existing = {
+    number: 77, title: 'day0: Qwen/Qwen3.8-Flash-Next', body: 'old human body',
+    user: { login: 'github-actions[bot]' },
+  };
+  const plan = planMutations([{ manifest }], [existing]);
   const calls = [];
   const ghClient = {
     request: async (path, init = {}) => {
@@ -506,9 +563,28 @@ test('apply-time body/revision conflict는 PATCH 없이 중단된다', async () 
   assert.equal(calls.filter(([, method]) => method === 'PATCH').length, 0);
 });
 
+test('apply update는 planning 뒤 author가 untrusted로 보이면 PATCH하지 않는다', async () => {
+  const manifest = manifestFor('e'.repeat(40));
+  const existing = {
+    number: 84, title: 'day0: Qwen/Qwen3.8-Flash-Next', body: 'trusted planning body',
+    user: { login: 'github-actions[bot]' },
+  };
+  const plan = planMutations([{ manifest }], [existing]);
+  const ghClient = {
+    request: async (requestPath, init = {}) => {
+      if (requestPath === '/issues/84' && !init.method) {
+        return { ...existing, user: { login: 'public-attacker' } };
+      }
+      assert.fail(`untrusted issue must not be mutated: ${init.method || 'GET'} ${requestPath}`);
+    },
+  };
+  const result = await applyIssuePlan(plan, ghClient, async () => assert.fail('author gate comes before HF recheck'));
+  assert.equal(result.results[0].status, 'UNTRUSTED_AUTHOR');
+});
+
 test('apply-time stale HF revision은 POST/PATCH를 막는다', async () => {
   const manifest = manifestFor();
-  const plan = planIssueMutations([{ manifest }], []);
+  const plan = planMutations([{ manifest }], []);
   const mutations = [];
   const ghClient = {
     requestWithHeaders: async () => ({ data: [], headers: new Headers() }),
@@ -538,12 +614,18 @@ test('existing issue scan은 label 제거된 exact marker/title도 찾도록 lab
   assert.match(paths[1], /^\/issues\?/);
 });
 
-test('create apply는 exact title/marker를 다시 조회해 concurrent duplicate를 만들지 않는다', async () => {
+test('create apply는 trusted managed issue를 다시 조회해 concurrent duplicate를 만들지 않는다', async () => {
   const manifest = manifestFor();
-  const plan = planIssueMutations([{ manifest }], []);
+  const plan = planMutations([{ manifest }], []);
   const ghClient = {
     requestWithHeaders: async () => ({
-      data: [{ number: 90, title: 'day0: Qwen/Qwen3.8-Flash-Next', body: 'created concurrently', labels: [] }],
+      data: [{
+        number: 90,
+        title: 'day0: Qwen/Qwen3.8-Flash-Next',
+        user: { login: 'github-actions[bot]' },
+        body: buildIssueBotBlock(manifest, null),
+        labels: [{ name: 'day0-candidate' }],
+      }],
       headers: new Headers(),
     }),
     request: async () => assert.fail('duplicate recheck must stop all mutation calls'),
@@ -555,7 +637,7 @@ test('create apply는 exact title/marker를 다시 조회해 concurrent duplicat
 
 test('explicit apply create는 pinned revision 재검사 뒤 issue endpoint만 쓴다', async () => {
   const manifest = manifestFor();
-  const plan = attachArtifactRef(planIssueMutations([{ manifest }], []), {
+  const plan = attachArtifactRef(planMutations([{ manifest }], []), {
     url: 'https://github.com/example/repo/actions/runs/1/artifacts/2',
     digest: 'a'.repeat(64),
   });
@@ -649,12 +731,49 @@ test('13개 중 선두 12개가 trusted noop이어도 13번째 신규 후보를 
       number: existingIssues.length + 1,
       title: `day0: ${candidate.id}`,
       body: buildIssueBotBlock(manifest, null),
+      user: { login: 'github-actions[bot]' },
       labels: [{ name: 'day0-candidate' }],
     });
   }
   const outputDir = await mkdtemp(path.join(tmpdir(), 'fitllm-day0-starvation-'));
   const result = await runDay0Watch({
     policy, fetchImpl, existingIssues, now: new Date('2026-09-21T12:00:00Z'),
+  }, { outputDir, sourceRoot: new URL('..', import.meta.url).pathname, mode: 'dry-run' });
+  assert.equal(result.summary.evaluated, 12);
+  assert.ok(result.issuePlan.operations.some(({ action, modelId }) => action === 'create' && modelId === 'Qwen/M'));
+  assert.equal(result.issuePlan.mutationCount, 1);
+  assert.ok(result.issuePlan.dropped.some(({ candidateId, reason }) => candidateId.startsWith('Qwen/L@') && reason === 'EVALUATION_LIMIT'));
+});
+
+test('선두 12개 revision이 invalid여도 13번째 valid 후보를 evidence cap 전에 우선 평가한다', async () => {
+  const policy = await sourcePolicy();
+  policy.officialNamespaces = policy.officialNamespaces.slice(0, 1);
+  const bytesByName = {
+    'config.json': Buffer.from(JSON.stringify({
+      model_type: 'llama', num_hidden_layers: 2, num_attention_heads: 2,
+      num_key_value_heads: 2, hidden_size: 128, head_dim: 64,
+      intermediate_size: 256, vocab_size: 1024, torch_dtype: 'bfloat16',
+    })),
+    'model.safetensors.index.json': Buffer.from(JSON.stringify({ metadata: { total_size: 1_000_000 } })),
+    LICENSE: Buffer.from('MIT'),
+  };
+  const models = 'ABCDEFGHIJKLM'.split('').map((name, index) => ({
+    id: `Qwen/${name}`,
+    sha: index < 12 ? `invalid-${index}` : 'd'.repeat(40),
+    pipeline_tag: 'text-generation',
+    createdAt: new Date(Date.UTC(2026, 8, 20 - index)).toISOString(),
+    tags: ['license:mit'],
+    siblings: Object.keys(bytesByName).map((rfilename) => ({ rfilename })),
+  }));
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/models') return jsonResponse(parsed.searchParams.has('author') ? models : []);
+    const [, revision, filename] = parsed.pathname.match(/\/resolve\/([0-9a-f]{40})\/(.+)$/);
+    return new Response(bytesByName[filename], { headers: { 'x-repo-commit': revision, etag: `"${filename}"` } });
+  };
+  const outputDir = await mkdtemp(path.join(tmpdir(), 'fitllm-day0-invalid-starvation-'));
+  const result = await runDay0Watch({
+    policy, fetchImpl, existingIssues: [], now: new Date('2026-09-21T12:00:00Z'),
   }, { outputDir, sourceRoot: new URL('..', import.meta.url).pathname, mode: 'dry-run' });
   assert.equal(result.summary.evaluated, 12);
   assert.ok(result.issuePlan.operations.some(({ action, modelId }) => action === 'create' && modelId === 'Qwen/M'));

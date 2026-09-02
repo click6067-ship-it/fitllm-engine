@@ -9,6 +9,7 @@ const ISSUE_BEGIN = '<!-- fitllm-day0:begin -->';
 const ISSUE_END = '<!-- fitllm-day0:end -->';
 const REVISION_RE = /^[0-9a-f]{40}$/;
 const ID_PART_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const ISSUE_AUTHOR_RE = /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?|github-actions\[bot\])$/i;
 const VARIANT_RE = /(?:^|[-_.])(gguf|awq|gptq|mlx|bnb|exl2|int[48]|nvfp4|mxfp4|fp4|fp8)(?:$|[-_.])/i;
 const FULL_PRECISION_VARIANT_RE = /(?:^|[-_.])(?:bf16|f16|fp16)(?:$|[-_.])/i;
 export const MAX_DISCOVERY_BYTES = 5 * 1024 * 1024;
@@ -23,6 +24,24 @@ const isPlainObject = (value) => value !== null && typeof value === 'object'
   && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+
+function normalizeTrustedIssueAuthors(authors) {
+  if (!Array.isArray(authors) || authors.length === 0
+      || authors.some((author) => typeof author !== 'string' || !ISSUE_AUTHOR_RE.test(author))) {
+    throw new Error('trustedIssueAuthors must be a non-empty array of GitHub logins');
+  }
+  const normalized = authors.map((author) => author.toLowerCase());
+  if (new Set(normalized).size !== authors.length) throw new Error('duplicate trusted issue author');
+  return [...authors];
+}
+
+function trustedAuthorLogins(authors) {
+  return new Set(normalizeTrustedIssueAuthors(authors).map((author) => author.toLowerCase()));
+}
+
+function issueHasTrustedAuthor(issue, authors) {
+  return typeof issue?.user?.login === 'string' && authors.has(issue.user.login.toLowerCase());
+}
 
 export function loadSourcePolicy(input) {
   const policy = typeof input === 'string' || Buffer.isBuffer(input)
@@ -41,6 +60,7 @@ export function loadSourcePolicy(input) {
     try { evidenceUrl = new URL(entry.identityEvidenceUrl); } catch { throw new Error(`invalid identity evidence URL: ${entry.namespace}`); }
     if (evidenceUrl.protocol !== 'https:') throw new Error(`identity evidence URL must use https: ${entry.namespace}`);
   }
+  policy.trustedIssueAuthors = normalizeTrustedIssueAuthors(policy.trustedIssueAuthors);
   if (!Array.isArray(policy.pipelineTags) || policy.pipelineTags.length === 0
       || policy.pipelineTags.some((tag) => !['text-generation', 'image-text-to-text'].includes(tag))) {
     throw new Error('pipelineTags must contain only reviewed local pipeline tags');
@@ -737,22 +757,29 @@ function issueLabelNames(issue) {
   }))];
 }
 
-function trustedManagedIssueForModel(existingIssues, modelId, expectedDigest = null) {
+function trustedManagedIssueForModel(existingIssues, modelId, trustedAuthors, expectedDigest = null) {
   return existingIssues.find((issue) => {
-    if (issue.pull_request || !issueLabelNames(issue).includes('day0-candidate')) return false;
+    if (issue.pull_request || !issueHasTrustedAuthor(issue, trustedAuthors)
+        || !issueLabelNames(issue).includes('day0-candidate')) return false;
     const managed = parseManagedBlock(issue.body);
     return managed?.modelId === modelId && (expectedDigest === null || managed.digest === expectedDigest);
   });
 }
 
-function issueForModel(existingIssues, modelId) {
-  return existingIssues.find((issue) => !issue.pull_request
+function trustedIssueForModel(existingIssues, modelId, trustedAuthors) {
+  return existingIssues.find((issue) => !issue.pull_request && issueHasTrustedAuthor(issue, trustedAuthors)
     && (String(issue.body || '').includes(`<!-- fitllm-day0:model=${modelId} -->`)
       || issue.title === `day0: ${modelId}`));
 }
 
-export function planIssueMutations(records, existingIssues, { maxMutations = 3, artifactRef = null } = {}) {
+export function planIssueMutations(records, existingIssues, {
+  maxMutations = 3,
+  artifactRef = null,
+  trustedIssueAuthors,
+} = {}) {
   if (!Number.isInteger(maxMutations) || maxMutations < 0 || maxMutations > 3) throw new Error('maxMutations must be 0..3');
+  const normalizedTrustedAuthors = normalizeTrustedIssueAuthors(trustedIssueAuthors);
+  const trustedAuthors = trustedAuthorLogins(normalizedTrustedAuthors);
   const operations = [];
   const dropped = [];
   let mutationCount = 0;
@@ -773,7 +800,7 @@ export function planIssueMutations(records, existingIssues, { maxMutations = 3, 
       });
       continue;
     }
-    const trustedIssue = trustedManagedIssueForModel(existingIssues, modelId, digest);
+    const trustedIssue = trustedManagedIssueForModel(existingIssues, modelId, trustedAuthors, digest);
     if (trustedIssue) {
       operations.push({
         action: 'noop', modelId, revision: manifest.hfRevision, manifestDigest: digest,
@@ -781,7 +808,7 @@ export function planIssueMutations(records, existingIssues, { maxMutations = 3, 
       });
       continue;
     }
-    const issue = issueForModel(existingIssues, modelId);
+    const issue = trustedIssueForModel(existingIssues, modelId, trustedAuthors);
     if (mutationCount >= maxMutations) {
       dropped.push({ candidateId: manifest.candidateId, reason: 'MUTATION_LIMIT' });
       continue;
@@ -802,7 +829,7 @@ export function planIssueMutations(records, existingIssues, { maxMutations = 3, 
     }
     mutationCount += 1;
   }
-  return { operations, mutationCount, dropped };
+  return { trustedIssueAuthors: normalizedTrustedAuthors, operations, mutationCount, dropped };
 }
 
 export function attachArtifactRef(plan, artifactRef) {
@@ -842,6 +869,7 @@ async function ensureIssueLabel(ghClient) {
 
 export async function applyIssuePlan(plan, ghClient, hfClient) {
   if (!Array.isArray(plan?.operations)) throw new Error('invalid issue plan');
+  const trustedAuthors = trustedAuthorLogins(plan.trustedIssueAuthors);
   for (const operation of plan.operations) {
     if (!['create', 'update', 'noop', 'blocked'].includes(operation.action)) throw new Error(`invalid issue action: ${operation.action}`);
     canonicalCandidateId({ id: operation.modelId });
@@ -881,6 +909,10 @@ export async function applyIssuePlan(plan, ghClient, hfClient) {
     let currentIssue = null;
     if (operation.action === 'update') {
       currentIssue = await ghClient.request(`/issues/${operation.issueNumber}`);
+      if (!issueHasTrustedAuthor(currentIssue, trustedAuthors)) {
+        results.push({ modelId: operation.modelId, action: operation.action, status: 'UNTRUSTED_AUTHOR' });
+        continue;
+      }
       const currentSha = sha256(Buffer.from(String(currentIssue?.body || ''), 'utf8'));
       if (currentSha !== operation.beforeBodySha256) {
         results.push({ modelId: operation.modelId, action: operation.action, status: 'BODY_CHANGED' });
@@ -889,7 +921,7 @@ export async function applyIssuePlan(plan, ghClient, hfClient) {
     }
     if (operation.action === 'create') {
       const currentIssues = await fetchAllGitHubIssues(ghClient);
-      if (issueForModel(currentIssues, operation.modelId)) {
+      if (trustedManagedIssueForModel(currentIssues, operation.modelId, trustedAuthors)) {
         results.push({ modelId: operation.modelId, action: operation.action, status: 'ALREADY_EXISTS' });
         continue;
       }
@@ -979,24 +1011,41 @@ export async function runDay0Watch(deps, options = {}) {
   const discovery = await discoverCandidates({ policy, fetchImpl, now });
   const max = policy.maxIssueMutationsPerRun;
   const existingIssues = suppliedIssues || await fetchAllGitHubIssues(ghClient);
+  const trustedAuthors = trustedAuthorLogins(policy.trustedIssueAuthors);
+  const candidatesWithValidRevision = [];
+  const candidatesWithInvalidRevision = [];
+  for (const candidate of discovery.candidates) {
+    const target = REVISION_RE.test(candidate.revision || '') && !candidate.discoveryRevisionConflict
+      ? candidatesWithValidRevision
+      : candidatesWithInvalidRevision;
+    target.push(candidate);
+  }
   const candidatesWithoutTrustedIssue = [];
   const candidatesWithTrustedIssue = [];
-  for (const candidate of discovery.candidates) {
-    const target = trustedManagedIssueForModel(existingIssues, candidate.id)
+  for (const candidate of candidatesWithValidRevision) {
+    const target = trustedManagedIssueForModel(existingIssues, candidate.id, trustedAuthors)
       ? candidatesWithTrustedIssue
       : candidatesWithoutTrustedIssue;
     target.push(candidate);
   }
-  const evaluationCandidates = [...candidatesWithoutTrustedIssue, ...candidatesWithTrustedIssue];
+  const evaluationCandidates = [
+    ...candidatesWithoutTrustedIssue,
+    ...candidatesWithTrustedIssue,
+    ...candidatesWithInvalidRevision,
+  ];
   const records = [];
-  let issuePlan = planIssueMutations(records, existingIssues, { maxMutations: max });
+  let issuePlan = planIssueMutations(records, existingIssues, {
+    maxMutations: max, trustedIssueAuthors: policy.trustedIssueAuthors,
+  });
   for (const candidate of evaluationCandidates) {
     if (records.length >= MAX_EVIDENCE_CANDIDATES_PER_RUN) break;
     const evidence = await pinEvidence(candidate, { fetchImpl });
     const capability = classifyCapability(evidence);
     const manifest = buildEvidenceManifest(evidence, capability, verifierSchemaVersion);
     records.push({ manifest, digest: sha256CanonicalManifest(manifest) });
-    issuePlan = planIssueMutations(records, existingIssues, { maxMutations: max });
+    issuePlan = planIssueMutations(records, existingIssues, {
+      maxMutations: max, trustedIssueAuthors: policy.trustedIssueAuthors,
+    });
     if (issuePlan.mutationCount >= max) break;
   }
   const remainingReason = issuePlan.mutationCount >= max ? 'MUTATION_LIMIT' : 'EVALUATION_LIMIT';
