@@ -671,21 +671,78 @@ export function buildIssueBotBlock(manifest, artifactRef = null) {
 
 export function mergeIssueBotBlock(existingBody, nextBlock) {
   const body = typeof existingBody === 'string' ? existingBody : '';
-  const start = body.indexOf(ISSUE_BEGIN);
-  const end = body.indexOf(ISSUE_END, start + ISSUE_BEGIN.length);
-  if (start >= 0 && end >= 0) return `${body.slice(0, start)}${nextBlock}${body.slice(end + ISSUE_END.length)}`;
+  const bounds = managedBlockBounds(body);
+  if (bounds) return `${body.slice(0, bounds.start)}${nextBlock}${body.slice(bounds.end)}`;
   if (!body) return nextBlock;
-  return `${body}\n\n${nextBlock}`;
+  const withoutCompleteBlocks = body.replace(
+    /<!-- fitllm-day0:begin -->[\s\S]*?<!-- fitllm-day0:end -->/g,
+    '',
+  );
+  const withoutOrphanMarkers = withoutCompleteBlocks
+    .replaceAll(ISSUE_BEGIN, '')
+    .replaceAll(ISSUE_END, '')
+    .replace(/<!-- fitllm-day0:(?:model=[^>\r\n]*|digest=[^>\r\n]*) -->/g, '');
+  if (!withoutOrphanMarkers.trim()) return nextBlock;
+  const separator = withoutOrphanMarkers.endsWith('\n\n')
+    ? ''
+    : withoutOrphanMarkers.endsWith('\n') ? '\n' : '\n\n';
+  return `${withoutOrphanMarkers}${separator}${nextBlock}`;
+}
+
+function literalIndexes(value, needle) {
+  const indexes = [];
+  let offset = 0;
+  while (offset <= value.length) {
+    const index = value.indexOf(needle, offset);
+    if (index < 0) break;
+    indexes.push(index);
+    offset = index + needle.length;
+  }
+  return indexes;
+}
+
+function managedBlockBounds(body) {
+  const value = String(body || '');
+  const starts = literalIndexes(value, ISSUE_BEGIN);
+  const ends = literalIndexes(value, ISSUE_END);
+  if (starts.length !== 1 || ends.length !== 1 || ends[0] <= starts[0]) return null;
+  return { start: starts[0], end: ends[0] + ISSUE_END.length };
+}
+
+function parseManagedBlock(body) {
+  const value = String(body || '');
+  const bounds = managedBlockBounds(value);
+  if (!bounds) return null;
+  const block = value.slice(bounds.start, bounds.end);
+  const modelMatches = [...block.matchAll(/<!-- fitllm-day0:model=([^>\r\n]+) -->/g)];
+  const digestMatches = [...block.matchAll(/<!-- fitllm-day0:digest=([0-9a-f]{64}) -->/g)];
+  if (modelMatches.length !== 1 || digestMatches.length !== 1
+      || modelMatches[0].index <= 0 || digestMatches[0].index <= modelMatches[0].index) return null;
+  let modelId;
+  try { modelId = canonicalCandidateId({ id: modelMatches[0][1] }); } catch { return null; }
+  if (modelId !== modelMatches[0][1]) return null;
+  return { block, modelId, digest: digestMatches[0][1] };
 }
 
 function currentBotBlock(body) {
-  const start = String(body || '').indexOf(ISSUE_BEGIN);
-  const end = String(body || '').indexOf(ISSUE_END, start + ISSUE_BEGIN.length);
-  return start >= 0 && end >= 0 ? String(body).slice(start, end + ISSUE_END.length) : null;
+  return parseManagedBlock(body)?.block || null;
 }
 
-function digestFromBody(body) {
-  return String(body || '').match(/<!-- fitllm-day0:digest=([0-9a-f]{64}) -->/)?.[1] || null;
+function issueLabelNames(issue) {
+  if (!Array.isArray(issue?.labels)) return [];
+  return [...new Set(issue.labels.flatMap((label) => {
+    if (typeof label === 'string' && label) return [label];
+    if (typeof label?.name === 'string' && label.name) return [label.name];
+    return [];
+  }))];
+}
+
+function trustedManagedIssueForModel(existingIssues, modelId, expectedDigest = null) {
+  return existingIssues.find((issue) => {
+    if (issue.pull_request || !issueLabelNames(issue).includes('day0-candidate')) return false;
+    const managed = parseManagedBlock(issue.body);
+    return managed?.modelId === modelId && (expectedDigest === null || managed.digest === expectedDigest);
+  });
 }
 
 function issueForModel(existingIssues, modelId) {
@@ -716,11 +773,15 @@ export function planIssueMutations(records, existingIssues, { maxMutations = 3, 
       });
       continue;
     }
-    const issue = issueForModel(existingIssues, modelId);
-    if (issue && digestFromBody(issue.body) === digest) {
-      operations.push({ action: 'noop', modelId, revision: manifest.hfRevision, manifestDigest: digest, issueNumber: issue.number });
+    const trustedIssue = trustedManagedIssueForModel(existingIssues, modelId, digest);
+    if (trustedIssue) {
+      operations.push({
+        action: 'noop', modelId, revision: manifest.hfRevision, manifestDigest: digest,
+        issueNumber: trustedIssue.number,
+      });
       continue;
     }
+    const issue = issueForModel(existingIssues, modelId);
     if (mutationCount >= maxMutations) {
       dropped.push({ candidateId: manifest.candidateId, reason: 'MUTATION_LIMIT' });
       continue;
@@ -817,8 +878,9 @@ export async function applyIssuePlan(plan, ghClient, hfClient) {
       results.push({ modelId: operation.modelId, action: 'noop', status: 'NOOP' });
       continue;
     }
+    let currentIssue = null;
     if (operation.action === 'update') {
-      const currentIssue = await ghClient.request(`/issues/${operation.issueNumber}`);
+      currentIssue = await ghClient.request(`/issues/${operation.issueNumber}`);
       const currentSha = sha256(Buffer.from(String(currentIssue?.body || ''), 'utf8'));
       if (currentSha !== operation.beforeBodySha256) {
         results.push({ modelId: operation.modelId, action: operation.action, status: 'BODY_CHANGED' });
@@ -850,9 +912,18 @@ export async function applyIssuePlan(plan, ghClient, hfClient) {
       });
       results.push({ modelId: operation.modelId, action: 'create', status: 'CREATED', issueNumber: issue?.number ?? null });
     } else {
+      const currentLabels = issueLabelNames(currentIssue);
+      const patchBody = { body: operation.body };
+      if (!currentLabels.includes('day0-candidate')) {
+        if (!labelReady) {
+          await ensureIssueLabel(ghClient);
+          labelReady = true;
+        }
+        patchBody.labels = [...currentLabels, 'day0-candidate'];
+      }
       await ghClient.request(`/issues/${operation.issueNumber}`, {
         method: 'PATCH',
-        body: { body: operation.body },
+        body: patchBody,
       });
       results.push({ modelId: operation.modelId, action: 'update', status: 'UPDATED', issueNumber: operation.issueNumber });
     }
@@ -908,9 +979,18 @@ export async function runDay0Watch(deps, options = {}) {
   const discovery = await discoverCandidates({ policy, fetchImpl, now });
   const max = policy.maxIssueMutationsPerRun;
   const existingIssues = suppliedIssues || await fetchAllGitHubIssues(ghClient);
+  const candidatesWithoutTrustedIssue = [];
+  const candidatesWithTrustedIssue = [];
+  for (const candidate of discovery.candidates) {
+    const target = trustedManagedIssueForModel(existingIssues, candidate.id)
+      ? candidatesWithTrustedIssue
+      : candidatesWithoutTrustedIssue;
+    target.push(candidate);
+  }
+  const evaluationCandidates = [...candidatesWithoutTrustedIssue, ...candidatesWithTrustedIssue];
   const records = [];
   let issuePlan = planIssueMutations(records, existingIssues, { maxMutations: max });
-  for (const candidate of discovery.candidates) {
+  for (const candidate of evaluationCandidates) {
     if (records.length >= MAX_EVIDENCE_CANDIDATES_PER_RUN) break;
     const evidence = await pinEvidence(candidate, { fetchImpl });
     const capability = classifyCapability(evidence);
@@ -922,7 +1002,7 @@ export async function runDay0Watch(deps, options = {}) {
   const remainingReason = issuePlan.mutationCount >= max ? 'MUTATION_LIMIT' : 'EVALUATION_LIMIT';
   issuePlan.dropped.push(
     ...discovery.droppedCandidates,
-    ...discovery.candidates.slice(records.length).map((candidate) => ({
+    ...evaluationCandidates.slice(records.length).map((candidate) => ({
       candidateId: `${candidate.id}@${candidate.revision || 'unverified'}`,
       reason: remainingReason,
     })),

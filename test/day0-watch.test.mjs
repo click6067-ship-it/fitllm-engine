@@ -390,6 +390,64 @@ test('manifest digest는 결정적이고 create/noop/update는 human text를 보
   assert.equal(update.operations[0].state, undefined);
 });
 
+test('noop은 label + 단일 정상 managed block 내부의 exact model/digest만 신뢰한다', () => {
+  const manifest = manifestFor();
+  const validBlock = buildIssueBotBlock(manifest, null);
+  const digest = sha256CanonicalManifest(manifest);
+  const baseIssue = {
+    number: 80,
+    title: 'day0: Qwen/Qwen3.8-Flash-Next',
+    labels: [{ name: 'day0-candidate' }],
+  };
+  const forgedUnlabelled = {
+    ...baseIssue,
+    labels: [{ name: 'human-label' }],
+    body: `human prefix\n\n${validBlock.replace('pending explicit apply workflow upload', 'https://evil.example/artifact')}\n\nhuman footer`,
+  };
+  const digestOutsideMalformedBlock = {
+    ...baseIssue,
+    body: `<!-- fitllm-day0:digest=${digest} -->\n<!-- fitllm-day0:begin -->\n<!-- fitllm-day0:model=Qwen/Qwen3.8-Flash-Next -->\nmissing in-block digest\n<!-- fitllm-day0:end -->`,
+  };
+  const multipleBlocks = { ...baseIssue, body: `${validBlock}\n\n${validBlock}` };
+
+  for (const issue of [forgedUnlabelled, digestOutsideMalformedBlock, multipleBlocks]) {
+    const plan = planIssueMutations([{ manifest }], [issue]);
+    assert.equal(plan.operations[0].action, 'update');
+  }
+  const repaired = planIssueMutations([{ manifest }], [multipleBlocks]).operations[0].body;
+  const secondPlan = planIssueMutations([{ manifest }], [{ ...baseIssue, body: repaired }]);
+  assert.equal(secondPlan.operations[0].action, 'noop');
+});
+
+test('unlabelled update apply는 현재 human labels/text/state를 보존하며 managed label을 복원한다', async () => {
+  const manifest = manifestFor('e'.repeat(40));
+  const currentIssue = {
+    number: 81,
+    title: 'day0: Qwen/Qwen3.8-Flash-Next',
+    state: 'closed',
+    labels: [{ name: 'human-label' }],
+    body: 'human prefix\n\nold body\n\nhuman footer',
+  };
+  const plan = attachArtifactRef(planIssueMutations([{ manifest }], [currentIssue]), {
+    url: 'https://github.com/example/repo/actions/runs/1/artifacts/3', digest: 'c'.repeat(64),
+  });
+  let patchBody;
+  const ghClient = {
+    request: async (requestPath, init = {}) => {
+      if (requestPath === '/issues/81' && !init.method) return currentIssue;
+      if (requestPath === '/labels/day0-candidate') return { name: 'day0-candidate' };
+      if (requestPath === '/issues/81' && init.method === 'PATCH') { patchBody = init.body; return currentIssue; }
+      assert.fail(`unexpected GitHub call: ${init.method || 'GET'} ${requestPath}`);
+    },
+  };
+  const applied = await applyIssuePlan(plan, ghClient, async (modelId) => ({ id: modelId, sha: 'e'.repeat(40) }));
+  assert.equal(applied.results[0].status, 'UPDATED');
+  assert.deepEqual(patchBody.labels, ['human-label', 'day0-candidate']);
+  assert.ok(patchBody.body.startsWith('human prefix'));
+  assert.ok(patchBody.body.includes('human footer'));
+  assert.ok(!('state' in patchBody));
+});
+
 test('mutation은 최대 3개이며 dropped candidate가 결정적으로 기록된다', () => {
   const records = ['A', 'B', 'C', 'D'].map((name, index) => ({
     manifest: {
@@ -555,7 +613,7 @@ test('runDay0Watch dry-run은 GET 외 GitHub 호출 없이 temp evidence만 쓴�
   assert.equal(JSON.parse(await readFile(path.join(outputDir, 'summary.json'), 'utf8')).mode, 'dry-run');
 });
 
-test('run은 선두 3개 noop 뒤 네 번째 신규 후보까지 평가해 create를 계획한다', async () => {
+test('13개 중 선두 12개가 trusted noop이어도 13번째 신규 후보를 12회 cap 안에서 우선 평가한다', async () => {
   const policy = await sourcePolicy();
   policy.officialNamespaces = policy.officialNamespaces.slice(0, 1);
   const baseConfig = {
@@ -568,11 +626,11 @@ test('run은 선두 3개 noop 뒤 네 번째 신규 후보까지 평가해 creat
     'model.safetensors.index.json': Buffer.from(JSON.stringify({ metadata: { total_size: 1_000_000 } })),
     LICENSE: Buffer.from('MIT'),
   };
-  const models = ['A', 'B', 'C', 'D'].map((name, index) => ({
+  const models = 'ABCDEFGHIJKLM'.split('').map((name, index) => ({
     id: `Qwen/${name}`,
-    sha: String(index + 1).repeat(40),
+    sha: (index + 1).toString(16).repeat(40),
     pipeline_tag: 'text-generation',
-    createdAt: `2026-09-0${4 - index}T00:00:00.000Z`,
+    createdAt: new Date(Date.UTC(2026, 8, 20 - index)).toISOString(),
     tags: ['license:mit'],
     siblings: Object.keys(bytesByName).map((rfilename) => ({ rfilename })),
   }));
@@ -582,22 +640,24 @@ test('run은 선두 3개 noop 뒤 네 번째 신규 후보까지 평가해 creat
     const [, revision, filename] = parsed.pathname.match(/\/resolve\/([0-9a-f]{40})\/(.+)$/);
     return new Response(bytesByName[filename], { headers: { 'x-repo-commit': revision, etag: `"${filename}"` } });
   };
-  const discovery = await discoverCandidates({ policy, fetchImpl, now: new Date('2026-09-05T12:00:00Z') });
+  const discovery = await discoverCandidates({ policy, fetchImpl, now: new Date('2026-09-21T12:00:00Z') });
   const existingIssues = [];
-  for (const candidate of discovery.candidates.slice(0, 3)) {
+  for (const candidate of discovery.candidates.slice(0, 12)) {
     const evidence = await pinEvidence(candidate, { fetchImpl });
     const manifest = buildEvidenceManifest(evidence, classifyCapability(evidence), 'capability-v1');
     existingIssues.push({
       number: existingIssues.length + 1,
       title: `day0: ${candidate.id}`,
       body: buildIssueBotBlock(manifest, null),
+      labels: [{ name: 'day0-candidate' }],
     });
   }
   const outputDir = await mkdtemp(path.join(tmpdir(), 'fitllm-day0-starvation-'));
   const result = await runDay0Watch({
-    policy, fetchImpl, existingIssues, now: new Date('2026-09-05T12:00:00Z'),
+    policy, fetchImpl, existingIssues, now: new Date('2026-09-21T12:00:00Z'),
   }, { outputDir, sourceRoot: new URL('..', import.meta.url).pathname, mode: 'dry-run' });
-  assert.equal(result.summary.evaluated, 4);
-  assert.deepEqual(result.issuePlan.operations.map(({ action }) => action), ['noop', 'noop', 'noop', 'create']);
+  assert.equal(result.summary.evaluated, 12);
+  assert.ok(result.issuePlan.operations.some(({ action, modelId }) => action === 'create' && modelId === 'Qwen/M'));
   assert.equal(result.issuePlan.mutationCount, 1);
+  assert.ok(result.issuePlan.dropped.some(({ candidateId, reason }) => candidateId.startsWith('Qwen/L@') && reason === 'EVALUATION_LIMIT'));
 });
