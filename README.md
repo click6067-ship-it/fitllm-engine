@@ -15,6 +15,14 @@ FitLLM is an open-source, zero-dependency engine that checks whether a local LLM
 > 
 > Zero dependencies. One readable file: [`engine.js`](engine.js). Conformance-vector tested. MIT.
 
+## Quick start
+
+```bash
+npx fitllm "Gemma 4 31b" --gpu "RTX 4090"     # one line, exit 0 fits / 1 won't — run before you download
+npx fitllm --top --gpu 4090                    # what can this hardware run?
+npm install fitllm-engine                      # use the same engine as a library (see Usage)
+```
+
 ## Remote MCP server
 
 Connect any Streamable HTTP MCP client to `https://fitllm.run/api/mcp`:
@@ -56,7 +64,7 @@ This is the open calculation core of FitLLM. **The math is open so you can audit
 
 Ask an LLM "does Qwen 3.6 fit my GPU?" and it pattern-matches to an architecture from its training cutoff — and usually says *no*. Catalog-based calculators lag new releases. On the fitllm.run web calculator, pasting a Hugging Face ID reads that model's **official `config.json` live**, so supported architectures work on **day-one releases**; the built-in catalog (CLI/API/MCP) uses fields curated from pinned official configs and on the hybrid / sliding-window / MoE architectures that naive formulas get wrong.
 
-Covers **Apple Silicon unified memory (M1–M5, Pro/Max/Ultra — up to the 512GB Mac Studio)**, **NVIDIA GPUs (RTX 20/30/40/50, workstation RTX 6000 Ada / RTX PRO 6000, datacenter A100/H100/H200/B200)**, **AMD Radeon (RX 7000/9000, PRO W7900)** and **multi-GPU presets (2×3090, 2×4090, 4×3090)** — with GGUF Q-tier weight quantization kept separate from KV-cache quantization. Every hardware number is cross-verified against **≥2 independent sources** (source URLs embedded per-value in `engine.js`).
+Covers **Apple Silicon unified memory (M1–M6, Pro/Max/Ultra — up to the 512GB Mac Studio)**, **NVIDIA GPUs (RTX 20/30/40/50, workstation RTX 6000 Ada / RTX PRO 6000, datacenter A100/H100/H200/B200)**, **AMD Radeon (RX 7000/9000, PRO W7900)** and **multi-GPU presets (2×3090, 2×4090, 4×3090)** — with GGUF Q-tier weight quantization kept separate from KV-cache quantization. Hardware entries carry their source URLs per-value in `engine.js`; new entries require **≥2 independent sources** ([CONTRIBUTING](CONTRIBUTING.md)).
 
 ---
 
@@ -105,7 +113,10 @@ Plus a `parseHfConfig()` that turns configs from verified, modeled Hugging Face 
 ## Usage
 
 ```js
-import { simulate, LOCAL_MODELS, parseHfConfig } from './engine.js';
+// from npm:  npm install fitllm-engine
+import { simulate, LOCAL_MODELS, parseHfConfig } from 'fitllm-engine';
+// …or vendored single-file:
+// import { simulate, LOCAL_MODELS, parseHfConfig } from './engine.js';
 
 const model = LOCAL_MODELS.find((m) => m.name === 'Gemma 4 31b');
 const sim = simulate(model, /*ram*/ 64, /*ctx*/ 131072, /*bits*/ 8);
@@ -126,20 +137,19 @@ local:  50 layers × 2(K,V) × 16 heads × 256 dim × 2 B × 1,024  =    838,860
 total = 22,313,697,280 B ÷ 1024³ = 20.78 GiB
 ```
 
-- Calibration: Qwen 3.6 35B-A3B @128K, 8-bit ≈ **54 GB** (matches real local runs).
 - MLA per-token cost: GLM-4.7-Flash = (512 + 64) × 2 B × 47 layers = **54,144 B/token** — pinned by conformance vectors.
 
 All figures are estimates — real usage varies with the runtime (MLX/Ollama/llama.cpp), OS state, and quantization scheme.
 
 ## Conformance vectors
 
-[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **16 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
+[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **28 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
 
 **Why this matters:** the formulas are easy to copy; a verified answer key is not. If you port this engine to Python, Rust or Go, you don't become an untrusted fork — pass the vectors and you're a **conformant implementation of the same standard**. Port the engine, keep the vectors.
 
 ## The Fit Census — every model × every device, one truth table
 
-[`census/`](census/README.md) holds **8,000+ verdicts** (24 models incl. draft tier × 88 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
+[`census/`](census/README.md) holds **8,000+ verdicts** (24 models incl. draft tier × 93 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
 
 ## Embed a fit badge
 
@@ -185,7 +195,7 @@ Open data: the full **Fit Census** (8,000+ verdicts, **CC0**) at [fitllm.run/dat
 
 ## Help calibrate
 
-Ran a model and measured real peak memory? **[Report a measurement](../../issues/new?labels=measurement)** — it improves the estimates for everyone.
+Ran a model and measured real peak memory? **[Report a measurement](../../issues/new?template=measurement.yml)** — it improves the estimates for everyone.
 
 ## Built by
 
