@@ -3,7 +3,7 @@
 FitLLM is an open-source, zero-dependency engine that checks whether a local LLM fits on a GPU or Apple Silicon Mac using architecture-aware memory math.
 
 [![npm](https://img.shields.io/npm/v/fitllm-engine?color=cb3837&label=npm)](https://www.npmjs.com/package/fitllm-engine)
-[![conformance](https://img.shields.io/badge/conformance_vectors-16%2F16-brightgreen)](vectors/fit-vectors-v1.json)
+[![conformance](https://img.shields.io/badge/conformance_vectors-28%2F28-brightgreen)](vectors/fit-vectors-v1.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![zero deps](https://img.shields.io/badge/dependencies-0-success)](package.json)
 
@@ -54,7 +54,7 @@ npx fitllm "gpt-oss-120b" --detect || { echo "won't fit — aborting pull"; exit
 
 This is the open calculation core of FitLLM. **The math is open so you can audit it.**
 
-Ask an LLM "does Qwen 3.6 fit my GPU?" and it pattern-matches to an architecture from its training cutoff — and usually says *no*. Catalog-based calculators lag new releases. FitLLM reads each model's **official `config.json` live**, so it's right on **day-one releases** and on the hybrid / sliding-window / MoE architectures that naive formulas get wrong.
+Ask an LLM "does Qwen 3.6 fit my GPU?" and it pattern-matches to an architecture from its training cutoff — and usually says *no*. Catalog-based calculators lag new releases. On the fitllm.run web calculator, pasting a Hugging Face ID reads that model's **official `config.json` live**, so supported architectures work on **day-one releases**; the built-in catalog (CLI/API/MCP) uses fields curated from pinned official configs and on the hybrid / sliding-window / MoE architectures that naive formulas get wrong.
 
 Covers **Apple Silicon unified memory (M1–M5, Pro/Max/Ultra — up to the 512GB Mac Studio)**, **NVIDIA GPUs (RTX 20/30/40/50, workstation RTX 6000 Ada / RTX PRO 6000, datacenter A100/H100/H200/B200)**, **AMD Radeon (RX 7000/9000, PRO W7900)** and **multi-GPU presets (2×3090, 2×4090, 4×3090)** — with GGUF Q-tier weight quantization kept separate from KV-cache quantization. Every hardware number is cross-verified against **≥2 independent sources** (source URLs embedded per-value in `engine.js`).
 
