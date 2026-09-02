@@ -6,7 +6,8 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { LOCAL_MODELS, GPUS, MACBOOK_RAM_GROUPS, GPU_QUANTS, gpuDevice, simulate, calcMaxContext, calcRuntimeOverhead, DATA_UPDATED } from '../engine.js';
 
-const OUT = new URL('./', import.meta.url).pathname;
+// CENSUS_OUT: 결정성 검증(census/check.mjs)이 임시 디렉터리로 재생성할 때 사용. 기본 = 이 디렉터리(커밋 산출물).
+const OUT = process.env.CENSUS_OUT ? process.env.CENSUS_OUT.replace(/\/?$/, '/') : new URL('./', import.meta.url).pathname;
 const measured = JSON.parse(readFileSync(new URL('../fixtures/measured.json', import.meta.url), 'utf8'));
 const measuredMap = new Map(measured.map((m) => [[m.model, m.device, m.quant].join('|'), m]));
 
@@ -48,7 +49,8 @@ for (const m of LOCAL_MODELS) {
   }
 }
 
-const generated = new Date().toISOString().slice(0, 10);
+// CENSUS_DATE 명시 시 그 날짜로 고정(결정적 재생성·byte-identical 검증용). 미지정 = 오늘(신규 릴리스 생성).
+const generated = process.env.CENSUS_DATE || new Date().toISOString().slice(0, 10);
 const header = {
   version: 1, schema_version: 2, generated, engine_data: DATA_UPDATED, verdicts: rows.length,
   assumptions: 'ctx=min(8192,model max), KV cache F16, engine reserve/headroom per platform',

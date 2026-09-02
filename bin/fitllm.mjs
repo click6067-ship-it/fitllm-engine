@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // fitllm — "will it run?" in one line. Zero deps. MIT. https://fitllm.run
 import { execFileSync } from 'node:child_process';
+import { canonicalReceiptSlug } from './receipt-slug.mjs';
 import {
   LOCAL_MODELS, GPUS, GPU_QUANTS, MACBOOK_RAM_GROUPS,
   gpuDevice, combineGpus, simulate, calcMaxContext, suggestFix, suggestFixGpu, formatTokens, fmtGB,
@@ -187,7 +188,12 @@ if (has('--json')) {
     console.log(`  → ${fix.text}`);
     console.log(`  (this just saved you a ~${fmtGB(s.param)} GB download that would have OOM'd)`); // 절약 영수증
   }
-  const slug = `${model.name}-${quantLabel}-on-${hwLabel.split(' (')[0].replace(/ \+ /g, '-plus-')}`.toLowerCase().replace(/[^a-z0-9._+-]+/g, '-').replace(/-+/g, '-');
+  // canonical 슬러그(v2 /r 파서와 동일 규칙) — 비기본 ctx/kv도 영수증이 같은 조건으로 재계산하게 토큰 포함
+  const slug = canonicalReceiptSlug({
+    modelName: model.name, quantLabel, isGpu,
+    hwLabel: hwLabel.split(' (')[0], ramGB: isGpu ? 0 : device,
+    ctx, kvBits, maxContext: model.maxContext,
+  });
   console.log(`  receipt: https://fitllm.run/r/${slug}`);
   console.log('  every number from official config.json — audit: github.com/click6067-ship-it/fitllm-engine');
 }
