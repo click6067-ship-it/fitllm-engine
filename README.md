@@ -18,7 +18,7 @@ FitLLM is an open-source, zero-dependency engine that checks whether a local LLM
 ## Quick start
 
 ```bash
-npx fitllm "Gemma 4 31b" --gpu "RTX 4090"     # one line, exit 0 fits / 1 won't — run before you download
+npx fitllm "Gemma 4 12b" --gpu "RTX 4090"     # one line, exit 0 fits / 1 won't — run before you download
 npx fitllm --top --gpu 4090                    # what can this hardware run?
 npm install fitllm-engine                      # use the same engine as a library (see Usage)
 ```
@@ -62,7 +62,7 @@ npx fitllm "gpt-oss-120b" --detect || { echo "won't fit — aborting pull"; exit
 
 This is the open calculation core of FitLLM. **The math is open so you can audit it.**
 
-Ask an LLM "does Qwen 3.6 fit my GPU?" and it pattern-matches to an architecture from its training cutoff — and usually says *no*. Catalog-based calculators lag new releases. On the fitllm.run web calculator, pasting a Hugging Face ID reads that model's **official `config.json` live**, so supported architectures work on **day-one releases**; the built-in catalog (CLI/API/MCP) uses fields curated from pinned official configs and on the hybrid / sliding-window / MoE architectures that naive formulas get wrong.
+Ask an LLM "does Qwen 3.6 fit my GPU?" and it pattern-matches to an architecture from its training cutoff — and usually says *no*. Catalog-based calculators lag new releases. The CLI, API, and MCP use a curated catalog pinned to official configs. The web calculator can additionally inspect a pasted Hugging Face ID's **official `config.json` live**, so supported architectures work on **day-one releases** — including the hybrid / sliding-window / MoE structures that naive formulas get wrong.
 
 Covers **Apple Silicon unified memory (M1–M6, Pro/Max/Ultra — up to the 512GB Mac Studio)**, **NVIDIA GPUs (RTX 20/30/40/50, workstation RTX 6000 Ada / RTX PRO 6000, datacenter A100/H100/H200/B200)**, **AMD Radeon (RX 7000/9000, PRO W7900)** and **multi-GPU presets (2×3090, 2×4090, 4×3090)** — with GGUF Q-tier weight quantization kept separate from KV-cache quantization. Hardware entries carry their source URLs per-value in `engine.js`; new entries require **≥2 independent sources** ([CONTRIBUTING](CONTRIBUTING.md)).
 
@@ -149,7 +149,7 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 ## The Fit Census — every model × every device, one truth table
 
-[`census/`](census/README.md) holds **8,000+ verdicts** (24 models incl. draft tier × 93 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
+[`census/`](census/README.md) holds **8,424 verdicts** (24 models incl. draft tier × 93 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
 
 ## Embed a fit badge
 
@@ -187,7 +187,7 @@ curl 'https://fitllm.run/api/check?model=gemma%204%2031b&gpu=4090'
 # multi-GPU rigs: gpu=5090%2B3090 · Mac: ram=64 · usage: curl https://fitllm.run/api/check
 ```
 
-Open data: the full **Fit Census** (8,000+ verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
+Open data: the full **Fit Census** (8,424 verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
 
 ## Principles
 
