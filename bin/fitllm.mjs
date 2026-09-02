@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // fitllm — "will it run?" in one line. Zero deps. MIT. https://fitllm.run
 import { execFileSync } from 'node:child_process';
-import { canonicalReceiptSlug } from './receipt-slug.mjs';
+import { canonicalReceiptSlug, receiptRepresentable } from './receipt-slug.mjs';
 import {
   LOCAL_MODELS, GPUS, GPU_QUANTS, MACBOOK_RAM_GROUPS,
   gpuDevice, combineGpus, simulate, calcMaxContext, suggestFix, suggestFixGpu, formatTokens, fmtGB,
@@ -53,6 +53,8 @@ if (!TOP) {
 
 // ── device: --gpu | --mac | --detect ──
 let device, isGpu, hwLabel;
+let receiptCards = 1;      // 물리 카드 총수 — v2 영수증 한계(≤8) 판정용
+let receiptCatalogGpu = true; // --detect 미등록 GPU는 v2 카탈로그에 없어 영수증 표현 불가
 const gpuName = flag('--gpu');
 const macRam = flag('--mac');
 if (gpuName) {
@@ -69,6 +71,7 @@ if (gpuName) {
   const list = [];
   for (let i = 0; i < count; i++) list.push(...found);
   device = combineGpus(list, 'windows-display'); isGpu = true;
+  receiptCards = list.reduce((s, g) => s + (g.count || 1), 0);
   hwLabel = `${device.gpu.name} (${device.memoryGB}GB${list.length > 1 ? ' pooled' : ''})`;
 } else if (macRam) {
   const ram = parseInt(macRam, 10);
@@ -80,6 +83,7 @@ if (gpuName) {
     const [name, mem] = out.split(',').map((s) => s.trim());
     const vram = Math.round(parseInt(mem, 10) / 1024);
     const g = GPUS.find((x) => name.toLowerCase().includes(x.name.toLowerCase())) || { name: `${name} (detected)`, vramGB: vram, bandwidthGBs: 0, series: 'detected' };
+    if (g.series === 'detected') receiptCatalogGpu = false; // v2 카탈로그 밖 — 영수증 발급 불가(계산은 계속)
     device = gpuDevice(g, 'windows-display'); isGpu = true; hwLabel = `${g.name} (${g.vramGB}GB, detected)`;
   } catch {
     if (process.platform === 'darwin') {
@@ -197,13 +201,18 @@ if (has('--json')) {
     console.log(`  → ${fix.text}`);
     console.log(`  (this just saved you a ~${fmtGB(s.param)} GB download that would have OOM'd)`); // 절약 영수증
   }
-  // canonical 슬러그(v2 /r 파서와 동일 규칙) — 비기본 ctx/kv도 영수증이 같은 조건으로 재계산하게 토큰 포함
-  const slug = canonicalReceiptSlug({
-    modelName: model.name, quantLabel, isGpu,
-    hwLabel: hwLabel.split(' (')[0], ramGB: isGpu ? 0 : device,
-    ctx, kvBits, maxContext: model.maxContext,
-  });
-  console.log(`  receipt: https://fitllm.run/r/${slug}`);
+  // canonical 슬러그(v2 /r 파서와 동일 규칙) — 비기본 ctx/kv도 영수증이 같은 조건으로 재계산하게 토큰 포함.
+  // v2가 표현 못 하는 입력(카탈로그 밖 GPU·9카드+·Mac 2048GB 초과)은 깨진 URL 대신 명시 안내만.
+  if (receiptRepresentable({ isGpu, ramGB: isGpu ? 0 : device, totalCards: receiptCards, catalogGpu: receiptCatalogGpu })) {
+    const slug = canonicalReceiptSlug({
+      modelName: model.name, quantLabel, isGpu,
+      hwLabel: hwLabel.split(' (')[0], ramGB: isGpu ? 0 : device,
+      ctx, kvBits, maxContext: model.maxContext,
+    });
+    console.log(`  receipt: https://fitllm.run/r/${slug}`);
+  } else {
+    console.log('  receipt: n/a — fitllm.run receipts cover catalog GPUs, up to 8 cards, Macs 8–2048GB (the calculation above is still valid)');
+  }
   console.log('  every number from official config.json — audit: github.com/click6067-ship-it/fitllm-engine');
 }
 process.exit(s.verdict === 'no' ? 1 : 0);

@@ -115,7 +115,7 @@ const minDevice = LOCAL_MODELS.map((m) => {
 
 const md = `# Local LLM Fit Census v1 — ${generated}
 
-**${rows.length.toLocaleString()} verdicts**: ${LOCAL_MODELS.length} models × ${devices.length} devices (${GPUS.length} GPUs + ${devices.length - GPUS.length} Mac configs) × per-platform quant tiers.
+**${rows.length.toLocaleString('en-US')} verdicts**: ${LOCAL_MODELS.length} models × ${devices.length} devices (${GPUS.length} GPUs + ${devices.length - GPUS.length} Mac configs) × per-platform quant tiers.
 Every number computed by [fitllm-engine](https://github.com/click6067-ship-it/fitllm-engine) from official \`config.json\` values — architecture-aware (MLA, sliding-window, hybrid attention, MoE). **Reproduce it yourself: \`npm run census\`.**
 
 Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/headroom per engine. Interactive per-combo pages: [fitllm.run/can-i-run](https://fitllm.run/can-i-run).
