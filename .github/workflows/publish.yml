@@ -2,7 +2,9 @@
 # One-time setup:
 #   1. In BOTH npm packages, configure trusted publisher repo/workflow/environment as
 #      click6067-ship-it/fitllm-engine, publish.yml, npm-publish.
-#   2. Protect the GitHub environment `npm-publish` with a selected-tag policy of `v*` only.
+#   2. Readiness requires protecting the GitHub environment `npm-publish` with a selected-tag policy
+#      of `v*` only, plus either an enforceable tag ruleset with protected release authority
+#      or a required human reviewer.
 #   3. Only after (1)-(2), set repository variable NPM_TRUSTED_PUBLISHING_READY=true.
 # The workflow still enforces exact ^vX.Y.Z$ because GitHub trigger/tag policy patterns are globs.
 name: publish
@@ -78,6 +80,12 @@ jobs:
           fetch-tags: true
           persist-credentials: false
 
+      - name: Use exact source-verification runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.14.0'
+          cache: ''
+
       - name: Bind tag commit, event SHA, checkout, and package versions
         env:
           TAG: ${{ steps.release.outputs.tag }}
@@ -94,12 +102,32 @@ jobs:
             echo "::error::tag commit($TAG_SHA) != github.sha($PUSH_SHA)"
             exit 1
           }
+          git show-ref --verify --quiet refs/remotes/origin/master || {
+            echo "::error::origin/master is unavailable; cannot verify approved master history"
+            exit 1
+          }
+          git merge-base --is-ancestor "$PUSH_SHA" refs/remotes/origin/master || {
+            echo "::error::release SHA is outside approved master history"
+            exit 1
+          }
           PKG=$(node -p "require('./package.json').version")
           ENG=$(node --input-type=module -e "import('./engine.js').then(m => console.log(m.ENGINE_VERSION))")
           [ "$PKG" = "$VER" ] || { echo "::error::package.json version mismatch"; exit 1; }
           [ "$ENG" = "$VER" ] || { echo "::error::ENGINE_VERSION mismatch"; exit 1; }
 
-      - name: Use exact trusted-publishing toolchain
+  test:
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Fresh checkout for package-controlled tests
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.verify.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Use exact test toolchain
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22.14.0'
@@ -109,22 +137,71 @@ jobs:
       - name: Install exact npm without lifecycle scripts
         run: |
           set -euo pipefail
-          npm install --global npm@11.5.1 --ignore-scripts
+          npm install --global npm@11.5.1 --ignore-scripts --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
           [ "$(node --version)" = "v22.14.0" ]
           [ "$(npm --version)" = "11.5.1" ]
 
-      - name: Test source with no OIDC permission
+      - name: Run package-controlled tests without OIDC
         run: |
           set -euo pipefail
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
           npm run census:check
 
+  pack:
+    needs: [verify, test]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Fresh checkout for deterministic packing
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.verify.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Use exact packing toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.14.0'
+          registry-url: 'https://registry.npmjs.org'
+          cache: ''
+
+      - name: Install exact npm without lifecycle scripts
+        run: |
+          set -euo pipefail
+          npm install --global npm@11.5.1 --ignore-scripts --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
+          [ "$(node --version)" = "v22.14.0" ]
+          [ "$(npm --version)" = "11.5.1" ]
+
+      - name: Bind clean checkout and source manifest before packing
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA=$(git rev-parse HEAD)
+          [ "$HEAD_SHA" = "$SOURCE_SHA" ] || {
+            echo "::error::pack checkout($HEAD_SHA) != verified source($SOURCE_SHA)"
+            exit 1
+          }
+          git diff --exit-code
+          git diff --cached --exit-code
+          [ -z "$(git status --porcelain)" ]
+          node --input-type=module - "$VER" <<'NODE'
+          import assert from 'node:assert/strict'
+          import { readFileSync } from 'node:fs'
+          const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
+          assert.equal(manifest.name, 'fitllm-engine')
+          assert.equal(manifest.version, process.argv[2])
+          assert.equal(Object.hasOwn(manifest, 'publishConfig'), false)
+          NODE
+
       - name: Pack canonical and alias artifacts deterministically
         env:
-          TAG: ${{ steps.release.outputs.tag }}
-          VER: ${{ steps.release.outputs.version }}
-          SOURCE_SHA: ${{ steps.release.outputs.source_sha }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          VER: ${{ needs.verify.outputs.version }}
+          SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: |
           set -euo pipefail
           rm -rf release-artifacts alias-stage payload-canonical payload-alias
@@ -201,6 +278,8 @@ jobs:
             printf 'alias_tarball\t%s\n' "$ALIAS_TARBALL"
             printf 'alias_integrity\t%s\n' "$ALIAS_INTEGRITY"
           } > release-artifacts/release-manifest.tsv
+          git diff --exit-code
+          git diff --cached --exit-code
 
       - name: Upload immutable release inputs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -214,7 +293,7 @@ jobs:
           retention-days: 1
 
   publish:
-    needs: verify
+    needs: [verify, pack]
     runs-on: ubuntu-24.04
     environment: npm-publish
     permissions:
@@ -223,6 +302,13 @@ jobs:
       READY: ${{ vars.NPM_TRUSTED_PUBLISHING_READY }}
       NPM_CONFIG_IGNORE_SCRIPTS: 'true'
       NPM_CONFIG_PROVENANCE: 'true'
+      NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org/'
+      NPM_CONFIG_STRICT_SSL: 'true'
+      NPM_CONFIG_PROXY: 'false'
+      NPM_CONFIG_HTTPS_PROXY: 'false'
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      ALL_PROXY: ''
     steps:
       - name: Refuse publication until both npm trusted publishers are connected
         run: |
@@ -242,7 +328,7 @@ jobs:
       - name: Install exact npm without lifecycle scripts
         run: |
           set -euo pipefail
-          npm install --global npm@11.5.1 --ignore-scripts
+          npm install --global npm@11.5.1 --ignore-scripts --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
           [ "$(node --version)" = "v22.14.0" ]
           [ "$(npm --version)" = "11.5.1" ]
 
@@ -259,6 +345,7 @@ jobs:
           VERIFIED_SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: |
           set -euo pipefail
+          unset http_proxy https_proxy all_proxy
           MANIFEST=release-artifacts/release-manifest.tsv
           [ -f "$MANIFEST" ]
           value() { awk -F '\t' -v key="$1" '$1 == key { print $2 }' "$MANIFEST"; }
@@ -291,6 +378,33 @@ jobs:
           }
           [ "$(artifact_integrity "release-artifacts/$ENGINE_TARBALL")" = "$EXPECTED_ENGINE_INTEGRITY" ]
           [ "$(artifact_integrity "release-artifacts/$ALIAS_TARBALL")" = "$EXPECTED_ALIAS_INTEGRITY" ]
+
+          inspect_tarball_manifest() {
+            local tarball="$1" expectedName="$2" manifest_file member_count
+            manifest_file=$(mktemp)
+            member_count=$(tar -tzf "$tarball" | awk '$0 == "package/package.json" { count++ } END { print count + 0 }')
+            [ "$member_count" -eq 1 ] || {
+              echo "::error::$tarball must contain exactly one package/package.json"
+              return 1
+            }
+            tar -xOf "$tarball" package/package.json > "$manifest_file"
+            node --input-type=module - "$manifest_file" "$expectedName" "$VER" <<'NODE'
+          import assert from 'node:assert/strict'
+          import { readFileSync } from 'node:fs'
+          const [path, expectedName, expectedVersion] = process.argv.slice(2)
+          const manifest = JSON.parse(readFileSync(path, 'utf8'))
+          assert.equal(manifest.name, expectedName)
+          assert.equal(manifest.version, expectedVersion)
+          assert.equal(Object.hasOwn(manifest, 'publishConfig'), false)
+          assert.deepEqual(manifest.repository, {
+            type: 'git',
+            url: 'git+https://github.com/click6067-ship-it/fitllm-engine.git',
+          })
+          NODE
+            rm -f "$manifest_file"
+          }
+          inspect_tarball_manifest "release-artifacts/$ENGINE_TARBALL" fitllm-engine
+          inspect_tarball_manifest "release-artifacts/$ALIAS_TARBALL" fitllm
 
           registry_integrity_or_missing() {
             local package_spec="$1" expected="$2" error_file actual status
@@ -344,12 +458,12 @@ jobs:
           fi
 
           if [ "$ENGINE_EXISTS" != "true" ]; then
-            npm publish "release-artifacts/$ENGINE_TARBALL" --access public --ignore-scripts --provenance
+            npm publish "release-artifacts/$ENGINE_TARBALL" --access public --ignore-scripts --provenance --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
           fi
           verify_registry_integrity "fitllm-engine@$VER" "$EXPECTED_ENGINE_INTEGRITY"
 
           if [ "$ALIAS_EXISTS" != "true" ]; then
-            npm publish "release-artifacts/$ALIAS_TARBALL" --access public --ignore-scripts --provenance
+            npm publish "release-artifacts/$ALIAS_TARBALL" --access public --ignore-scripts --provenance --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
           fi
           verify_registry_integrity "fitllm@$VER" "$EXPECTED_ALIAS_INTEGRITY"
 
@@ -357,6 +471,14 @@ jobs:
     needs: [verify, publish]
     runs-on: ubuntu-24.04
     permissions: {}
+    env:
+      NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org/'
+      NPM_CONFIG_STRICT_SSL: 'true'
+      NPM_CONFIG_PROXY: 'false'
+      NPM_CONFIG_HTTPS_PROXY: 'false'
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      ALL_PROXY: ''
     steps:
       - name: Use exact verification toolchain
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -368,7 +490,7 @@ jobs:
       - name: Install exact npm without lifecycle scripts
         run: |
           set -euo pipefail
-          npm install --global npm@11.5.1 --ignore-scripts
+          npm install --global npm@11.5.1 --ignore-scripts --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
           [ "$(node --version)" = "v22.14.0" ]
           [ "$(npm --version)" = "11.5.1" ]
 
@@ -385,6 +507,7 @@ jobs:
           VERIFIED_SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
         run: |
           set -euo pipefail
+          unset http_proxy https_proxy all_proxy
           MANIFEST=release-artifacts/release-manifest.tsv
           value() { awk -F '\t' -v key="$1" '$1 == key { print $2 }' "$MANIFEST"; }
           TAG=$(value tag)

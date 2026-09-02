@@ -41,12 +41,16 @@ test('test_dispatch_tag_env_exact: dispatch tag is env-only and anchored exactly
 
 test('test_oidc_minimal_job: OIDC exists only on the minimal protected publish job', () => {
   const verify = job('verify')
+  const testJob = job('test')
+  const pack = job('pack')
   const publish = job('publish')
   const postcondition = job('postcondition')
 
   assert.match(workflow, /^permissions: \{\}$/m)
   assert.equal(workflow.match(/id-token:\s*write/g)?.length, 1)
   assert.doesNotMatch(verify, /id-token:\s*write/)
+  assert.doesNotMatch(testJob, /id-token:\s*write/)
+  assert.doesNotMatch(pack, /id-token:\s*write/)
   assert.doesNotMatch(postcondition, /id-token:\s*write/)
   assert.match(publish, /^    environment: npm-publish$/m)
   assert.match(publish, /^      id-token: write$/m)
@@ -77,12 +81,12 @@ test('test_push_sha_and_exact_tools: release source and tools use immutable pins
 })
 
 test('test_immutable_integrity_artifact: both registry versions are gated by the packed SHA512 values', () => {
-  const verify = job('verify')
+  const pack = job('pack')
   const publish = job('publish')
-  assert.match(verify, /release-manifest\.tsv/)
-  assert.match(verify, /sha512-/)
-  assert.match(verify, /actions\/upload-artifact@[0-9a-f]{40}/)
-  assert.match(verify, /retention-days: 1/)
+  assert.match(pack, /release-manifest\.tsv/)
+  assert.match(pack, /sha512-/)
+  assert.match(pack, /actions\/upload-artifact@[0-9a-f]{40}/)
+  assert.match(pack, /retention-days: 1/)
   assert.match(publish, /actions\/download-artifact@[0-9a-f]{40}/)
   assert.match(publish, /release-manifest\.tsv/)
   assert.match(publish, /EXPECTED_ENGINE_INTEGRITY/)
@@ -100,12 +104,12 @@ test('test_immutable_integrity_artifact: both registry versions are gated by the
 })
 
 test('test_payload_parity_and_provenance: parity is checked before upload and provenance after publish', () => {
-  const verify = job('verify')
+  const pack = job('pack')
   const publish = job('publish')
   const postcondition = job('postcondition')
-  assert.match(verify, /Payload parity/)
-  assert.match(verify, /package name/)
-  assert.match(verify, /npm pack --ignore-scripts/)
+  assert.match(pack, /Payload parity/)
+  assert.match(pack, /package name/)
+  assert.match(pack, /npm pack --ignore-scripts/)
   assert.doesNotMatch(publish, /Payload parity|npm pack/)
   assert.match(postcondition, /dist\.attestations\.provenance\.predicateType/)
   assert.match(postcondition, /https:\/\/slsa\.dev\/provenance\/v1/)
@@ -123,4 +127,64 @@ test('test_readiness_external_gate: readiness remains false by default and gates
   assert.doesNotMatch(executableLines, /NPM_TRUSTED_PUBLISHING_READY\s*[:=]\s*true/)
   assert.match(workflow, /trusted publisher[\s\S]{0,200}environment[\s\S]{0,100}npm-publish/i)
   assert.match(workflow, /protect(?:ed)?[\s\S]{0,100}environment[\s\S]{0,100}selected-tag policy[\s\S]{0,50}v\*/i)
+})
+
+test('test_publish_config_blocked_and_registry_forced: tarball config cannot redirect publishing', () => {
+  const publish = job('publish')
+  assert.match(publish, /inspect_tarball_manifest\(\)/)
+  assert.equal(publish.match(/^\s+inspect_tarball_manifest "release-artifacts\//gm)?.length, 2)
+  assert.match(publish, /tar -xOf/)
+  assert.match(publish, /Object\.hasOwn\(manifest, 'publishConfig'\)/)
+  assert.match(publish, /assert\.equal\(manifest\.name, expectedName\)/)
+  assert.match(publish, /assert\.equal\(manifest\.version, expectedVersion\)/)
+
+  const manifestGate = publish.indexOf('inspect_tarball_manifest "release-artifacts/')
+  const firstPublish = publish.search(/^\s+npm publish /m)
+  assert.ok(manifestGate > 0 && manifestGate < firstPublish)
+
+  const publishCommands = publish.split('\n').filter((line) => /^\s+npm publish /.test(line))
+  assert.equal(publishCommands.length, 2)
+  for (const command of publishCommands) {
+    assert.match(command, /--registry=https:\/\/registry\.npmjs\.org\//)
+    assert.match(command, /--strict-ssl=true/)
+    assert.match(command, /--proxy=false/)
+    assert.match(command, /--https-proxy=false/)
+    assert.match(command, /--ignore-scripts/)
+    assert.match(command, /--provenance/)
+  }
+})
+
+test('test_pack_is_fresh_job: tested checkout is never reused to build release artifacts', () => {
+  const verify = job('verify')
+  const testJob = job('test')
+  const pack = job('pack')
+  const publish = job('publish')
+
+  assert.doesNotMatch(verify, /npm (?:ci|test|pack)|upload-artifact/)
+  assert.match(testJob, /^    needs: verify$/m)
+  assert.match(testJob, /^          ref: \$\{\{ needs\.verify\.outputs\.source_sha \}\}$/m)
+  assert.match(testJob, /npm test/)
+  assert.match(testJob, /npm run census:check/)
+  assert.doesNotMatch(testJob, /npm pack|upload-artifact/)
+
+  assert.match(pack, /^    needs: \[verify, test\]$/m)
+  assert.match(pack, /^          ref: \$\{\{ needs\.verify\.outputs\.source_sha \}\}$/m)
+  assert.match(pack, /persist-credentials: false/)
+  assert.match(pack, /\[ "\$HEAD_SHA" = "\$SOURCE_SHA" \]/)
+  assert.match(pack, /git diff --exit-code/)
+  assert.match(pack, /\[ -z "\$\(git status --porcelain\)" \]/)
+  assert.doesNotMatch(pack, /git status --porcelain --untracked-files=no/)
+  assert.match(pack, /npm pack --ignore-scripts/)
+  assert.doesNotMatch(pack, /npm (?:ci|test)|npm run|import\('\.\/engine\.js'\)/)
+  assert.match(pack, /actions\/upload-artifact@[0-9a-f]{40}/)
+  assert.match(publish, /^    needs: \[verify, pack\]$/m)
+})
+
+test('test_master_history_and_release_authority: release SHA and authority are both gated', () => {
+  const verify = job('verify')
+  assert.match(verify, /refs\/remotes\/origin\/master/)
+  assert.match(verify, /git merge-base --is-ancestor "\$PUSH_SHA" refs\/remotes\/origin\/master/)
+  assert.match(verify, /approved master history/)
+  assert.match(workflow, /readiness[\s\S]{0,300}(?:tag ruleset|protected release authority)[\s\S]{0,100}required human reviewer/i)
+  assert.match(workflow, /^    environment: npm-publish$/m)
 })
