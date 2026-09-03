@@ -692,7 +692,10 @@ export function calcParamMemory(model, bits, device) {
 }
 
 // 런타임 오버헤드: 양자화 메타(12%) + KV 블록 padding(15%) + 활성화 버퍼 + 고정 2GB
-// 검증: Qwen3.6 35B @130K @8bit → 이론 43GB, 실제 ~54GB (오버헤드 ~11GB)
+// ⚠ 이 상수들을 특정 숫자에 맞추려 하지 말 것. 예전 주석은 'Qwen3.6 35B @130K @8bit →
+// 이론 43GB, 실제 ~54GB'라고 적었으나 그 '실제 54GB'를 뒷받침하는 측정 픽스처가 없고
+// (system_total_peak 0행), 엔진은 그 시나리오에서 49.94 GiB를 낸다. 2026-09-03 조사: 54는
+// 주장이 도입된 커밋 시점 엔진에서도 나오지 않았다(49.88). total-to-run 캘리브레이션은 아직 없다.
 export function calcRuntimeOverhead(model, ctx, bitsOrQuant, device) {
   ctx = Math.max(0, Math.floor(Number(ctx)) || 0); // 음수/NaN 가드 (활성화 버퍼 ctx 비례)
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight↔KV 분리(GGUF: KV padding이 weight bpw 오염 금지)
@@ -1568,8 +1571,70 @@ export function naiveKVCache(model, ctx, bits) {
 }
 
 // 내장 모델 데이터 기준일 (신선도 표시용). HF 붙여넣기는 항상 실시간이라 무관.
+// ── 이름 해석 — 모든 표면의 단일 정본 ────────────────────────────────────────
+// 표면마다 별도 matcher를 두면 같은 질의에 다른 답이 나온다(계획서 AC-1). 그리고 기존
+// `.includes()` 첫-일치는 임의 선택이었다. 실측(2026-09-03 라이브 카탈로그):
+//   'llama' → 후보 3개 중 Llama-3.2-3B (사용자가 8B를 의도했을 수 있다)
+//   'gemma' → 후보 6개 중 가장 작은 Gemma 4 e2b
+//   'qwen'  → 후보 7개 중 Qwen 3.6 27B
+// 배열 순서에 따라 *작은 모델로 기우는* 편향이고, 작은 모델은 메모리를 덜 먹으니 판정이
+// fits 쪽으로 틀린다 — 거짓 FITS와 같은 방향의 실패다. 그래서 모호하면 고르지 않고 후보를 돌려준다.
+// ⚠ 카탈로그 배열 순서는 `?m=` 공유링크·OG 이미지가 인덱스로 참조한다(api/og.js) — 재정렬 금지.
+export function normalizeNameTokens(value) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+const nameKey = (value) => normalizeNameTokens(value).join(' ');
+
+// -> { status: 'resolved',  match, canonicalName, matchedBy: 'exact'|'tokens' }
+//  | { status: 'ambiguous', candidates: [{ name }], total }
+//  | { status: 'unknown',   candidates: [{ name }], total }
+export function resolveByName(list, query, { limit = 5 } = {}) {
+  const tokens = normalizeNameTokens(query);
+  if (!tokens.length) return { status: 'unknown', candidates: [], total: 0 };
+
+  const key = tokens.join(' ');
+  const exact = list.find((item) => nameKey(item.name) === key);
+  if (exact) return { status: 'resolved', match: exact, canonicalName: exact.name, matchedBy: 'exact' };
+
+  // 질의 토큰 전체를 품는 항목만 후보. 유일할 때만 해석하고, 복수면 고르지 않는다.
+  const full = list.filter((item) => {
+    const own = new Set(normalizeNameTokens(item.name));
+    return tokens.every((t) => own.has(t));
+  });
+  if (full.length === 1) {
+    return { status: 'resolved', match: full[0], canonicalName: full[0].name, matchedBy: 'tokens' };
+  }
+  if (full.length > 1) {
+    // 후보 중 "나머지 전부가 확장하는 유일한 최소 이름"이 있으면 그것으로 해석한다.
+    // 'RTX 4090'은 '2× RTX 4090' 리그 항목의 부분집합이라 gpu=4090은 단일 카드로 해석된다
+    // (문서가 광고하는 질의). 반면 'A100 40GB'와 'A100 80GB'는 서로 부분집합이 아니고
+    // 'Gemma 4 12b'와 'Gemma 4 31b'도 아니라서 그대로 ambiguous — 임의 선택이 아니다.
+    const sets = full.map((m) => new Set(normalizeNameTokens(m.name)));
+    const minimal = full.filter((_, i) => sets.every((other, j) => j === i || [...sets[i]].every((t) => other.has(t))));
+    if (minimal.length === 1) {
+      return { status: 'resolved', match: minimal[0], canonicalName: minimal[0].name, matchedBy: 'base-name' };
+    }
+    return { status: 'ambiguous', candidates: full.slice(0, limit).map((m) => ({ name: m.name })), total: full.length };
+  }
+
+  // 전체 일치가 없으면 부분 일치를 *후보로만* 제시한다 — 첫 항목을 답으로 승격하지 않는다.
+  const partial = list.filter((item) => {
+    const own = new Set(normalizeNameTokens(item.name));
+    return tokens.some((t) => own.has(t));
+  });
+  return { status: 'unknown', candidates: partial.slice(0, limit).map((m) => ({ name: m.name })), total: partial.length };
+}
+
+export const resolveLocalModel = (query, opts) => resolveByName(LOCAL_MODELS, query, opts);
+export const resolveGpuByName = (query, opts) => resolveByName(GPUS, query, opts);
+
 export const DATA_UPDATED = '2026-08';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.10.0';
+export const ENGINE_VERSION = '2.11.0';
