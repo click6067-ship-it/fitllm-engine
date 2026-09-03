@@ -115,10 +115,10 @@ test('PLE: verdict flip — e2b FP16 on RTX 3060 8GB (linux-headless) no→yes',
 
 test('PLE: parseHfConfig detects vocab_size_per_layer_input × hidden_size_per_layer_input × L', async () => {
   const { parseHfConfig } = await import('../engine.js');
-  const cfg = { text_config: { num_hidden_layers: 35, num_attention_heads: 8, num_key_value_heads: 1, head_dim: 256, hidden_size: 1536, vocab_size_per_layer_input: 262144, hidden_size_per_layer_input: 256, max_position_embeddings: 131072, sliding_window: 512, layer_types: Array.from({ length: 35 }, (_, i) => ((i + 1) % 5 === 0 ? 'full_attention' : 'sliding_attention')) } };
+  const cfg = { dtype: 'bfloat16', text_config: { num_hidden_layers: 35, num_attention_heads: 8, num_key_value_heads: 1, head_dim: 256, hidden_size: 1536, vocab_size_per_layer_input: 262144, hidden_size_per_layer_input: 256, max_position_embeddings: 131072, sliding_window: 512, layer_types: Array.from({ length: 35 }, (_, i) => ((i + 1) % 5 === 0 ? 'full_attention' : 'sliding_attention')) } };
   const m = parseHfConfig('google/gemma-4-E2B-it', cfg, 10246356102); // bf16 2B × 5,123,178,051
   assert.equal(m.pleParams, 2.349); // 262144×256×35/1e9 = 2.34881 → toFixed(3)
-  const plain = parseHfConfig('meta-llama/Llama-3.1-8B', { num_hidden_layers: 32, num_attention_heads: 32, hidden_size: 4096 }, 16060522496);
+  const plain = parseHfConfig('meta-llama/Llama-3.1-8B', { num_hidden_layers: 32, num_attention_heads: 32, hidden_size: 4096, dtype: 'bfloat16' }, 16060522496);
   assert.equal(plain.pleParams, undefined);
 });
 

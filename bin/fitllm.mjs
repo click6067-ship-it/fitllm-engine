@@ -62,7 +62,7 @@ if (!TOP) {
   if (!model && parseHfId(modelInput)) {
     try {
       const remote = await fetchHfModel(modelInput);
-      model = parseHfConfig(remote.id, remote.config, remote.totalSize);
+      model = parseHfConfig(remote.id, remote.config, remote.totalSize, remote.parameterEvidence ?? undefined);
       receiptCatalogModel = false;
       modelSource = { type: 'huggingface', id: remote.id, revision: remote.revision };
     } catch (error) {

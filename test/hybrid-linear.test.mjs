@@ -61,6 +61,7 @@ test('linearState는 simulate의 used에 반영된다 (분해 합 == used)', () 
 // ── 3) parseHfConfig: qwen3_5 하이브리드 허용 ────────────────────────────────
 const QWEN38_27B = {
   model_type: 'qwen3_5',
+  dtype: 'bfloat16',
   image_token_id: 248056,
   text_config: {
     model_type: 'qwen3_5_text', num_hidden_layers: 64, num_attention_heads: 24, num_key_value_heads: 4,
@@ -113,7 +114,7 @@ test("거부: 모르는 레이어 타입('conv' 등) — lfm2류", () => {
 
 test('거부: 레포 이름이 타깃 모델을 가리키는 드래프트 헤드 (z-lab/Qwen3.8-27B-DFlash2 = 5레이어)', () => {
   const draft = { model_type: 'qwen3', num_hidden_layers: 5, num_attention_heads: 32, num_key_value_heads: 8,
-    head_dim: 128, hidden_size: 5120, intermediate_size: 17408, vocab_size: 248320,
+    head_dim: 128, hidden_size: 5120, intermediate_size: 17408, vocab_size: 248320, dtype: 'bfloat16',
     sliding_window: 2048, use_sliding_window: true, max_position_embeddings: 262144,
     layer_types: Array(5).fill('sliding_attention') };
   // totalSize 없음 → 이름에서 "27B"를 줍는 경로. config 치수는 ~4B라 2배 가드에 걸려야 한다.
