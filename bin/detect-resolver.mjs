@@ -7,13 +7,34 @@
 //      승격되지 않는다(예: "RTX 3090 Ti"는 RTX 3090이 될 수 없음 — Ti 엔트리에만 매치 가능)
 //   ③ 감지 VRAM(반올림 GB)이 카탈로그와 정확히 일치해야 확정(동명 이용량 변형 방어)
 // 불일치/변형 잔존 → null: 호출부는 감지된 실제 이름·VRAM으로 계산하고 영수증은 n/a.
-export function resolveDetectedGpu(detectedName, detectedVramGB, catalog) {
-  const tokens = String(detectedName).trim().split(/\s+/);
-  while (tokens.length && /^(nvidia|geforce)$/i.test(tokens[0])) tokens.shift();
-  while (tokens.length && /^gpu$/i.test(tokens[tokens.length - 1])) tokens.pop();
-  const core = tokens.join(' ').toLowerCase();
+export function normalizeDetectedGpuName(detectedName) {
+  return String(detectedName || '')
+    .toLowerCase()
+    .replace(/\b(nvidia|geforce|amd|radeon)\b/g, ' ')
+    .replace(/\bgpu\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+export function resolveDetectedGpuByName(detectedName, catalog) {
+  const core = normalizeDetectedGpuName(detectedName);
   if (!core) return null;
-  const g = catalog.find((x) => x.name.toLowerCase() === core);
+  const matches = catalog.filter((x) => normalizeDetectedGpuName(x.name) === core);
+  if (matches.length !== 1) return null;
+
+  // A name-only API cannot distinguish a base card from a same-name VRAM variant.
+  // If the catalog contains both, require a memory-reporting source such as nvidia-smi.
+  const withoutCapacity = (name) => name.replace(/\s+\d+\s*gb$/, '').trim();
+  if (!/\s+\d+\s*gb$/.test(core)) {
+    const family = catalog.filter((x) => withoutCapacity(normalizeDetectedGpuName(x.name)) === core);
+    if (family.length !== 1) return null;
+  }
+  return matches[0];
+}
+
+export function resolveDetectedGpu(detectedName, detectedVramGB, catalog) {
+  const g = resolveDetectedGpuByName(detectedName, catalog);
   if (!g) return null;
   if (!Number.isFinite(detectedVramGB) || detectedVramGB !== g.vramGB) return null;
   return g;

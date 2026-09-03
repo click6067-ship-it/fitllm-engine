@@ -17,19 +17,15 @@ body:
   - type: input
     id: hardware
     attributes:
-      label: Hardware (chip + RAM)
-      placeholder: e.g. M5 Max 64GB
+      label: Exact hardware identity
+      placeholder: e.g. RTX 4090 or M5 Max 64GB
     validations:
       required: true
-  - type: dropdown
+  - type: input
     id: quant
     attributes:
       label: Quantization
-      options:
-        - "4-bit"
-        - "8-bit"
-        - "16-bit (bf16)"
-        - other
+      placeholder: e.g. Q4_K_M, 8bit, FP16
     validations:
       required: true
   - type: input
@@ -37,20 +33,54 @@ body:
     attributes:
       label: Context length (tokens)
       placeholder: e.g. 32768
-  - type: dropdown
+    validations:
+      required: true
+  - type: input
     id: runtime
     attributes:
-      label: Runtime
-      options:
-        - MLX
-        - Ollama / llama.cpp
-        - vLLM
-        - other
+      label: Runtime and exact version/commit
+      placeholder: e.g. llama.cpp b6400, Ollama 0.12.3, MLX 0.29.1
+    validations:
+      required: true
   - type: input
     id: measured
     attributes:
-      label: Measured peak memory (GB)
+      label: Measured peak memory (value)
       placeholder: e.g. 53.2
+    validations:
+      required: true
+  - type: dropdown
+    id: measurement_kind
+    attributes:
+      label: What exactly was measured?
+      options:
+        - idle_resident
+        - load_peak
+        - generation_peak
+        - system_total_peak
+    validations:
+      required: true
+  - type: dropdown
+    id: unit
+    attributes:
+      label: Unit
+      options:
+        - GiB
+        - GB
+    validations:
+      required: true
+  - type: input
+    id: kv_bits
+    attributes:
+      label: KV cache precision
+      placeholder: 16, 8, or 4 bits
+    validations:
+      required: true
+  - type: textarea
+    id: command_and_artifact
+    attributes:
+      label: Exact command, flags, and raw evidence
+      description: Include a log or screenshot link and say whether prefill/decode completed.
     validations:
       required: true
   - type: input

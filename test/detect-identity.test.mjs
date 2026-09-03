@@ -9,6 +9,12 @@ import { join } from 'node:path';
 import { resolveDetectedGpu } from '../bin/detect-resolver.mjs';
 import { GPUS } from '../engine.js';
 
+test('test_exact_identity_and_vram', () => {
+  assert.equal(resolveDetectedGpu('NVIDIA GeForce RTX 4090', 24, GPUS)?.name, 'RTX 4090');
+  assert.equal(resolveDetectedGpu('NVIDIA GeForce RTX 4090', 16, GPUS), null);
+  assert.equal(resolveDetectedGpu('NVIDIA GeForce RTX 4090 Laptop GPU', 16, GPUS), null);
+});
+
 test('순수 리졸버: Laptop 변형은 exact 불일치로 null — 데스크톱 4090 승격 금지 (Sol 반례 1)', () => {
   assert.equal(resolveDetectedGpu('NVIDIA GeForce RTX 4090 Laptop GPU', 16, GPUS), null);
   // 이름이 우연히 벗겨져도 VRAM 3중 방어가 잡는다

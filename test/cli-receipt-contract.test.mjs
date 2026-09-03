@@ -42,10 +42,11 @@ test('경계: Mac 2048GB는 발급, 카드 8장(4×2)도 발급 — 슬러그는
   }
 });
 
-test('출력 문구 정직성: 런타임은 큐레이션 카탈로그 — "every number from official config.json" 과장 금지', () => {
+test('출력 문구 정직성: 공식 구조 입력과 추정 reserve를 구분한다', () => {
   const r = run('Gemma 4 31b', '--gpu', 'RTX 4090');
-  assert.match(r.stdout, /curated from pinned official configs/);
-  assert.doesNotMatch(r.stdout, /every number from official config\.json/);
+  assert.match(r.stdout, /architecture inputs pinned to official configs/);
+  assert.match(r.stdout, /runtime\/OS reserves are estimates/);
+  assert.doesNotMatch(r.stdout, /every number/i);
 });
 
 test('receiptRepresentable 단위: 미등록(detected) GPU·한계 초과는 false', () => {

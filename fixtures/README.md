@@ -17,6 +17,12 @@ An `idle_resident` reading **below** fitllm's total is expected — the total de
 
 ## Submit a measurement (PR)
 
+Generate a validated candidate and prefilled issue URL locally (nothing is submitted automatically):
+
+```bash
+npx fitllm measure "Qwen 3.6 27B" --gpu "RTX 4090" --measured 15.3 --kind system_total_peak --unit GiB --runtime "llama.cpp b6400"
+```
+
 1. Run a model. Note the memory reading **and what kind it is** (see table above; e.g. `nvidia-smi`, Activity Monitor, `ollama ps`, oMLX `/admin/api/models`).
 2. Add one object to [`measured.json`](measured.json) following [`schema.json`](schema.json) — exact engine model/device names, quant, context, KV precision, `measurementKind`, unit if you know it (GiB vs GB), runtime **with version**, and a link to your fuller report (issue or the PR itself).
 3. `npm test` must still pass. That's it.
