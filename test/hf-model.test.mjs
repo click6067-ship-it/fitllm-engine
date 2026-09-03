@@ -52,23 +52,57 @@ test('test_bounded_fail_closed_fetch', async () => {
   assert.match(requested[1], new RegExp(`/resolve/${REVISION}/config\\.json$`));
   assert.match(requested[2], new RegExp(`/resolve/${REVISION}/model\\.safetensors\\.index\\.json$`));
 
-  // weight_map이 siblings에 없는 파일을 가리키면 합계를 만들지 않는다(부분합 금지).
+  // weight_map이 siblings에 없는 파일을 가리키면 합계를 만들지 않고, 루트 model.safetensors로
+  // 폴백하지도 않는다 — "original + fp8" 류 레포의 작은 잔여 파일로 내려가면 거짓 FITS다.
+  const leftoverRoot = 4_000;
   const missingShard = await fetchHfModel('Qwen/Qwen3-32B', {
     fetchImpl: async (url, options = {}) => {
       if (url === API) {
         return new Response(JSON.stringify({
           ...METADATA,
-          siblings: [{ rfilename: 'model-00001-of-00002.safetensors', size: SHARD_A }],
+          siblings: [
+            { rfilename: 'model-00001-of-00002.safetensors', size: SHARD_A },
+            { rfilename: 'model.safetensors', size: leftoverRoot },
+          ],
         }), { status: 200 });
       }
       if (url.endsWith('/config.json')) return new Response(JSON.stringify({ model_type: 'llama', hidden_size: 1024, dtype: 'bfloat16' }), { status: 200 });
       if (url.endsWith('/model.safetensors.index.json')) return new Response(JSON.stringify(INDEX), { status: 200 });
-      if (options.method === 'HEAD') return new Response('', { status: 404 });
+      if (options.method === 'HEAD') return new Response('', { status: 200, headers: { 'content-length': String(leftoverRoot) } });
       return new Response('', { status: 404 });
     },
   });
   assert.equal(missingShard.totalSize, null);
+  assert.notEqual(missingShard.totalSize, leftoverRoot);
   assert.equal(missingShard.parameterEvidence.safetensorsParameters.BF16, 1_000);
+
+  // index 조회가 404가 아닌 이유로 실패하면 크기를 추측하지 않고 fail-closed 한다.
+  await assert.rejects(
+    fetchHfModel('Qwen/Qwen3-32B', {
+      fetchImpl: async (url) => {
+        if (url === API) return new Response(JSON.stringify(METADATA), { status: 200 });
+        if (url.endsWith('/config.json')) return new Response(JSON.stringify({ model_type: 'llama', hidden_size: 1024, dtype: 'bfloat16' }), { status: 200 });
+        if (url.endsWith('/model.safetensors.index.json')) return new Response('', { status: 500 });
+        return new Response('', { status: 404 });
+      },
+    }),
+    /index\.json request failed with HTTP 500/,
+  );
+
+  // index가 404일 때만 단일 파일 경로로 내려간다.
+  const singleFile = await fetchHfModel('Qwen/Qwen3-32B', {
+    fetchImpl: async (url) => {
+      if (url === API) {
+        return new Response(JSON.stringify({
+          ...METADATA,
+          siblings: [{ rfilename: 'model.safetensors', size: 2_048 }],
+        }), { status: 200 });
+      }
+      if (url.endsWith('/config.json')) return new Response(JSON.stringify({ model_type: 'llama', hidden_size: 1024, dtype: 'bfloat16' }), { status: 200 });
+      return new Response('', { status: 404 });
+    },
+  });
+  assert.equal(singleFile.totalSize, 2_048);
 
   // 파라미터 증거도 checkpoint 크기도 없으면 추정하지 않는다.
   await assert.rejects(

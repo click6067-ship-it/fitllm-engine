@@ -1131,8 +1131,15 @@ function checkpointSanityParams(c, layerCount) {
   return usable ? paramsFromDims(c, layerCount) : null;
 }
 
+// 저장 element와 논리 파라미터가 1:1이고 폭이 확정된 dtype만 여기 넣는다 — 이 집합에 있으면
+// shard byte 등식이라는 강한 검증을 받는다. FP8은 packing 컨테이너가 아니라 1 element = 1 byte라
+// 포함한다(DeepSeek-V3-FP8 류가 약한 밴드 대신 등식 검증을 받게 된다).
+// ⚠ I8/U8/I32/U32는 제외 — GPTQ(I32)·NF4(U8)가 여러 값을 packing하는 컨테이너라 폭이 확정되지
+// 않는다. 이들은 bytes/parameter 밴드로만 검증한다.
 const ONE_TO_ONE_SAFETENSORS_DTYPES = new Map([
   ['F64', 8], ['F32', 4], ['F16', 2], ['BF16', 2],
+  ['F8_E4M3', 1], ['F8_E4M3FN', 1], ['F8_E5M2', 1], ['F8_E8M0', 1],
+  ['I64', 8], ['U64', 8], ['I16', 2], ['U16', 2], ['BOOL', 1],
 ]);
 const COMMIT_SHA_RE = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i;
 

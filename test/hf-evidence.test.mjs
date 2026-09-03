@@ -157,12 +157,36 @@ test('float-only 레포는 shard byte 등식과 헤더 slack 경계를 지킨다
 });
 
 test('F32 레포에 작은 비-float 보조 텐서가 섞여도 거짓 거부하지 않는다', () => {
-  assert.doesNotThrow(() => resolveParameterCount({
+  const ok = resolveParameterCount({
     checkpointBytes: 400_000_100,
     revision: REVISION,
     safetensorsParameters: { F32: 100_000_000, I64: 1 },
     safetensorsTotal: 100_000_001,
-  }));
+  });
+  // I64는 폭이 확정된 1:1 dtype이라 강한 byte-equality 검증을 그대로 받는다
+  // (작은 보조 텐서 하나가 31B BF16 레포를 약한 밴드로 떨어뜨리면 안 된다).
+  assert.equal(ok.validation, 'byte-equality');
+});
+
+test('FP8 레포는 약한 밴드가 아니라 byte-equality 검증을 받는다', () => {
+  // FP8은 packing 컨테이너가 아니라 1 element = 1 byte다(DeepSeek-V3-FP8 류).
+  const params = { F8_E4M3: 31_000_000_000, BF16: 100_000_000 };
+  const tensorBytes = 31_000_000_000 + 100_000_000 * 2;
+  const ok = resolveParameterCount({
+    checkpointBytes: tensorBytes + 2_000_000,
+    revision: REVISION,
+    safetensorsParameters: params,
+    safetensorsTotal: 31_100_000_000,
+  });
+  assert.equal(ok.validation, 'byte-equality');
+  assert.ok(Math.abs(ok.totalParamsB - 31.1) < 1e-9);
+  // 파라미터 수가 절반으로 잘못 보고되면 등식이 깨져 거부한다 — 밴드였다면 통과했을 값이다.
+  assert.throws(() => resolveParameterCount({
+    checkpointBytes: tensorBytes + 2_000_000,
+    revision: REVISION,
+    safetensorsParameters: { F8_E4M3: 15_500_000_000, BF16: 50_000_000 },
+    safetensorsTotal: 15_550_000_000,
+  }), /shard byte/);
 });
 
 test('기형·모순 증거는 계산하지 않는다', () => {

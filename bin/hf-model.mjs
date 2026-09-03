@@ -129,27 +129,32 @@ export async function fetchHfModel(input, { fetchImpl = globalThis.fetch, timeou
       .filter((file) => typeof file?.rfilename === 'string' && positiveSafeInteger(file?.size))
       .map((file) => [file.rfilename, file.size]),
   );
+  // index가 있으면 그 레포는 샤드 레포다 — 샤드 합계를 못 만들면 크기를 포기하지, 루트
+  // model.safetensors로 내려가지 않는다. "original + fp8" 류 레포는 루트에 훨씬 작은 잔여
+  // 파일을 두는데, 거기로 폴백하면 30B급 레포를 몇 B로 읽어 다시 거짓 FITS가 된다.
+  // (web 프록시 api/hf-config.js와 같은 정책 — 두 표면이 같은 모델에 다른 답을 내면 안 된다.)
   let totalSize = null;
   const indexResponse = await request(pinnedBase, 'model.safetensors.index.json');
   if (indexResponse.ok) {
     const index = await bounded(() => readJsonLimited(indexResponse, 'model.safetensors.index.json', MAX_INDEX_BYTES));
     const shardNames = [...new Set(Object.values(index?.weight_map || {}))];
-    if (shardNames.length && shardNames.every((name) => siblingSizes.has(name))) {
+    if (shardNames.length && shardNames.every((name) => typeof name === 'string' && siblingSizes.has(name))) {
       const sum = shardNames.reduce((acc, name) => acc + siblingSizes.get(name), 0);
       if (positiveSafeInteger(sum)) totalSize = sum;
     }
-  } else if (indexResponse.status !== 404) {
-    checkedResponse(indexResponse, 'model.safetensors.index.json');
-  }
-  if (!totalSize && positiveSafeInteger(siblingSizes.get('model.safetensors'))) {
-    totalSize = siblingSizes.get('model.safetensors');
-  }
-  if (!totalSize) {
-    const head = await request(pinnedBase, 'model.safetensors', { method: 'HEAD' });
-    if (head.ok) {
-      const sz = Number(head.headers.get('x-linked-size') || head.headers.get('content-length'));
-      if (positiveSafeInteger(sz)) totalSize = sz;
+  } else if (indexResponse.status === 404) {
+    if (positiveSafeInteger(siblingSizes.get('model.safetensors'))) {
+      totalSize = siblingSizes.get('model.safetensors');
     }
+    if (!totalSize) {
+      const head = await request(pinnedBase, 'model.safetensors', { method: 'HEAD' });
+      if (head.ok) {
+        const sz = Number(head.headers.get('x-linked-size') || head.headers.get('content-length'));
+        if (positiveSafeInteger(sz)) totalSize = sz;
+      }
+    }
+  } else {
+    checkedResponse(indexResponse, 'model.safetensors.index.json');
   }
 
   const rawParameters = metadata?.safetensors?.parameters;
