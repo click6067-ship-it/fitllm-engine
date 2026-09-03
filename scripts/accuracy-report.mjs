@@ -189,6 +189,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const json = process.argv.includes('--json');
   const census = JSON.parse(readFileSync(new URL('../census/census-v1.json', import.meta.url), 'utf8'));
   const measurements = JSON.parse(readFileSync(new URL('../fixtures/measured.json', import.meta.url), 'utf8'));
-  const report = buildAccuracyReport(census, measurements);
+  const competitors = JSON.parse(readFileSync(new URL('../benchmarks/competitors.json', import.meta.url), 'utf8'));
+  const report = buildAccuracyReport(census, measurements, competitors);
   console.log(json ? JSON.stringify(report, null, 2) : renderMarkdown(report));
 }

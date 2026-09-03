@@ -53,3 +53,15 @@ test('test_approved_cli_workflows', () => {
   assert.match(readme, /Hugging Face ID|org\/model/);
   assert.doesNotMatch(readme, /most accurate|#1 accuracy/i);
 });
+
+test('distribution preflight examples stay present and reproducible', () => {
+  for (const required of [
+    'uses: click6067-ship-it/fitllm-engine@v2.9.0',
+    'npx fitllm "Gemma 4 12b" --detect --json --why',
+    '&& ollama pull gemma4:12b',
+    '&& llama-cli -m',
+    'npm run benchmark:differential',
+    'npm run benchmark:capture:llmfit -- --binary',
+    'architecture_differential_not_runtime_accuracy',
+  ]) assert.ok(README.includes(required), `distribution example missing: ${required}`);
+});

@@ -8,6 +8,7 @@ FitLLM's public accuracy claim is blocked until independent evidence clears this
 npm run census:check
 npm run benchmark:accuracy
 npm run benchmark:accuracy -- --json
+npm run benchmark:differential
 ```
 
 The current fixture ledger is useful input, but its entries remain claims unless independently verified. `community_unverified` rows can appear in the report; only `verified` or `maintainer_verified` rows with the immutable evidence fields below count toward the public claim gate.
@@ -38,6 +39,19 @@ Competitor rows are future, reviewed inputs to `buildAccuracyReport(census, meas
 ```
 
 Run every product against the same precommitted cases and conditions. The claim gate pairs rows by `caseId`, requires an immutable competitor identifier (`name@version-or-commit`), HTTPS raw-output source, and SHA-256, and compares only a single pinned competitor's matched cohort. Do not fill a competitor output by reusing FitLLM's formulas or census.
+
+## Pinned llmfit architecture differential
+
+`llmfit-v1.1.12/manifest.json` pins the official Linux release URL and SHA-256, the exact binary version and arguments, and SHA-256 for each uncut JSON stdout file. It includes one standard-GQA control plus sliding-window and MLA counterexamples. Recreate the ledger only from the official archive after independently checking its source:
+
+```bash
+npm run benchmark:capture:llmfit -- \
+  --binary /path/to/llmfit \
+  --artifact /path/to/llmfit-v1.1.12-x86_64-unknown-linux-gnu.tar.gz
+npm run benchmark:differential
+```
+
+The capture command rejects an archive whose SHA-256 differs from the pinned official checksum and rejects a binary that does not report `llmfit 1.1.12`. The output is intentionally classified as `architecture_differential_not_runtime_accuracy`. It is useful for reproducible estimator behavior, but it cannot enter `benchmarks/competitors.json` or unlock the public accuracy claim without matched independent runtime measurements.
 
 ## Claim gate and kill conditions
 

@@ -22,6 +22,7 @@ npx fitllm "Gemma 4 12b" --gpu "RTX 4090"     # one line, exit 0 fits / 1 won't 
 npx fitllm --top --gpu 4090                    # what can this hardware run?
 npx fitllm --top --detect --json               # detect every supported local GPU; agent-ready JSON
 npx fitllm Qwen/Qwen3-32B --detect --json      # public Hugging Face ID or URL; unsupported configs fail closed
+npx fitllm "Gemma 4 12b" --detect --json --why # include architecture, evidence, assumptions, and exact memory inputs
 npm install fitllm-engine                      # use the same engine as a library (see Usage)
 ```
 
@@ -63,6 +64,32 @@ npx fitllm "Gemma 4 12b" --detect         # one verdict on this machine
 # in your model-pull script — stop BEFORE the 40 GB download:
 npx fitllm "gpt-oss-120b" --detect || { echo "won't fit — aborting pull"; exit 1; }
 ```
+
+### Put the guard in the download path
+
+The CLI exit contract composes directly with model runtimes. The download or launch runs only after a `FITS` or `TIGHT` verdict; invalid inputs stop with exit 2.
+
+```bash
+npx fitllm "Gemma 4 12b" --detect && ollama pull gemma4:12b
+npx fitllm "Llama-3.1-8B-Instruct" --detect && llama-cli -m ./Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
+```
+
+For CI, use the repository's composite Action. It needs no secret and returns the full `--json --why` result as `steps.preflight.outputs.result`:
+
+```yaml
+permissions:
+  contents: read
+steps:
+  - name: Check model memory before download
+    id: preflight
+    uses: click6067-ship-it/fitllm-engine@v2.9.0
+    with:
+      model: Gemma 4 12b
+      gpu: RTX 4090
+      ctx: '8192'
+```
+
+Set exactly one of `gpu` or `mac`. The Action preserves the CLI contract: exit 0 means fits/tight, 1 means it will not fit, and 2 means the request is invalid. Inputs cross the GitHub expression boundary through environment variables and are passed to Node as a Bash argument array.
 
 Agents can collect a typed measurement without uploading anything:
 
@@ -140,7 +167,13 @@ const m = parseHfConfig('Qwen/Qwen3-32B', configJson, totalSizeBytes);
 
 ## Verification
 
-From a repository checkout, recompute the typed measured-vs-predicted ledger with `npm run benchmark:accuracy` (or add `-- --json`). The methodology, competitor input format, and precommitted kill conditions are in [`benchmarks/README.md`](benchmarks/README.md). The current evidence does **not** clear the comparative accuracy claim gate.
+From a repository checkout, recompute the typed measured-vs-predicted ledger with `npm run benchmark:accuracy` (or add `-- --json`). Run the pinned estimator differential with `npm run benchmark:differential`. To recapture its uncut source output from a separately downloaded official llmfit release artifact:
+
+```bash
+npm run benchmark:capture:llmfit -- --binary /path/to/llmfit --artifact /path/to/llmfit-v1.1.12-x86_64-unknown-linux-gnu.tar.gz
+```
+
+The differential is labeled `architecture_differential_not_runtime_accuracy`: it demonstrates how estimators treat GQA, sliding-window attention, and MLA, but it is not runtime measurement evidence. The methodology, competitor input format, checksums, and precommitted kill conditions are in [`benchmarks/README.md`](benchmarks/README.md). The current evidence does **not** clear the comparative accuracy claim gate.
 
 - Architecture values checked against official HuggingFace `config.json`.
 - Gemma 4 31B full-context KV reproduces **20.78 GiB**, matching the published [architecture analysis](https://kaitchup.substack.com/p/gemma-4-31b-and-26b-a4b-architecture). Reproduce it by hand:
