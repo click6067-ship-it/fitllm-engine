@@ -8,6 +8,7 @@ import { buildExplanation } from './explain.mjs';
 import {
   LOCAL_MODELS, GPUS, GPU_QUANTS, MACBOOK_RAM_GROUPS,
   gpuDevice, combineGpus, simulate, calcMaxContext, suggestFix, suggestFixGpu, formatTokens, fmtGB, parseHfConfig,
+  resolveLocalModel, resolveGpuByName,
 } from '../engine.js';
 
 const argv = process.argv.slice(2);
@@ -56,9 +57,15 @@ let receiptCatalogModel = true;
 let modelSource;
 if (!TOP) {
   const modelInput = positional[MEASURE ? 1 : 0] || '';
-  const q = modelInput.toLowerCase();
-  model = LOCAL_MODELS.find((m) => m.name.toLowerCase() === q)
-    || (!MEASURE && q ? LOCAL_MODELS.find((m) => m.name.toLowerCase().includes(q)) : null);
+  // 해석은 엔진 정본만 쓴다 — CLI와 웹(fitllm.run)이 같은 질의에 다른 모델을 답하면 안 된다.
+  // 모호하면 임의로 고르지 않고 후보를 보여주고 exit 2 (fail-closed).
+  const mr = resolveLocalModel(modelInput);
+  if (mr.status === 'ambiguous') {
+    console.error(`ambiguous model: "${modelInput}" — ${mr.total} matches: ${mr.candidates.map((c) => c.name).join(', ')}${mr.total > mr.candidates.length ? ', …' : ''}`);
+    console.error('pass one exactly — refusing to guess which model you meant.');
+    process.exit(2);
+  }
+  model = mr.status === 'resolved' ? mr.match : null;
   if (!model && parseHfId(modelInput)) {
     try {
       const remote = await fetchHfModel(modelInput);
@@ -84,10 +91,13 @@ if (gpuName) {
   const parts = gpuName.split(/[+,&]/).map((s) => s.trim()).filter(Boolean);
   const found = [];
   for (const p of parts) {
-    const pq = p.toLowerCase();
-    const g = GPUS.find((x) => x.name.toLowerCase() === pq) || GPUS.find((x) => x.name.toLowerCase().includes(pq));
-    if (!g) { console.error(`unknown GPU: "${p}" — try: npx fitllm --list`); process.exit(2); }
-    found.push(g);
+    const gr = resolveGpuByName(p);
+    if (gr.status === 'ambiguous') {
+      console.error(`ambiguous GPU: "${p}" — ${gr.total} matches: ${gr.candidates.map((c) => c.name).join(', ')}${gr.total > gr.candidates.length ? ', …' : ''}`);
+      process.exit(2);
+    }
+    if (gr.status !== 'resolved') { console.error(`unknown GPU: "${p}" — try: npx fitllm --list`); process.exit(2); }
+    found.push(gr.match);
   }
   const count = Math.min(Math.max(parseInt(flag('--count'), 10) || 1, 1), 8);
   const list = [];

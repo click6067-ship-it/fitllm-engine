@@ -1,6 +1,6 @@
 {
   "name": "fitllm-engine",
-  "version": "2.10.0",
+  "version": "2.11.0",
   "description": "Auditable local-LLM memory estimates for GPUs and Macs. Models sliding-window, hybrid/linear, MLA compressed-KV and MoE architectures. Zero deps, single file, conformance-vector tested.",
   "type": "module",
   "main": "engine.js",
