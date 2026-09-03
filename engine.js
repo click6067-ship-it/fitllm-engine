@@ -12,9 +12,12 @@ export const MODELS = [
 
   // --- GLM (zAI, MLA) — 압축 KV(kv_lora_rank 512 + qk_rope 64 = 576 elem/tok/layer, ×1) ---
   { name: 'GLM-4.7-Flash', group: 'GLM', tags: ['moe', 'mla'],
-    totalParams: 30, activeParams: 3, layerCount: 47, kvHeads: 20, kvHeadDim: 256, attnHeads: 20, hiddenSize: 2048,
+    // Exact tensor count: HF API at pinned revision; 30B-A3B class corroboration: official model card.
+    // https://huggingface.co/api/models/zai-org/GLM-4.7-Flash/revision/7dd20894a642a0aa287e9827cb1a1f7f91386b67
+    // https://huggingface.co/zai-org/GLM-4.7-Flash
+    totalParams: 31.2, activeParams: 3, layerCount: 47, kvHeads: 20, kvHeadDim: 256, attnHeads: 20, hiddenSize: 2048,
     numExperts: 64, expertsPerToken: 4, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 202752, benchmarks: null,
-    desc: 'MoE · MLA · ~30B / ~3B active · 64 experts(top-4) · 압축 KV(576/tok/layer) · 최대 202K' }, // config.json: zai-org/GLM-4.7-Flash (fp8 체크포인트)
+    desc: 'MoE · MLA · ~31B / ~3B active · 64 experts(top-4) · 압축 KV(576/tok/layer) · 최대 202K' }, // config.json: zai-org/GLM-4.7-Flash
   { name: 'GLM-5.2', group: 'GLM', tags: ['moe', 'mla'],
     totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
     numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
@@ -1114,7 +1117,113 @@ function paramsFromDims(c, layerCount) {
   return (layerCount * (attn + ffn) + embed) / 1e9;
 }
 
-export function parseHfConfig(id, raw, totalSize) {
+// checkpoint/evidence 자릿수 검증에 쓸 수 있는 config에서만 구조 추정치를 만든다.
+// 전문가 배치가 일부 레이어에만 적용되는 MoE는 현재 근사식이 그 배치를 모델링하지 못한다.
+function checkpointSanityParams(c, layerCount) {
+  const nExp = c.num_local_experts || c.num_experts || c.n_routed_experts || 0;
+  const hasMoePlacement = nExp && (
+    c.moe_layer_freq != null || c.decoder_sparse_step != null ||
+    c.mlp_only_layers != null || c.first_k_dense_replace != null ||
+    c.interleave_moe_layer_step != null || c.n_dense_first_layers != null
+  );
+  const usable = !hasMoePlacement &&
+    c.hidden_size && c.vocab_size && (nExp ? c.moe_intermediate_size : c.intermediate_size);
+  return usable ? paramsFromDims(c, layerCount) : null;
+}
+
+// 저장 element와 논리 파라미터가 1:1이고 폭이 확정된 dtype만 여기 넣는다 — 이 집합에 있으면
+// shard byte 등식이라는 강한 검증을 받는다. FP8은 packing 컨테이너가 아니라 1 element = 1 byte라
+// 포함한다(DeepSeek-V3-FP8 류가 약한 밴드 대신 등식 검증을 받게 된다).
+// ⚠ I8/U8/I32/U32는 제외 — GPTQ(I32)·NF4(U8)가 여러 값을 packing하는 컨테이너라 폭이 확정되지
+// 않는다. 이들은 bytes/parameter 밴드로만 검증한다.
+const ONE_TO_ONE_SAFETENSORS_DTYPES = new Map([
+  ['F64', 8], ['F32', 4], ['F16', 2], ['BF16', 2],
+  ['F8_E4M3', 1], ['F8_E4M3FN', 1], ['F8_E5M2', 1], ['F8_E8M0', 1],
+  ['I64', 8], ['U64', 8], ['I16', 2], ['U16', 2], ['BOOL', 1],
+]);
+const COMMIT_SHA_RE = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i;
+
+// HF model API의 safetensors.parameters는 dtype별 *논리 파라미터 수*다. GPTQ/AWQ처럼
+// I32 컨테이너에 여러 값을 packing한 레포도 원래 shape의 논리 수를 보고한다. 모든 dtype의
+// 합계를 쓰되, float-only는 shard bytes 등식으로, 그 밖은 bytes/parameter 안전 밴드로 검증한다.
+// https://huggingface.co/docs/huggingface_hub/package_reference/hf_api#huggingface_hub.hf_api.HfApi.get_safetensors_metadata
+// https://huggingface.co/api/models/Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4/revision/e9c932ac1893a49ae0fc497ad6e1e86e2e39af20
+export function resolveParameterCount({
+  checkpointBytes,
+  safetensorsParameters,
+  safetensorsTotal,
+  revision,
+} = {}) {
+  if (safetensorsParameters == null) return null;
+  if (!COMMIT_SHA_RE.test(String(revision || ''))) {
+    throw new Error('Hugging Face parameter evidence의 revision이 immutable commit SHA가 아니에요');
+  }
+  if (!safetensorsParameters || typeof safetensorsParameters !== 'object' || Array.isArray(safetensorsParameters)) {
+    throw new Error('Hugging Face safetensors 파라미터 증거가 객체가 아니에요');
+  }
+  const entries = Object.entries(safetensorsParameters);
+  if (!entries.length) throw new Error('Hugging Face safetensors 파라미터 증거가 비어 있어요');
+
+  let totalParams = 0;
+  let tensorBytes = 0;
+  let nonOneToOneParams = 0;
+  let allOneToOne = true;
+  for (const [rawDtype, count] of entries) {
+    const dtype = String(rawDtype).toUpperCase();
+    const bytes = ONE_TO_ONE_SAFETENSORS_DTYPES.get(dtype);
+    if (!(Number.isSafeInteger(count) && count >= 0)) {
+      throw new Error(`safetensors 파라미터 수(${rawDtype})가 유효한 비음수 정수가 아니에요`);
+    }
+    totalParams += count;
+    if (bytes) tensorBytes += count * bytes;
+    else {
+      nonOneToOneParams += count;
+      allOneToOne = false;
+    }
+    if (!Number.isSafeInteger(totalParams) || !Number.isSafeInteger(tensorBytes)) {
+      throw new Error('safetensors 파라미터 증거가 안전한 정수 범위를 벗어났어요');
+    }
+  }
+  if (!(totalParams > 0)) throw new Error('safetensors 파라미터 합계가 양수가 아니에요');
+  if (safetensorsTotal != null &&
+      (!(Number.isSafeInteger(safetensorsTotal) && safetensorsTotal > 0) || safetensorsTotal !== totalParams)) {
+    throw new Error('safetensors 파라미터 dtype별 합계와 total 합계가 서로 달라요');
+  }
+
+  if (checkpointBytes != null) {
+    if (!(Number.isSafeInteger(checkpointBytes) && checkpointBytes > 0)) {
+      throw new Error('체크포인트 shard byte 합계가 유효한 양의 정수가 아니에요');
+    }
+    if (allOneToOne) {
+      // safetensors 파일은 tensor data 외에 JSON header를 가진다. header slack은 최소 1MB,
+      // 데이터의 1%, 절대 64MB 중 가장 엄격한 상한으로 제한한다.
+      const headerSlack = checkpointBytes - tensorBytes;
+      const maxHeaderSlack = Math.min(Math.max(1_000_000, tensorBytes * 0.01), 64_000_000);
+      if (headerSlack < 0 || headerSlack > maxHeaderSlack) {
+        throw new Error('safetensors 파라미터와 실제 checkpoint shard byte 합계가 서로 설명되지 않아요');
+      }
+    } else {
+      // packed/혼합 레포는 auxiliary scale·zero-point 때문에 등식 검증이 불가능하다. 대신
+      // API가 저장 element 수로 의미를 바꿀 때 생기는 조용한 2–8배 과소계산을 넓은 밴드로 차단한다.
+      const minCheckpointBytes = tensorBytes + nonOneToOneParams * 0.1;
+      const maxDataBytes = tensorBytes + nonOneToOneParams * 2.5;
+      const maxCheckpointBytes = maxDataBytes + Math.max(64_000_000, maxDataBytes * 0.1);
+      if (checkpointBytes < minCheckpointBytes || checkpointBytes > maxCheckpointBytes) {
+        throw new Error('packed safetensors 파라미터 수와 checkpoint bytes/parameter 비율이 설명되지 않아요');
+      }
+    }
+  }
+
+  return {
+    totalParamsB: totalParams / 1e9,
+    tensorBytes: allOneToOne ? tensorBytes : null,
+    source: 'hf-safetensors-parameters',
+    confidence: 'exact',
+    validation: checkpointBytes == null ? 'config-required' : allOneToOne ? 'byte-equality' : 'byte-band',
+  };
+}
+
+export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   // 일반 파싱은 의도적으로 fail-closed다. 익숙한 필드명을 쓰면서 메모리 레이아웃이 다른 config
   // (반복 레이어·혼합 linear/GQA·압축/인덱스 어텐션·멀티모달 프로젝터)는 그럴듯한 오답을 만든다.
   // 숫자를 내지 않는 편이 틀린 fit보다 안전하다.
@@ -1286,10 +1395,36 @@ export function parseHfConfig(id, raw, totalSize) {
 
   // 파라미터 수: safetensors total_size(저장 dtype 바이트)에서 역산, 없으면 이름 추정
   let totalParams = null;
+  let parameterSource = null;
   if (totalSize != null && !(Number.isFinite(totalSize) && totalSize > 0)) {
     throw new Error('체크포인트 크기(total_size)가 유효한 양수가 아니에요 — 계산하지 않습니다');
   }
-  if (totalSize) {
+  const resolvedEvidence = resolveParameterCount({
+    checkpointBytes: totalSize,
+    safetensorsParameters: parameterEvidence?.safetensorsParameters,
+    safetensorsTotal: parameterEvidence?.safetensorsTotal,
+    revision: parameterEvidence?.revision,
+  });
+  if (resolvedEvidence) {
+    if (totalSize == null) {
+      const dims = checkpointSanityParams(c, layerCount);
+      if (!dims) {
+        throw new Error('checkpoint byte 합계 없이 safetensors 파라미터 증거를 교차검증할 수 없어 계산하지 않아요');
+      }
+      if (resolvedEvidence.totalParamsB > dims * 4 || resolvedEvidence.totalParamsB < dims / 4) {
+        throw new Error('safetensors 파라미터 수가 config 구조 추정과 자릿수가 달라 계산하지 않아요');
+      }
+    }
+    if (resolvedEvidence.validation === 'byte-band') {
+      const dims = checkpointSanityParams(c, layerCount);
+      if (dims && (resolvedEvidence.totalParamsB > dims * 2 || resolvedEvidence.totalParamsB < dims / 2)) {
+        throw new Error('packed safetensors 파라미터 수가 config 구조 추정과 달라 계산하지 않아요');
+      }
+    }
+    totalParams = resolvedEvidence.totalParamsB;
+    parameterSource = resolvedEvidence.source;
+  }
+  if (totalSize && !resolvedEvidence) {
     // 선-양자화 레포(MLX/AWQ/bnb): 저장 비트폭의 진실은 quantization(.bits) — torch_dtype은 원본 정밀도라
     // ÷2 과소계산 → 거짓 "fits" (issue #2). 합성 재현: 8bit 레포에 qbits 무시 시 params 절반 (test/parsehf.test.mjs).
     // 혼합 정밀도(일부 레이어 상위 bit)는 params 과대 방향으로만 틀림 — 보수적이라 허용.
@@ -1336,9 +1471,20 @@ export function parseHfConfig(id, raw, totalSize) {
       const meth = quantObjs.map((q) => q.quant_method || q.fmt).filter(Boolean).join(', ');
       throw new Error(`선언된 양자화(${meth || '방식 미상'})의 저장 비트폭을 확정할 수 없어 계산하지 않아요`);
     }
+    if (!qbits && !dt) {
+      throw new Error('체크포인트의 저장 dtype이 명시되지 않아 파라미터 수를 계산하지 않아요');
+    }
     const dtypeBytes = qbits ? qbits / 8
-      : dt.includes('float32') || dt.includes('fp32') ? 4 : dt.includes('fp8') || dt.includes('int8') ? 1 : 2;
+      : dt.includes('float64') || dt.includes('fp64') ? 8
+        : dt.includes('float32') || dt.includes('fp32') ? 4
+          : dt.includes('bfloat16') || dt.includes('bf16') || dt.includes('float16') || dt.includes('fp16') ? 2
+            : dt.includes('float8') || dt.includes('fp8') || dt.includes('int8') || dt.includes('uint8') ? 1
+              : null;
+    if (!dtypeBytes) {
+      throw new Error(`체크포인트의 저장 dtype(${dt})을 해석할 수 없어 파라미터 수를 계산하지 않아요`);
+    }
     totalParams = totalSize / dtypeBytes / 1e9;
+    parameterSource = 'uniform-checkpoint';
     // total_size sanity check — 종래엔 아래 fallback 경로에만 교차검증이 있어서, total_size가
     // 있기만 하면 그 값을 무조건 믿었다. 그런데 index의 metadata.total_size가 아예 틀린 레포가 있다.
     // 실증: InternScience/Agents-A1-4B는 shard 2개(텍스트 32L·hidden 2560 = ~4B급 멀티모달)인데
@@ -1353,18 +1499,8 @@ export function parseHfConfig(id, raw, totalSize) {
     // MoE일 때 paramsFromDims는 moe_intermediate_size로만 FFN을 센다. gpt_oss처럼 전문가 FFN 폭을
     // intermediate_size에 담는 config는 FFN이 0으로 잡혀 추정이 자릿수째 무너지므로 심판으로 쓸 수 없다
     // (실증: gpt-oss-120b 추정 ~2.1B vs 실제 32.6B → 거짓 거부).
-    const nExpDims = c.num_local_experts || c.num_experts || c.n_routed_experts || 0;
-    // MoE 배치 필드(전문가가 *일부* 레이어에만 있음)를 추정식이 반영하지 않는다 — 모든 레이어에
-    // 모든 전문가가 있다고 세어 과대 추정하고, 그 추정으로 심판하면 정상 모델을 거짓 거부한다
-    // (moe_layer_freq=8 합성 구성에서 실제 52.5B를 ~363.2B로 추정해 거부한 재현 있음).
-    const hasMoePlacement = nExpDims && (
-      c.moe_layer_freq != null || c.decoder_sparse_step != null ||
-      c.mlp_only_layers != null || c.first_k_dense_replace != null ||
-      c.interleave_moe_layer_step != null || c.n_dense_first_layers != null
-    );
-    const dimsUsable = !hasMoePlacement &&
-      c.hidden_size && c.vocab_size && (nExpDims ? c.moe_intermediate_size : c.intermediate_size);
-    const dims = dimsUsable ? paramsFromDims(c, layerCount) : null;
+    // MoE 배치 필드가 있으면 현재 근사식은 전 레이어에 전문가가 있다고 세므로 심판에서 제외한다.
+    const dims = checkpointSanityParams(c, layerCount);
     if (dims && (totalParams > dims * 4 || totalParams < dims / 4)) {
       throw new Error(
         `체크포인트 크기로 계산한 파라미터 수(${totalParams.toFixed(1)}B)가 config 구조 추정` +
@@ -1384,6 +1520,7 @@ export function parseHfConfig(id, raw, totalSize) {
       );
     }
     totalParams = named;
+    parameterSource = 'model-name';
   }
 
   return {
@@ -1391,6 +1528,7 @@ export function parseHfConfig(id, raw, totalSize) {
     group: 'HuggingFace',
     custom: true,
     sourceId: id,
+    parameterSource,
     tags: isMoe ? ['moe'] : ['dense'],
     totalParams: totalParams ? +totalParams.toFixed(1) : null,
     activeParams: null, // MoE 활성 파라미터는 config로 정확 산출 어려움 → 속도만 근사
@@ -1434,4 +1572,4 @@ export const DATA_UPDATED = '2026-08';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.9.0';
+export const ENGINE_VERSION = '2.10.0';
