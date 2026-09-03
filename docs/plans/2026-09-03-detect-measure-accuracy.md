@@ -89,4 +89,4 @@ Contract-Version: 1
 - [x] Step 1: 타깃 테스트, `npm test`, `npm run census:check`, `npm run alias:dry-run`, `npm run benchmark:accuracy`를 실행한다.
 - [x] Step 2: CLI 실제 `--top --detect --json`과 public HF 모델 smoke를 실행하고 stdout에 민감정보가 없는지 확인한다.
 - [x] Step 3: CC Opus에 contract와 diff를 주어 감지 오인·측정 비교 오류·과장 claim을 독립 리뷰시킨다.
-- [ ] Step 4: 지정 author로 저장소별 의도 파일만 커밋하고 원격 HEAD/PR/CI는 실제 수행한 범위만 보고한다.
+- [x] Step 4: 지정 author로 저장소별 의도 파일만 커밋하고 원격 HEAD/PR/CI는 실제 수행한 범위만 보고한다.
