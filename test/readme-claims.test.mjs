@@ -7,6 +7,8 @@ import { spawnSync } from 'node:child_process';
 
 const README = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
 const CONTRIB = readFileSync(new URL('../CONTRIBUTING.md', import.meta.url), 'utf8');
+const SERVER = readFileSync(new URL('../server.json', import.meta.url), 'utf8');
+const CENSUS_GENERATOR = readFileSync(new URL('../census/generate.mjs', import.meta.url), 'utf8');
 
 test('README: 낡은/과장 문구 금지', () => {
   for (const banned of [
@@ -14,6 +16,8 @@ test('README: 낡은/과장 문구 금지', () => {
     'Every hardware number is cross-verified', '16%2F16',
   ]) assert.equal(README.includes(banned), false, `금지 문구 잔존: ${banned}`);
   assert.doesNotMatch(README, /every number from official config\.json/i);
+  assert.doesNotMatch(SERVER, /exact VRAM|exact.*math/i);
+  assert.doesNotMatch(CENSUS_GENERATOR, /every number[^\n]*official/i);
   assert.equal(README.includes('8,000+'), false, 'census 수치는 8,424 exact');
 });
 
@@ -40,4 +44,12 @@ test('measurement 링크는 template 지정 — README·CONTRIBUTING 모두', ()
   assert.equal(README.includes('labels=measurement)'), false);
   assert.equal(CONTRIB.includes('labels=measurement)'), false);
   assert.ok(CONTRIB.includes('?template=measurement.yml'));
+});
+test('test_approved_cli_workflows', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /npx fitllm --top --detect --json/);
+  assert.match(readme, /npx fitllm measure/);
+  assert.match(readme, /npm run benchmark:accuracy/);
+  assert.match(readme, /Hugging Face ID|org\/model/);
+  assert.doesNotMatch(readme, /most accurate|#1 accuracy/i);
 });

@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "run.fitllm/fitllm",
   "title": "FitLLM",
-  "description": "Will this LLM fit on your GPU, multi-GPU rig or Mac? Exact VRAM & KV-cache math. Read-only.",
+  "description": "Will this LLM fit on your GPU, multi-GPU rig or Mac? Auditable architecture-aware memory estimates. Read-only.",
   "version": "1.1.0",
   "repository": {
     "url": "https://github.com/click6067-ship-it/fitllm-engine",

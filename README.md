@@ -20,6 +20,8 @@ FitLLM is an open-source, zero-dependency engine that checks whether a local LLM
 ```bash
 npx fitllm "Gemma 4 12b" --gpu "RTX 4090"     # one line, exit 0 fits / 1 won't — run before you download
 npx fitllm --top --gpu 4090                    # what can this hardware run?
+npx fitllm --top --detect --json               # detect every supported local GPU; agent-ready JSON
+npx fitllm Qwen/Qwen3-32B --detect --json      # public Hugging Face ID or URL; unsupported configs fail closed
 npm install fitllm-engine                      # use the same engine as a library (see Usage)
 ```
 
@@ -49,9 +51,11 @@ The server is read-only, stateless, and requires no authentication.
 npx fitllm "GLM-4.7-Flash" --gpu 4090     # ✓ FITS — 21.9/24 GB, free 2.1 GB
 npx fitllm "gpt-oss-120b" --mac 64        # ✗ WON'T FIT → what to change to make it fit
 npx fitllm "Qwen 3.6 35B" --gpu "5090 + 3090"   # multi-GPU rig — VRAM pools (56GB), even mixed cards
-npx fitllm --top --detect                 # what CAN this machine run? — best quant per model
-npx fitllm --detect                       # reads this machine's real hardware
+npx fitllm --top --detect --json          # detect hardware + what fits, for people or agents
+npx fitllm "Gemma 4 12b" --detect         # one verdict on this machine
 ```
+
+`--detect` reads all `nvidia-smi` adapters, uses Apple Silicon unified memory on arm64 macOS, and can resolve an exact catalog GPU name through Windows/WSL PowerShell. It never uses `Win32_VideoController.AdapterRAM`, serials, PNP IDs, or full environment dumps. Intel-only, ambiguous, and unsupported adapters stop with exit 2 instead of borrowing a nearby GPU's memory.
 
 **Why a CLI?** The "will it run?" question is born in the terminal — one line before `ollama pull`. No install, no tab-switching, and it reads your *actual* hardware with `--detect` instead of asking you to know your VRAM. Exit code 0/1 makes it a **pre-download guard**:
 
@@ -59,6 +63,14 @@ npx fitllm --detect                       # reads this machine's real hardware
 # in your model-pull script — stop BEFORE the 40 GB download:
 npx fitllm "gpt-oss-120b" --detect || { echo "won't fit — aborting pull"; exit 1; }
 ```
+
+Agents can collect a typed measurement without uploading anything:
+
+```bash
+npx fitllm measure "Qwen 3.6 27B" --detect --measured 15.3 --kind system_total_peak --unit GiB --runtime "llama.cpp b6400"
+```
+
+The command validates the conditions and prints a candidate JSON object plus a prefilled GitHub issue URL. Submission remains a human action. Public Hugging Face IDs (`org/model`) are fetched with a bounded config/index reader and accepted only when `parseHfConfig()` supports the architecture.
 
 This is the open calculation core of FitLLM. **The math is open so you can audit it.**
 
@@ -127,6 +139,8 @@ const m = parseHfConfig('Qwen/Qwen3-32B', configJson, totalSizeBytes);
 ```
 
 ## Verification
+
+From a repository checkout, recompute the typed measured-vs-predicted ledger with `npm run benchmark:accuracy` (or add `-- --json`). The methodology, competitor input format, and precommitted kill conditions are in [`benchmarks/README.md`](benchmarks/README.md). The current evidence does **not** clear the comparative accuracy claim gate.
 
 - Architecture values checked against official HuggingFace `config.json`.
 - Gemma 4 31B full-context KV reproduces **20.78 GiB**, matching the published [architecture analysis](https://kaitchup.substack.com/p/gemma-4-31b-and-26b-a4b-architecture). Reproduce it by hand:
