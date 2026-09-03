@@ -1,0 +1,59 @@
+name: FitLLM preflight
+description: Fail a job before downloading a local LLM that will not fit the selected hardware.
+author: click6067-ship-it
+
+inputs:
+  model:
+    description: Built-in model name or public Hugging Face org/model ID.
+    required: true
+  gpu:
+    description: GPU name known to FitLLM. Set exactly one of gpu or mac.
+    required: false
+    default: ''
+  mac:
+    description: Apple Silicon unified memory in GiB. Set exactly one of gpu or mac.
+    required: false
+    default: ''
+  quant:
+    description: Weight quantization. Defaults to Q4_K_M on GPU or 8-bit on Mac.
+    required: false
+    default: ''
+  ctx:
+    description: Context tokens.
+    required: false
+    default: '8192'
+  kv:
+    description: KV-cache bits (16, 8, or 4).
+    required: false
+    default: '16'
+  count:
+    description: Copies of the selected GPU.
+    required: false
+    default: '1'
+
+outputs:
+  result:
+    description: Full FitLLM JSON result, including its auditable basis.
+    value: ${{ steps.preflight.outputs.result }}
+  exit-code:
+    description: FitLLM exit contract (0 fits/tight, 1 will not fit, 2 invalid input).
+    value: ${{ steps.preflight.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - id: preflight
+      shell: bash
+      env:
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_GPU: ${{ inputs.gpu }}
+        INPUT_MAC: ${{ inputs.mac }}
+        INPUT_QUANT: ${{ inputs.quant }}
+        INPUT_CTX: ${{ inputs.ctx }}
+        INPUT_KV: ${{ inputs.kv }}
+        INPUT_COUNT: ${{ inputs.count }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/action-entry.sh"
+
+branding:
+  icon: shield
+  color: blue

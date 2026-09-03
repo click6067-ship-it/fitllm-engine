@@ -15,6 +15,37 @@ test('fits case exits 0 with verdict json', () => {
   assert.ok(j.breakdown.paramGB > 0);
 });
 
+test('--why --json exposes an auditable basis that matches the legacy result', () => {
+  const legacy = JSON.parse(run(['Gemma 4 31b', '--gpu', 'RTX 4090', '--json']).out);
+  const { out, code } = run(['Gemma 4 31b', '--gpu', 'RTX 4090', '--json', '--why']);
+  assert.equal(code, 0);
+  const explained = JSON.parse(out);
+  assert.deepEqual(Object.keys(explained).sort(), [...Object.keys(legacy), 'basis'].sort());
+  assert.deepEqual(Object.fromEntries(Object.entries(explained).filter(([key]) => key !== 'basis')), legacy);
+  assert.equal(explained.basis.attention.kind, 'sliding-window');
+  assert.equal(explained.basis.configuration.contextTokens, legacy.ctx);
+  assert.equal(explained.basis.memoryGiB.total.toFixed(2), legacy.usedGB.toFixed(2));
+  assert.equal(explained.basis.hardware.evidence.status, 'VERIFIED');
+});
+
+test('without --why preserves the legacy JSON shape exactly', () => {
+  const result = JSON.parse(run(['Llama-3.1-8B-Instruct', '--gpu', 'RTX 4090', '--json']).out);
+  assert.deepEqual(Object.keys(result), [
+    'model', 'hardware', 'quant', 'kvBits', 'ctx', 'verdict', 'usedGB', 'memoryGB', 'freeGB',
+    'breakdown', 'maxContext', 'engine',
+  ]);
+  assert.equal('basis' in result, false);
+});
+
+test('--why text adds the compact calculation basis', () => {
+  const { out, code } = run(['GLM-4.7-Flash', '--gpu', 'RTX 4090', '--why']);
+  assert.equal(code, 0);
+  assert.match(out, /basis: model GLM-4\.7-Flash/);
+  assert.match(out, /attention: mla/);
+  assert.match(out, /hardware evidence: VERIFIED/);
+  assert.match(out, /not a speed prediction/i);
+});
+
 test("won't-fit case exits 1 and suggests a fix", () => {
   const { out, code } = run(['gpt-oss-120b', '--gpu', 'RTX 4090']);
   assert.equal(code, 1);

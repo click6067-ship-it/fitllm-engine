@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { buildAccuracyReport, renderMarkdown } from '../scripts/accuracy-report.mjs';
 
 const census = { data: [
@@ -30,6 +31,15 @@ test('test_public_claim_gate', () => {
   assert.equal(report.claimGate.allowed, false);
   assert.ok(report.claimGate.minimums.measurements >= 30);
   assert.match(report.claimGate.reason, /insufficient/i);
+});
+
+test('committed competitor ledger cannot bypass independent evidence', () => {
+  const competitors = JSON.parse(readFileSync(new URL('../benchmarks/competitors.json', import.meta.url), 'utf8'));
+  const report = buildAccuracyReport(census, [], competitors);
+  assert.deepEqual(competitors, []);
+  assert.equal(report.claimGate.allowed, false);
+  assert.equal(report.claimGate.actual.measurements, 0);
+  assert.equal(report.claimGate.actual.competitors, 0);
 });
 
 test('test_claim_gate_requires_same_immutable_cases_and_independent_verification', () => {

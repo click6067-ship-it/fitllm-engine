@@ -4,6 +4,7 @@ import { canonicalReceiptSlug, receiptRepresentable } from './receipt-slug.mjs';
 import { detectHardware } from './detect-hardware.mjs';
 import { fetchHfModel, parseHfId } from './hf-model.mjs';
 import { buildMeasurementReport } from './measurement-report.mjs';
+import { buildExplanation } from './explain.mjs';
 import {
   LOCAL_MODELS, GPUS, GPU_QUANTS, MACBOOK_RAM_GROUPS,
   gpuDevice, combineGpus, simulate, calcMaxContext, suggestFix, suggestFixGpu, formatTokens, fmtGB, parseHfConfig,
@@ -33,6 +34,7 @@ options:
   --kv 16|8|4      KV-cache quant (default 16 = F16)
   --count N        copies of --gpu (1-8, default 1)
   --json           machine-readable output
+  --why            include the calculation basis and limitations
 exit codes: 0 fits · 1 won't fit · 2 error (guard-friendly: run before you download)`;
 
 if (has('--help') || argv.length === 0) { console.log(HELP); process.exit(argv.length ? 0 : 2); }
@@ -203,6 +205,16 @@ const ctx = Math.min(ctxRequested, model.maxContext);
 const EN = (ko, en) => en; // CLI output is English
 const s = simulate(model, device, ctx, { weightBpw, kvBits });
 const maxCtx = calcMaxContext(model, device, { weightBpw, kvBits });
+const basis = has('--why') ? buildExplanation({
+  model,
+  device: s.device,
+  simulation: s,
+  quantLabel,
+  kvBits,
+  ctx,
+  modelSource,
+  detection,
+}) : null;
 if (MEASURE) {
   try {
     if (!isGpu && !detection) throw new Error('Mac measurement reports require --detect so the chip identity is recorded');
@@ -243,6 +255,7 @@ if (has('--json')) {
     verdict: s.verdict, usedGB: +s.used.toFixed(2), memoryGB: s.memoryGB, freeGB: +s.free.toFixed(2),
     breakdown: { paramGB: +s.param.toFixed(2), kvGB: +s.kv.toFixed(2), linearStateGB: +s.linearState.toFixed(2), overheadGB: +s.rtDyn.toFixed(2), reserveGB: +s.reserve.toFixed(2) }, // reserve 병기 분해는 rtDyn(s.rt는 Apple 고정 2GB 중복). linearState=선형어텐션 고정상태(표준 어텐션은 0)
     maxContext: maxCtx, engine: 'fitllm-engine', detection, modelSource,
+    ...(basis ? { basis } : {}),
   }, null, 2));
 } else {
   const WORD = { yes: 'FITS', tight: 'TIGHT', no: "WON'T FIT" };
@@ -272,6 +285,12 @@ if (has('--json')) {
     console.log(`  receipt: https://fitllm.run/r/${slug}`);
   } else {
     console.log('  receipt: n/a — fitllm.run receipts cover catalog GPUs, up to 8 cards, Macs 8–2048GB (the calculation above is still valid)');
+  }
+  if (basis) {
+    console.log(`  basis: model ${basis.model.name} (${basis.model.source.type}) · ${basis.model.totalParamsB}B params · ${basis.model.layers} layers`);
+    console.log(`  attention: ${basis.attention.kind} · KV ${basis.attention.kvLayers}/${basis.attention.totalLayers} layers · ${basis.attention.kvHeads} heads × ${basis.attention.kvHeadDim} dim`);
+    console.log(`  hardware evidence: ${basis.hardware.evidence.status} · ${basis.hardware.memoryGB} GiB · ${basis.hardware.environment}`);
+    console.log(`  limitation: ${basis.limitations.join(' ')}`);
   }
   console.log('  architecture inputs pinned to official configs; runtime/OS reserves are estimates — audit: github.com/click6067-ship-it/fitllm-engine');
 }

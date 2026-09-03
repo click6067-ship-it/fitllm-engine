@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "evidenceClass": "architecture_differential_not_runtime_accuracy",
+  "competitor": {
+    "repository": "AlexsJones/llmfit",
+    "releaseTag": "v1.1.12",
+    "binaryVersion": "llmfit 1.1.12",
+    "artifactUrl": "https://github.com/AlexsJones/llmfit/releases/download/v1.1.12/llmfit-v1.1.12-x86_64-unknown-linux-gnu.tar.gz",
+    "artifactSha256": "6a97338862c87e497c844ccd29a16512a147335631c179744b4f6cc87a36ead1"
+  },
+  "cases": [
+    {
+      "id": "llama31-8b-gqa",
+      "role": "control",
+      "architecture": "gqa",
+      "modelInput": "mlx-community/Llama-3.1-8B-Instruct-4bit",
+      "fitllmModel": "Llama-3.1-8B-Instruct",
+      "stdoutFile": "llama31-8b-gqa.json",
+      "args": [
+        "--json",
+        "plan",
+        "mlx-community/Llama-3.1-8B-Instruct-4bit",
+        "--context",
+        "8192",
+        "--quant",
+        "Q4_K_M"
+      ],
+      "stdoutSha256": "f41624b595dadecbc33013d082e755fb1553b707d866547c33aeeaf613a8d58a"
+    },
+    {
+      "id": "gemma4-31b-sliding-window",
+      "role": "counterexample",
+      "architecture": "sliding-window",
+      "modelInput": "google/gemma-4-31B-it",
+      "fitllmModel": "Gemma 4 31b",
+      "stdoutFile": "gemma4-31b-sliding-window.json",
+      "args": [
+        "--json",
+        "plan",
+        "google/gemma-4-31B-it",
+        "--context",
+        "8192",
+        "--quant",
+        "Q4_K_M"
+      ],
+      "stdoutSha256": "d2125955e88c2880511141b650764b164dc5b598afa29da6af08cf82f8870b0e"
+    },
+    {
+      "id": "glm47-flash-mla",
+      "role": "counterexample",
+      "architecture": "mla",
+      "modelInput": "zai-org/GLM-4.7-Flash",
+      "fitllmModel": "GLM-4.7-Flash",
+      "stdoutFile": "glm47-flash-mla.json",
+      "args": [
+        "--json",
+        "plan",
+        "zai-org/GLM-4.7-Flash",
+        "--context",
+        "8192",
+        "--quant",
+        "Q4_K_M"
+      ],
+      "stdoutSha256": "91e4fb3992b1b5fd5f32b6bdf88e8513779de00bcc80ff23682372bdcd164bda"
+    }
+  ]
+}
