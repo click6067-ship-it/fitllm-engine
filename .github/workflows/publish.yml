@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Exact tag; dispatch must itself be run from this tag ref (for example v2.8.2)'
+        description: 'Exact tag; dispatch must itself be run from this tag ref (for example v2.8.3)'
         required: true
         type: string
   push:
@@ -458,12 +458,12 @@ jobs:
           fi
 
           if [ "$ENGINE_EXISTS" != "true" ]; then
-            npm publish "release-artifacts/$ENGINE_TARBALL" --access public --ignore-scripts --provenance --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
+            npm publish "./release-artifacts/$ENGINE_TARBALL" --access public --ignore-scripts --provenance --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
           fi
           verify_registry_integrity "fitllm-engine@$VER" "$EXPECTED_ENGINE_INTEGRITY"
 
           if [ "$ALIAS_EXISTS" != "true" ]; then
-            npm publish "release-artifacts/$ALIAS_TARBALL" --access public --ignore-scripts --provenance --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
+            npm publish "./release-artifacts/$ALIAS_TARBALL" --access public --ignore-scripts --provenance --registry=https://registry.npmjs.org/ --strict-ssl=true --proxy=false --https-proxy=false
           fi
           verify_registry_integrity "fitllm@$VER" "$EXPECTED_ALIAS_INTEGRITY"
 

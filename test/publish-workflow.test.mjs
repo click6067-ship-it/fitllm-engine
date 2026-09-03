@@ -145,6 +145,7 @@ test('test_publish_config_blocked_and_registry_forced: tarball config cannot red
   const publishCommands = publish.split('\n').filter((line) => /^\s+npm publish /.test(line))
   assert.equal(publishCommands.length, 2)
   for (const command of publishCommands) {
+    assert.match(command, /npm publish "\.\/release-artifacts\/\$[A-Z]+_TARBALL"/)
     assert.match(command, /--registry=https:\/\/registry\.npmjs\.org\//)
     assert.match(command, /--strict-ssl=true/)
     assert.match(command, /--proxy=false/)
