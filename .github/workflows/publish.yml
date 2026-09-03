@@ -306,6 +306,8 @@ jobs:
       NPM_CONFIG_STRICT_SSL: 'true'
       NPM_CONFIG_PROXY: 'false'
       NPM_CONFIG_HTTPS_PROXY: 'false'
+      REGISTRY_VISIBILITY_ATTEMPTS: '360'
+      REGISTRY_VISIBILITY_DELAY_SECONDS: '5'
       HTTP_PROXY: ''
       HTTPS_PROXY: ''
       ALL_PROXY: ''
@@ -429,14 +431,15 @@ jobs:
           }
           verify_registry_integrity() {
             local package_spec="$1" expected="$2" attempt status
-            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            # npm publish-time scanning can keep an accepted package hidden for 15+ minutes.
+            for attempt in $(seq 1 "$REGISTRY_VISIBILITY_ATTEMPTS"); do
               if registry_integrity_or_missing "$package_spec" "$expected"; then
                 return 0
               else
                 status=$?
               fi
               [ "$status" -eq 10 ] || return "$status"
-              sleep 5
+              sleep "$REGISTRY_VISIBILITY_DELAY_SECONDS"
             done
             echo "::error::$package_spec did not reach the registry with expected integrity"
             return 1
