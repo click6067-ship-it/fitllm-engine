@@ -103,6 +103,14 @@ test('test_immutable_integrity_artifact: both registry versions are gated by the
   assert.ok((publish.match(/else\n\s+status=\$\?/g)?.length ?? 0) >= 2)
 })
 
+test('test_registry_visibility_window: publish-time scanning gets a 30-minute visibility window', () => {
+  const publish = job('publish')
+  assert.match(publish, /^      REGISTRY_VISIBILITY_ATTEMPTS: '360'$/m)
+  assert.match(publish, /^      REGISTRY_VISIBILITY_DELAY_SECONDS: '5'$/m)
+  assert.match(publish, /seq 1 "\$REGISTRY_VISIBILITY_ATTEMPTS"/)
+  assert.match(publish, /sleep "\$REGISTRY_VISIBILITY_DELAY_SECONDS"/)
+})
+
 test('test_payload_parity_and_provenance: parity is checked before upload and provenance after publish', () => {
   const pack = job('pack')
   const publish = job('publish')
