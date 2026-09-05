@@ -7,7 +7,7 @@
 - **One-shot answer**: `GET https://fitllm.run/api/check?model=<name>&gpu=<name|a%2Bb>` or `&ram=<GB>` — no auth, fuzzy names, JSON (or `&format=text|md`). Won't-fit responses include a computed `fix`.
 - **MCP**: `https://fitllm.run/api/mcp` — tools `check_llm_fit` / `what_fits_on_hardware` / `list_supported`; resources `fitllm://models|hardware|census|engine`. Read-only, idempotent.
 - **CLI guard**: `npx fitllm "<model>" --gpu "<gpu>"` → exit 0/1. Use it to gate model downloads in scripts/CI.
-- **Precomputed data (CC0)**: `census/census-v1.{csv,json}` — 9,126 verdicts, model × device × quant. Also on [HF Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census).
+- **Precomputed data (CC0)**: `census/census-v1.{csv,json}` — 9,477 verdicts, model × device × quant. Also on [HF Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census).
 - **Agent answer recipe**: https://fitllm.run/agent/answer-with-citation.md
 
 ## Use it as a library

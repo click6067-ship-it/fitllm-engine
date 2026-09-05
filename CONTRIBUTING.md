@@ -27,4 +27,6 @@ Ran a model and measured actual peak memory? Two ways:
 - **Gate A (UI measured-exception note)**: ≥2 independent reporters · `measurementKind: generation_peak` with completed prefill+decode (context + generated token counts) · raw artifacts (runtime version/commit, launch flags, completion status, wall-clock prefill/decode timing, logs/screenshots, report URL) · canonical model/quant/runtime/platform ids. `idle_resident` observations don't qualify — the schema forbids comparing them to totals.
 - **Gate B (engine modeling)**: a deterministic residency derivation from runtime source/docs — only then does the engine gain a runtime dimension.
 
+The one disclosed structural exception, the Gemma 4 e2b/e4b PLE deduction (`ple-llamacpp-non-gpu-residency`, shown with the verdict), is not storage paging: the pinned llama.cpp/GGUF path assigns that input-layer tensor to CPU/host buffers instead of accelerator memory, the host memory it needs is not budgeted by the discrete-GPU verdict, and a runtime that loads PLE onto the accelerator invalidates the estimate. It does not open a CPU/RAM/SSD offload path; a Gemma 4 GGUF measurement that names the runtime and revision belongs in the measurement template above.
+
 Estimate-vs-measured reports calibrate the overhead constants for everyone — they're the most valuable contribution this repo takes.
