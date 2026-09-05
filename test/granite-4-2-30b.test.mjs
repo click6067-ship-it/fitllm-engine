@@ -165,12 +165,13 @@ test('test_catalog_append_index_and_group_order_stable', () => {
     'MiniCPM5-1B', 'Qwen3-0.6B', 'Qwen3-1.7B', 'Llama-3.2-1B-Instruct', 'Gemma-3-1B-it', 'Claude Opus 4.7', 'Hy3',
     'Qwen 3.8 27B', 'Qwen 3.8 2.4T-A95B', 'Laguna XS 2.1', 'Laguna S 2.1', 'Spark-X2.5-4B',
   ];
-  // ?m= 공유링크 인덱스 0–25 불변, Granite는 배열 끝 append(인덱스 26)
+  // ?m= 공유링크 인덱스 0–25 불변, Granite는 2.14.0 시점 배열 끝 append(MODELS 인덱스 26) — 이후 모델이 뒤에 붙어도 이 인덱스는 불변
   assert.deepEqual(MODELS.slice(0, BASE_NAMES.length).map((m) => m.name), BASE_NAMES);
-  assert.equal(MODELS.length, BASE_NAMES.length + 1);
+  assert.equal(MODELS.length, BASE_NAMES.length + 2); // 2.15.0 GLM-5.3 append(MODELS 인덱스 27)
   assert.equal(MODELS[BASE_NAMES.length].name, 'Granite-4.2-30B');
+  assert.equal(LOCAL_MODELS[25].name, 'Granite-4.2-30B'); // ?m=25
   assert.equal(MODELS.filter((m) => /granite/i.test(m.name)).length, 1); // 3B/8B 형제·base 모델은 이번 변경에 넣지 않는다
-  assert.equal(LOCAL_MODELS.length, 26);
+  assert.equal(LOCAL_MODELS.length, 27); // 26(2.14.x) + GLM-5.3(2.15.0, 인덱스 26) — 앞 26개는 그대로
   // 기존 그룹의 상대 순서 불변 + Granite 그룹 등재(신규 그룹은 앞 — Spark 전례)
   const BASE_ORDER = ['Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5', 'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft'];
   assert.deepEqual(MODEL_GROUP_ORDER.filter((g) => g !== 'Granite'), BASE_ORDER);
@@ -248,26 +249,29 @@ test('test_census_contains_granite_rows', () => {
   const manifest = readJson('../census/manifest.json');
   const rows = census.data.filter((r) => r.model === 'Granite-4.2-30B');
   assert.equal(rows.length, 57 * 3 + 36 * 5); // Mac 57구성 × 3 tiers + GPU 36종 × 5 tiers = 351 rows/model
-  assert.equal(census.verdicts, 9126);
-  assert.equal(census.data.length, 9126);
-  assert.equal(manifest.rows, 9126);
+  const total = LOCAL_MODELS.length * (57 * 3 + 36 * 5); // 27 × 351 = 9,477 (2.15.0: GLM-5.3 1행 추가)
+  assert.equal(census.verdicts, total);
+  assert.equal(census.data.length, total);
+  assert.equal(manifest.rows, total);
   assert.ok(rows.every((r) => r.params_b === 29.277 && r.linear_state_gb === 0 && r.ctx === 8192));
 });
 
 test('test_release_version_bumped_and_readme_counts', () => {
   // 카탈로그 1행 추가 = minor bump 2.13.0 → 2.14.0 (#93) — 버전 표면 3곳과 수치 표면을 함께 현행화.
   // 2.14.1 = gpt-oss totalParams를 HF 증거값(20.9/116.8)으로 맞춘 patch bump (#98 잔여).
+  // 2.15.0 = PLE parser fail-closed + residency-policy 정정 + text-only GLM-5.3 (minor bump, 카탈로그 27행).
   const pkg = readJson('../package.json');
   const lock = readJson('../package-lock.json');
-  assert.equal(pkg.version, '2.14.1');
-  assert.equal(lock.version, '2.14.1');
-  assert.equal(ENGINE_VERSION, '2.14.1');
+  assert.equal(pkg.version, '2.15.0');
+  assert.equal(lock.version, '2.15.0');
+  assert.equal(ENGINE_VERSION, '2.15.0');
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.14.1', 'conformance_vectors-30%2F30', '30 language-neutral', '9,126 verdicts', '26 models incl. draft tier']) {
+  const verdicts = `${readJson('../census/manifest.json').rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.15.0', 'conformance_vectors-30%2F30', '30 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
-  for (const s of ['9,126 verdicts', '30 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
+  for (const s of [verdicts, '30 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
   assert.doesNotMatch(readme, /Granite[^\n]*tok(?:ens)?\/s/i); // 속도 주장 금지
   const vectors = readJson('../vectors/fit-vectors-v1.json');
   assert.equal(vectors.vectors.length, 30);

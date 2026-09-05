@@ -51,6 +51,9 @@ test('PLE and MTP metadata are normalized without broadening the family allowlis
     num_key_value_heads: 1, head_dim: 256, hidden_size: 1536,
     max_position_embeddings: 131072, vocab_size_per_layer_input: 262144,
     hidden_size_per_layer_input: 256,
+    // 공식 google/gemma-4-E2B-it@3e22461f text_config 치수 — 2.15.0 PLE 검증은 config 자체의 dense body와
+    // 체크포인트 총량의 정합을 요구하므로 body 추정에 필요한 세 필드를 공식값 그대로 둔다.
+    vocab_size: 262144, intermediate_size: 6144, tie_word_embeddings: true,
   };
   const verified = parseHfConfig('google/gemma-4-E2B-it', {
     model_type: 'gemma4', text_config: { ...base, model_type: 'gemma4_text' },

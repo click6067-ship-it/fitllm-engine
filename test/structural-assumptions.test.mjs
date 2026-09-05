@@ -32,7 +32,8 @@ test('verified PLE excludes GPU weights only under the pinned path while an inve
   const inventedResult = simulate(invented, gpu, 8192, { weightBpw: 16, kvBits: 16 });
   assert.deepEqual(verifiedResult.structuralAssumptions, [{
     id: 'ple-llamacpp-non-gpu-residency',
-    statement: 'GPU weight memory excludes the verified Gemma 4 PLE tensors only under the pinned llama.cpp/GGUF lazy-or-host-resident path; an accelerator-loading runtime invalidates this estimate.',
+    // 2.15.0 residency-policy correction: 근거는 pinned llama.cpp의 입력층 host 배치 사실 — lazy/on-disk 경로는 근거가 아니다
+    statement: 'GPU weight memory excludes the verified Gemma 4 PLE tensors only because the pinned llama.cpp/GGUF path assigns the per_layer_token_embd input-layer tensor to CPU/host buffers instead of accelerator memory; that host memory is not budgeted here, and a runtime that loads PLE onto the accelerator invalidates this estimate.',
   }]);
   assert.ok(Math.abs(verifiedResult.param - 5.1241) < 5e-4);
   assert.ok(Math.abs(inventedResult.param - 9.4995) < 5e-4);

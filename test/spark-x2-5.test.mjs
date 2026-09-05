@@ -193,10 +193,11 @@ test('test_catalog_append_index_and_group_order_stable', () => {
   ];
   // ?m= 공유링크 인덱스 0–24 불변, Spark는 배열 끝 append(인덱스 25)
   assert.deepEqual(MODELS.slice(0, BASE_NAMES.length).map((m) => m.name), BASE_NAMES);
-  assert.equal(MODELS.length, BASE_NAMES.length + 2); // 2026-09-05 Granite-4.2-30B append(인덱스 26, #93)
+  assert.equal(MODELS.length, BASE_NAMES.length + 3); // 2026-09-05 Granite-4.2-30B append(인덱스 26, #93) + 2.15.0 GLM-5.3 append(인덱스 27)
   assert.equal(MODELS[BASE_NAMES.length].name, 'Spark-X2.5-4B');
+  assert.equal(LOCAL_MODELS[24].name, 'Spark-X2.5-4B'); // ?m=24 불변
   assert.equal(MODELS.filter((m) => /spark/i.test(m.name)).length, 1); // 1.7B sibling은 이번 변경에 넣지 않는다
-  assert.equal(LOCAL_MODELS.length, 26);
+  assert.equal(LOCAL_MODELS.length, 27); // 26(2.14.x) + GLM-5.3(2.15.0, 인덱스 26)
   // 기존 그룹의 상대 순서 불변 + Spark 그룹 등재
   const BASE_ORDER = ['Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5', 'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft'];
   assert.deepEqual(MODEL_GROUP_ORDER.filter((g) => g !== 'Spark' && g !== 'Granite'), BASE_ORDER);
@@ -234,25 +235,27 @@ test('test_census_contains_spark_rows', () => {
   const manifest = readJson('../census/manifest.json');
   const sparkRows = census.data.filter((r) => r.model === 'Spark-X2.5-4B');
   assert.equal(sparkRows.length, 57 * 3 + 36 * 5); // Mac 57구성 × 3 tiers + GPU 36종 × 5 tiers = 351 rows/model
-  assert.equal(census.verdicts, 9126);
-  assert.equal(census.data.length, 9126);
-  assert.equal(manifest.rows, 9126);
+  const total = LOCAL_MODELS.length * (57 * 3 + 36 * 5); // 27 × 351 = 9,477 (2.15.0: GLM-5.3 1행 추가)
+  assert.equal(census.verdicts, total);
+  assert.equal(census.data.length, total);
+  assert.equal(manifest.rows, total);
   assert.ok(sparkRows.every((r) => r.params_b === 4.112 && r.linear_state_gb === 0 && r.ctx === 8192));
 });
 
 test('test_release_version_and_readme_counts', () => {
   const pkg = readJson('../package.json');
   const lock = readJson('../package-lock.json');
-  assert.equal(pkg.version, '2.14.1');
-  assert.equal(lock.version, '2.14.1');
-  assert.equal(lock.packages[''].version, '2.14.1');
-  assert.equal(ENGINE_VERSION, '2.14.1');
+  assert.equal(pkg.version, '2.15.0');
+  assert.equal(lock.version, '2.15.0');
+  assert.equal(lock.packages[''].version, '2.15.0');
+  assert.equal(ENGINE_VERSION, '2.15.0');
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.14.1', 'conformance_vectors-30%2F30', '30 language-neutral', '9,126 verdicts', '26 models incl. draft tier']) {
+  const verdicts = `${readJson('../census/manifest.json').rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.15.0', 'conformance_vectors-30%2F30', '30 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
-  for (const s of ['9,126 verdicts', '30 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
+  for (const s of [verdicts, '30 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
   const vectors = readJson('../vectors/fit-vectors-v1.json');
   assert.equal(vectors.vectors.length, 30); // 2026-09-05 Granite 벡터 1개 추가(#93) — Spark 벡터는 id로 고정
   const sparkVector = vectors.vectors.find((v) => v.id === 'spark-x25-4b-kv-1m-f16');
