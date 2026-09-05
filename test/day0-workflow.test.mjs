@@ -18,9 +18,9 @@ test('workflow는 직렬화되고 apply evidence만 immutable 이름으로 업�
   const workflow = await readFile(workflowUrl, 'utf8');
   assert.match(workflow, /group:\s*day0-watch-\$\{\{ github\.repository \}\}/);
   assert.match(workflow, /cancel-in-progress:\s*false/);
-  assert.equal((workflow.match(/actions\/checkout@11bd71901bbe5b1630ceea73d27597364c9af683/g) || []).length, 2);
-  assert.equal((workflow.match(/actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/g) || []).length, 2);
-  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/);
+  assert.equal((workflow.match(/actions\/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09/g) || []).length, 2);
+  assert.equal((workflow.match(/actions\/setup-node@a0853c24544627f65ddf259abe73b1d18a591444/g) || []).length, 2);
+  assert.match(workflow, /actions\/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f/);
   assert.equal((workflow.match(/persist-credentials:\s*false/g) || []).length, 2);
   assert.doesNotMatch(workflow, /actions\/(?:checkout|setup-node|upload-artifact)@v\d/);
   assert.match(workflow, /fitllm-day0-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/);
