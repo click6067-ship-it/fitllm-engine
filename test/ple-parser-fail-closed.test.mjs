@@ -320,15 +320,18 @@ test('catalog rows and plain GQA are unchanged by the parser guard', () => {
 // ── 독립 Astra review(2026-09-06) R1/R2 회귀 — 잔여 body 하한의 입력 검증과 파라미터 출처 ──────────────────
 // 두 테스트 모두 리뷰어 재현(RTX 3060 12GB · linux-headless · ctx 8192 · weight/KV 16)을 그대로 고정한다.
 const gpu3060x12 = gpu('RTX 3060 12GB', 'linux-headless');
-// 다섯 계산 표면의 full residency에 더해 리뷰어 카드(12GB)에서도 전체 가중치·차감 0·fit 없음을 고정한다.
+// 다섯 계산 표면의 full residency에 더해 리뷰어 카드(12GB)에서도 전체 가중치·차감 0·전제 없음을 고정하고,
+// used/verdict/maxContext가 PLE 메타데이터를 지운 기준 사본과 같음을 요구한다(호출자가 verdict 리터럴을 따로 고정한다).
 const expectClosedOn12GB = (model, label) => {
   expectFullResidency(model, label);
   const sim = simulate(model, gpu3060x12, 8192, FP16);
+  const reference = simulate({ ...model, pleParams: undefined, pleOffloadVerified: false }, gpu3060x12, 8192, FP16);
   close(sim.param, fullWeightsGB(model), 6, `${label} 12GB param`);
   assert.equal(sim.pleOffloadGB, 0, `${label} 12GB pleOffloadGB`);
   assert.equal(sim.structuralAssumptions, undefined, `${label} 12GB premise`);
-  assert.equal(sim.verdict, 'no', `${label} 12GB verdict`);
-  assert.equal(sim.maxContext, 0, `${label} 12GB maxContext`);
+  assert.equal(sim.used, reference.used, `${label} 12GB used`);
+  assert.equal(sim.verdict, reference.verdict, `${label} 12GB verdict`);
+  assert.equal(sim.maxContext, reference.maxContext, `${label} 12GB maxContext`);
   return sim;
 };
 
@@ -342,6 +345,8 @@ test('RED: malformed vocab_size cannot lower the PLE residual-body floor', () =>
     matchObject(m, { totalParams: 6.8, pleParams: 2.819, parameterSource: 'uniform-checkpoint' }, label);
     const sim = expectClosedOn12GB(m, label);
     close(sim.param, 12.666, 3, `${label} 12GB param`);
+    assert.equal(sim.verdict, 'no', `${label} 12GB verdict`);
+    assert.equal(sim.maxContext, 0, `${label} 12GB maxContext`);
   }
   // 공식 E4B 체크포인트(7,996,156,490 × 2 B)에서도 vocab_size가 양의 안전 정수가 아니면 PLE 인증만 닫힌다 —
   // 문자열·소수는 산술 강제변환으로, 음수는 임베딩 항 삭제로 종래 verified true였다(12GB param 9.6504·verdict tight).
@@ -352,11 +357,17 @@ test('RED: malformed vocab_size cannot lower the PLE residual-body floor', () =>
     matchObject(m, { totalParams: 8, pleParams: 2.819, parameterSource: 'uniform-checkpoint' }, label);
     const sim = expectClosedOn12GB(m, label);
     close(sim.param, 14.9012, 4, `${label} 12GB param`);
+    assert.equal(sim.verdict, 'no', `${label} 12GB verdict`);
+    assert.equal(sim.maxContext, 0, `${label} 12GB maxContext`);
   }
-  // E2B 공식 체크포인트 + 문자열 vocab_size: 종래 verified true(8GB param 5.1241·verdict yes) → 9.4995 GiB 전체 상주
+  // E2B 공식 체크포인트 + 문자열 vocab_size: 종래 verified true(8GB param 5.1241·verdict yes·pleOffloadGB 4.3754)
+  // → 9.4995 GiB 전체 상주(8GB에서 no). 12GB에서는 전체 상주 5.1B FP16이 기준 사본과 같은 'tight'다 — 차감 0이 요점.
   const e2bString = parseHfConfig('google/gemma-4-E2B-it', { ...subset('E2B'), vocab_size: '262144' }, checkpointBytes('E2B'));
   matchObject(e2bString, { totalParams: 5.1, pleParams: 2.349 }, 'E2B vocab_size="262144"');
-  close(expectClosedOn12GB(e2bString, 'E2B vocab_size="262144"').param, 9.4995, 4, 'E2B string 12GB param');
+  const e2bSim = expectClosedOn12GB(e2bString, 'E2B vocab_size="262144"');
+  close(e2bSim.param, 9.4995, 4, 'E2B string 12GB param');
+  assert.equal(e2bSim.verdict, 'tight', 'E2B string 12GB verdict');
+  assert.equal(simulate(e2bString, gpu3060, 8192, FP16).verdict, 'no', 'E2B string 8GB verdict');
   // 비안전 정수(±2^53)는 임베딩 항이 자릿수째 무너져 기존 체크포인트 자릿수 게이트가 먼저 거부한다(throw) — 수치 fit 없음.
   // E2B의 -1·1.5도 같은 게이트(잔여 body ~1.2B vs 5.1B)에 걸린다. 이 거부는 유지되어야 하며 verified true로 열리면 안 된다.
   for (const [n, v] of [['E4B', 2 ** 53], ['E4B', -(2 ** 53)], ['E2B', 2 ** 53], ['E2B', -1], ['E2B', 1.5]]) {
@@ -384,13 +395,15 @@ test('RED: model-name parameter estimates cannot certify PLE offload', () => {
         matchObject(m, { totalParams, pleParams: 2.819, parameterSource: 'model-name' }, label);
         const sim = expectClosedOn12GB(m, label);
         close(sim.param, fullGiB, 4, `${label} 12GB param`);
+        assert.equal(sim.verdict, 'no', `${label} 12GB verdict`);
+        assert.equal(sim.maxContext, 0, `${label} 12GB maxContext`);
       }
     }
   }
   // 정수가 아닌 checkpoint bytes는 uniform-checkpoint 추정은 남지만 PLE 인증 출처로는 쓰지 않는다
   const fractional = parseHfConfig('google/gemma-4-E4B-it', subset('E4B'), checkpointBytes('E4B') + 0.5);
   matchObject(fractional, { totalParams: 8, pleParams: 2.819, parameterSource: 'uniform-checkpoint' }, 'fractional totalSize');
-  expectClosedOn12GB(fractional, 'fractional totalSize');
+  assert.equal(expectClosedOn12GB(fractional, 'fractional totalSize').verdict, 'no', 'fractional totalSize 12GB verdict');
   // positive controls: 실제 출처가 있으면 기존대로 인증된다 — 공식 checkpoint bytes / safetensors 증거 / 둘 다
   const evidence = {
     revision: 'ee0ef6023621cff504d758262d4e04895a5af4a2',

@@ -1760,6 +1760,13 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   //     극단적 층 수 부풀리기(70층)를 잡는다. 공식 여유: E2B 2.774B−1.641B=1.133B, E4B 5.177B−4.525B=0.653B.
   //     kv-shared 층은 K/V 사영이 없어 body가 과대될 수 있는 최대치는 E2B 15.7M·E4B 47.2M(여유의 1.4%·7.2%).
   //  ③ body 추정을 만들 수 없으면(intermediate_size·vocab_size 부재) 정합을 확인할 수 없어 검증하지 않는다.
+  //     body에 들어가는 vocab_size는 pinned 다섯 필드 밖이라 별도로 양의 안전 정수를 요구한다 — 독립 리뷰 R1(2026-09-06):
+  //     -1은 truthy라 임베딩 항을 음수로 만들어 하한을 낮추고, 문자열 '262144'·소수 1.5는 산술 강제변환으로 유한한
+  //     양수 body가 되어 수축된 체크포인트가 verified로 열렸다. Number.isFinite(body)만으로는 못 막는다.
+  //  ④ 하한에 넣는 총 파라미터는 실제 checkpoint/evidence 출처여야 한다 — 독립 리뷰 R2(2026-09-06): 이름 추정
+  //     (parameterSource 'model-name')은 checkpoint bytes도 safetensors 증거도 없는데 잔여 하한을 통과해 인증됐다.
+  //     이름 추정은 일반 추정으로는 그대로 남기되, 예외적 GPU 차감의 인증에는 검증된 resolvedEvidence 또는
+  //     양의 안전 정수 checkpoint bytes에서 역산한 uniform-checkpoint만 허용한다.
   // 실패는 throw가 아니라 미검증(false)이다 — guardedPleParamsB가 이 플래그 하나로 GPU 차감·전제·pleOffloadGB를
   // 모두 닫아 전체 가중치 상주로 계산한다(사용자 결정: 확인되지 않은 부분 상주는 일반 fit으로 표현하지 않는다).
   const pleProfiles = PLE_OFFLOAD_FAMILIES.has(modelType) ? PLE_VERIFIED_PROFILES[modelType] : undefined;
@@ -1768,8 +1775,12 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
       layerCount === p.layerCount && c.hidden_size === p.hiddenSize && c.intermediate_size === p.intermediateSize &&
       c.vocab_size_per_layer_input === p.vocabSizePerLayerInput && c.hidden_size_per_layer_input === p.hiddenSizePerLayerInput)
     : undefined;
-  const pleBody = pinnedPle ? checkpointSanityParams(c, layerCount) : null;
-  const pleOffloadVerified = Boolean(pinnedPle && pleBody && totalParams && totalParams - pleParams >= pleBody);
+  const pleBody = pinnedPle && plePosInt(c.vocab_size) ? checkpointSanityParams(c, layerCount) : null;
+  const pleParamsProvenance = Boolean(resolvedEvidence) ||
+    (parameterSource === 'uniform-checkpoint' && Number.isSafeInteger(totalSize) && totalSize > 0);
+  const pleOffloadVerified = Boolean(
+    pinnedPle && pleBody && pleParamsProvenance && totalParams && totalParams - pleParams >= pleBody
+  );
 
   return {
     name: id.split('/').pop(),
