@@ -9,16 +9,21 @@ const README = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
 const CONTRIB = readFileSync(new URL('../CONTRIBUTING.md', import.meta.url), 'utf8');
 const SERVER = readFileSync(new URL('../server.json', import.meta.url), 'utf8');
 const CENSUS_GENERATOR = readFileSync(new URL('../census/generate.mjs', import.meta.url), 'utf8');
+const CENSUS_MANIFEST = JSON.parse(readFileSync(new URL('../census/manifest.json', import.meta.url), 'utf8'));
+const CENSUS_VERDICTS = `${CENSUS_MANIFEST.rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도 — 이전 릴리스 수치 복사 금지
 
 test('README: 낡은/과장 문구 금지', () => {
   for (const banned of [
     'M1–M5', '16 language-neutral', '× 88 GPUs', 'matches real local runs',
     'Every hardware number is cross-verified', '16%2F16',
+    // 2.15.0 residency-policy correction: 저장장치 페이징 계열은 PLE 차감 근거가 아니다
+    'lazy-or-host-resident', 'read lazily', 'stays host-resident',
+    'uses: click6067-ship-it/fitllm-engine@v2.14.1',
   ]) assert.equal(README.includes(banned), false, `금지 문구 잔존: ${banned}`);
   assert.doesNotMatch(README, /every number from official config\.json/i);
   assert.doesNotMatch(SERVER, /exact VRAM|exact.*math/i);
   assert.doesNotMatch(CENSUS_GENERATOR, /every number[^\n]*official/i);
-  assert.equal(README.includes('8,000+'), false, 'census 수치는 9,126 exact');
+  assert.equal(README.includes('8,000+'), false, `census 수치는 ${CENSUS_VERDICTS} exact`);
 });
 
 test('Quick start 첫 예시는 실제로 성공(FITS) 데모 — Gemma 4 12b × RTX 4090 E2E', () => {
@@ -31,7 +36,7 @@ test('Quick start 첫 예시는 실제로 성공(FITS) 데모 — Gemma 4 12b ×
 
 test('README: 현행 사실 필수 표기', () => {
   for (const required of [
-    '30 language-neutral', '× 93 GPUs', 'M1–M6', '30%2F30', '9,126 verdicts',
+    '30 language-neutral', '× 93 GPUs', 'M1–M6', '30%2F30', CENSUS_VERDICTS,
     'npm install fitllm-engine', '?template=measurement.yml',
     "from 'fitllm-engine'",
     'The CLI, API, and MCP use a curated catalog pinned to official configs.', // 문법 파손 정정문(감사 제안) 고정
@@ -62,9 +67,12 @@ test('README pins three sourced premises and bans a fixed 71x multiplier', () =>
     'ple-llamacpp-non-gpu-residency',
     'mtp-ordinary-generation',
   ]) assert.ok(README.includes(id), `missing structural premise ${id}`);
-  assert.ok(README.includes('GPU weight memory excludes the verified Gemma 4 PLE tensors only under the pinned llama.cpp/GGUF lazy-or-host-resident path; an accelerator-loading runtime invalidates this estimate.'));
+  // 2.15.0 residency-policy correction: 근거는 pinned llama.cpp의 입력층 host 배치 사실이며 lazy/on-disk 경로는 근거가 아니다
+  assert.ok(README.includes('GPU weight memory excludes the verified Gemma 4 PLE tensors only because the pinned llama.cpp/GGUF path assigns the per_layer_token_embd input-layer tensor to CPU/host buffers instead of accelerator memory; that host memory is not budgeted here, and a runtime that loads PLE onto the accelerator invalidates this estimate.'));
   for (const url of [
     'https://huggingface.co/google/gemma-4-E2B-it/blob/main/config.json',
+    'https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model.cpp',
+    'https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-arch.cpp',
     'https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/models/gemma4.cpp',
     'https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.h',
     'https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.cpp',
@@ -74,7 +82,7 @@ test('README pins three sourced premises and bans a fixed 71x multiplier', () =>
 
 test('distribution preflight examples stay present and reproducible', () => {
   for (const required of [
-    'uses: click6067-ship-it/fitllm-engine@v2.14.1',
+    'uses: click6067-ship-it/fitllm-engine@v2.15.0',
     'npx fitllm "Gemma 4 12b" --detect --json --why',
     '&& ollama pull gemma4:12b',
     '&& llama-cli -m',

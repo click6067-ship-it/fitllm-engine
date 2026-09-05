@@ -440,6 +440,29 @@ export const MODELS = [
     benchmarks: null, // 카드 표의 "GPQA"는 Diamond 명시가 없고 체크포인트(thinking 모드) 귀속이 불명 → 미기입(엔진 원칙: 공개·검증된 것만)
     desc: 'Dense · 29.3B · 64레이어 · GQA(32/8, head_dim 128) · 최대 128K · Apache 2.0',
   },
+
+  // ==========================================================================
+  //  GLM-5.3 (zai-org) — 2026-09-05 사설 준비(트래픽 실험 gate 이전, 배포 전). HF revision aca966e4e02791568aa6a4ced368624b3d897f42.
+  //  공식 모델카드: "GLM-5.3 uses the same base model as GLM-5.2 — every gain comes from post-training."
+  //   https://huggingface.co/zai-org/GLM-5.3/blob/aca966e4e02791568aa6a4ced368624b3d897f42/README.md
+  //  config.json은 GLM-5.2(cf457fa734ab149ffef225f80893eb38c6ff5cdc)와 quantization_config(fp8·e4m3·block 128×128)·transformers_version만 다르다:
+  //   https://huggingface.co/zai-org/GLM-5.3/blob/aca966e4e02791568aa6a4ced368624b3d897f42/config.json
+  //   https://huggingface.co/zai-org/GLM-5.2/blob/cf457fa734ab149ffef225f80893eb38c6ff5cdc/config.json
+  //  파라미터: HF API safetensors.parameters(논리 수) BF16 2,103,729,152 + F8_E4M3 751,226,191,872 + F32 19,456 = 753,329,940,480
+  //   — GLM-5.2(BF16 753,329,921,024 + F32 19,456)와 total 정확 일치. 카탈로그는 GLM-5.2와 같은 정수 관례 753 (parseHfConfig는
+  //   두 config 모두 DSA index_topk로 fail-closed 거부하므로 카탈로그↔즉석 파싱 parity 경로가 없다).
+  //   https://huggingface.co/api/models/zai-org/GLM-5.3/revision/aca966e4e02791568aa6a4ced368624b3d897f42
+  //  형상: 78 layers · hidden 6144 · 64/64 heads · kv_lora_rank 512 · qk_rope_head_dim 64 · 256 experts(top-8) · max 1,048,576.
+  //   kvHeadDim 256 = config v_head_dim/qk_head_dim(qk_nope 192 + rope 64); config head_dim 192는 qk_nope_head_dim이다.
+  //   MLA 경로(calcKVCache/calcMaxContext)는 mlaKvLoraRank+mlaRopeDim만 쓰므로 kvHeadDim은 비작동(naiveKVCache 비교값·MCP 원시 노출뿐)
+  //   — GLM-5.2 행과 같은 값으로 parity 유지. activeParams 40은 GLM-5.2 행에서 상속(같은 base) — 새 측정 아님.
+  //  핀 리비전의 저장 정밀도는 FP8이지만 판정 입력은 사용자가 고르는 양자화라 행은 논리 파라미터 수만 갖는다(Hy3-FP8 관례).
+  //  벤치마크 미기입(엔진 원칙). ?m= 인덱스 26 — append-only, 표시 순서는 MODEL_GROUP_ORDER('GLM').
+  // ==========================================================================
+  { name: 'GLM-5.3', group: 'GLM', tags: ['moe', 'mla'],
+    totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
+    numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
+    desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit) · GLM-5.2와 같은 base(post-training만 차이)' },
 ];
 
 // 카탈로그 표시 순서(최신·화제순). MODELS 배열은 ?m= 공유링크 때문에 append-only라
@@ -741,12 +764,40 @@ const quantAdjust = {
 
 // Exact Gemma text-family identity:
 // https://huggingface.co/google/gemma-4-E2B-it/blob/main/config.json
-// Pinned llama.cpp/GGUF lazy-or-host-resident evidence; this does not prove
-// unconditional host-RAM residency, and accelerator loading invalidates the estimate:
+// Pinned llama.cpp/GGUF placement evidence (primary): per_layer_token_embd is classified as an
+// input-layer tensor, and the input layer is always assigned to the CPU device / host buffer list
+// regardless of -ngl, so it is never allocated in accelerator memory. The deduction rests on that
+// placement alone. The loader's lazy read (TENSOR_READ_LAZY; default auto mode engages it only
+// above 4 GiB) also resolves to the CPU buffer type but is a mode-dependent detail, not the
+// justification — on-demand file reads are never counted as capacity, and unconditional host-RAM
+// residency is not claimed. The host memory this tensor needs is not budgeted by the GPU verdict;
+// a runtime that loads PLE onto the accelerator invalidates the deduction.
+// https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model.cpp
+// https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-arch.cpp
 // https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/models/gemma4.cpp
 // https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.h
 // https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.cpp
 const PLE_OFFLOAD_FAMILIES = new Set(['gemma4_text']);
+// FitLLM이 GGUF per_layer_token_embd 바이트로 재현해 검증한 PLE 텐서 형상 — pinned 공식 text_config 두 개가 전부다.
+// 계열 허용만으로는 붙여넣은 config가 hidden_size_per_layer_input을 부풀려 GPU 가중치를 최대 99% 차감하고도
+// "verified"를 받았다(2026-09-05 감사 §5.4). PLE 치수 두 개만 대조해도 곱의 세 번째 인자 num_hidden_layers가
+// 열려 있어 공식 E2B 체크포인트에 45층을 선언하면 잔여 하한을 통과하고 GPU 가중치 59%를 차감했다(2026-09-05
+// 독립 리뷰 P1). 그래서 검증 단위는 스칼라가 아니라 공식 config에 결합된 완전 profile — 층 수·hidden_size·
+// intermediate_size·PLE 두 치수 — 이고, 어느 profile과도 완전히 일치하지 않는 조합은 검증되지 않은 것이므로 fail-closed.
+// https://huggingface.co/google/gemma-4-E2B-it/blob/3e22461f65e89153144f8adb70e3b8c2cc9845a7/config.json
+//   (sha256 1b28f3d2c3100f6c594754b81107428bd7b822a7f48272ca681dae9d2ec38330 · safetensors BF16 5,123,178,051)
+// https://huggingface.co/google/gemma-4-E4B-it/blob/ee0ef6023621cff504d758262d4e04895a5af4a2/config.json
+//   (sha256 33b10c02df3c2e8536cf323d29d53262aaa2f4d11dbe19bc729373fbe90295d4 · safetensors BF16 7,996,156,490)
+// 텐서 형상 [vocab_size_per_layer_input, num_hidden_layers × hidden_size_per_layer_input]:
+// https://github.com/huggingface/transformers/blob/4177486a9f199bd7be520eff14431071d5d41ec5/src/transformers/models/gemma4/configuration_gemma4.py
+const PLE_VERIFIED_PROFILES = Object.freeze({
+  gemma4_text: Object.freeze([
+    // E2B: 35L × 1536 × 6144 · PLE 262144 × (35 × 256) = 2,348,810,240
+    Object.freeze({ layerCount: 35, hiddenSize: 1536, intermediateSize: 6144, vocabSizePerLayerInput: 262144, hiddenSizePerLayerInput: 256 }),
+    // E4B: 42L × 2560 × 10240 · PLE 262144 × (42 × 256) = 2,818,572,288
+    Object.freeze({ layerCount: 42, hiddenSize: 2560, intermediateSize: 10240, vocabSizePerLayerInput: 262144, hiddenSizePerLayerInput: 256 }),
+  ]),
+});
 
 // MLA cache structure:
 // https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py
@@ -761,7 +812,7 @@ const STRUCTURAL_ASSUMPTIONS = Object.freeze({
   }),
   ple: Object.freeze({
     id: 'ple-llamacpp-non-gpu-residency',
-    statement: 'GPU weight memory excludes the verified Gemma 4 PLE tensors only under the pinned llama.cpp/GGUF lazy-or-host-resident path; an accelerator-loading runtime invalidates this estimate.',
+    statement: 'GPU weight memory excludes the verified Gemma 4 PLE tensors only because the pinned llama.cpp/GGUF path assigns the per_layer_token_embd input-layer tensor to CPU/host buffers instead of accelerator memory; that host memory is not budgeted here, and a runtime that loads PLE onto the accelerator invalidates this estimate.',
   }),
   mtp: Object.freeze({
     id: 'mtp-ordinary-generation',
@@ -878,8 +929,9 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight(파라미터) ↔ KV 비트 분리
   const param = calcParamMemory(model, weightBpw, device).totalGB; // PLE 모델은 GPU에서 상주분만 (residentParamsB)
   const kv = calcKVCache(model, ctx, kvBits).totalGB;
-  // 검증된 pinned llama.cpp/GGUF lazy-or-host-resident 경로에서 GPU에 상주하지 않는 PLE 근사 크기.
-  // accelerator-loading runtime에서는 이 추정과 GPU weight 차감이 모두 무효다.
+  // pinned llama.cpp/GGUF 경로가 입력층 텐서(per_layer_token_embd)를 accelerator가 아닌 CPU/host 버퍼에 배치하므로
+  // GPU에 상주하지 않는 PLE 근사 크기. host 메모리는 예산에 넣지 않으며, PLE를 accelerator에 적재하는 런타임에서는
+  // 이 추정과 GPU weight 차감이 모두 무효다.
   const pleOffloadGB = device.type === 'gpu' ? (guardedPleParamsB(model) * 1e9 * (weightBpw / 8)) / 1024 ** 3 : 0;
 
   // 단일 reserve 방정식(Codex council): used = param + kv + rtDyn + reserve. reserve는 1회만.
@@ -922,7 +974,7 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
     rtDyn,
     reserve,
     system: os + rt, // 비전공자용 묶음
-    pleOffloadGB, // >0이면 pinned llama.cpp/GGUF lazy-or-host-resident 경로에서 GPU에 상주하지 않는 PLE 근사분 — UI 각주용(판정 미포함)
+    pleOffloadGB, // >0이면 pinned llama.cpp/GGUF 입력층 host 배치 경로에서 GPU에 상주하지 않는 PLE 근사분 — UI 각주용(판정 미포함)
     used,
     free,
     headroom,
@@ -1542,13 +1594,16 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   const isMoe = !!numExperts;
 
   // PLE(Per-Layer Embeddings, Gemma e2b/e4b류) 감지 — config에 두 필드가 있으면 텐서 크기 결정론 산출.
-  // 검증된 gemma4_text 계열에 한해 pinned llama.cpp/GGUF lazy-or-host-resident 경로에서만 GPU weight
+  // 검증된 gemma4_text 계열에 한해 pinned llama.cpp/GGUF 경로(입력층 텐서 → CPU/host 버퍼 배치)에서만 GPU weight
   // 차감 대상이 된다(residentParamsB·pleOffloadVerified 참조). 그 밖의 계열은 전체 상주로 fail-close.
-  // 카탈로그의 손계산 값과 같은 식.
-  const pleParams = c.vocab_size_per_layer_input && c.hidden_size_per_layer_input
+  // 카탈로그의 손계산 값과 같은 식. 두 필드가 양의 안전 정수이고 곱도 안전 정수일 때만 산출한다 —
+  // 문자열·0·음수·소수·NaN·Infinity·오버플로는 종래 `*` 강제변환으로 그럴듯한 수가 되거나 NaN이 흘렀다.
+  const plePosInt = (v) => Number.isSafeInteger(v) && v > 0;
+  const pleWellFormed = plePosInt(c.vocab_size_per_layer_input) && plePosInt(c.hidden_size_per_layer_input) &&
+    Number.isSafeInteger(c.vocab_size_per_layer_input * c.hidden_size_per_layer_input * layerCount);
+  const pleParams = pleWellFormed
     ? (c.vocab_size_per_layer_input * c.hidden_size_per_layer_input * layerCount) / 1e9
     : undefined;
-  const pleOffloadVerified = Boolean(pleParams && PLE_OFFLOAD_FAMILIES.has(modelType));
 
   // MLA(Multi-head Latent Attention) 감지 — kv_lora_rank 있으면 압축 KV 경로(GLM-5.2/GLM-4.7-Flash 등).
   // ⚠ DeepSeek-V4류(kv_lora_rank 부재 + MQA/compressor)는 MLA 아님 → 표준 경로 유지.
@@ -1695,6 +1750,38 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     parameterSource = 'model-name';
   }
 
+  // PLE GPU 차감 검증 — 계열 허용(PLE_OFFLOAD_FAMILIES)만으로는 부족하다. 세 조건을 모두 요구한다:
+  //  ① 선언이 pinned 공식 검증 profile(PLE_VERIFIED_PROFILES) 하나와 완전히 일치한다 — 층 수·hidden_size·
+  //     intermediate_size·PLE 두 치수 전부. 밴드 정합만으로는 E2B hidden_size_per_layer_input ≤ 379(PLE +48%)가
+  //     통과하고, PLE 치수 두 개만 대조하면 E2B 40·45·46층 부풀리기(PLE 곱의 세 번째 인자)와 E2B 본체+E4B 층 수
+  //     같은 profile 혼합이 ②를 통과해 거짓 fits 구멍이 남는다.
+  //  ② 체크포인트 총 파라미터에서 PLE를 뺀 잔여가 config 자체가 선언한 dense body(어텐션+FFN+임베딩,
+  //     checkpointSanityParams)보다 작지 않다 — 계수 1의 구조 하한. 수축된 total_size(2.4B → 잔여 0.05B)와
+  //     극단적 층 수 부풀리기(70층)를 잡는다. 공식 여유: E2B 2.774B−1.641B=1.133B, E4B 5.177B−4.525B=0.653B.
+  //     kv-shared 층은 K/V 사영이 없어 body가 과대될 수 있는 최대치는 E2B 15.7M·E4B 47.2M(여유의 1.4%·7.2%).
+  //  ③ body 추정을 만들 수 없으면(intermediate_size·vocab_size 부재) 정합을 확인할 수 없어 검증하지 않는다.
+  //     body에 들어가는 vocab_size는 pinned 다섯 필드 밖이라 별도로 양의 안전 정수를 요구한다 — 독립 리뷰 R1(2026-09-06):
+  //     -1은 truthy라 임베딩 항을 음수로 만들어 하한을 낮추고, 문자열 '262144'·소수 1.5는 산술 강제변환으로 유한한
+  //     양수 body가 되어 수축된 체크포인트가 verified로 열렸다. Number.isFinite(body)만으로는 못 막는다.
+  //  ④ 하한에 넣는 총 파라미터는 실제 checkpoint/evidence 출처여야 한다 — 독립 리뷰 R2(2026-09-06): 이름 추정
+  //     (parameterSource 'model-name')은 checkpoint bytes도 safetensors 증거도 없는데 잔여 하한을 통과해 인증됐다.
+  //     이름 추정은 일반 추정으로는 그대로 남기되, 예외적 GPU 차감의 인증에는 검증된 resolvedEvidence 또는
+  //     양의 안전 정수 checkpoint bytes에서 역산한 uniform-checkpoint만 허용한다.
+  // 실패는 throw가 아니라 미검증(false)이다 — guardedPleParamsB가 이 플래그 하나로 GPU 차감·전제·pleOffloadGB를
+  // 모두 닫아 전체 가중치 상주로 계산한다(사용자 결정: 확인되지 않은 부분 상주는 일반 fit으로 표현하지 않는다).
+  const pleProfiles = PLE_OFFLOAD_FAMILIES.has(modelType) ? PLE_VERIFIED_PROFILES[modelType] : undefined;
+  const pinnedPle = pleParams && pleProfiles
+    ? pleProfiles.find((p) =>
+      layerCount === p.layerCount && c.hidden_size === p.hiddenSize && c.intermediate_size === p.intermediateSize &&
+      c.vocab_size_per_layer_input === p.vocabSizePerLayerInput && c.hidden_size_per_layer_input === p.hiddenSizePerLayerInput)
+    : undefined;
+  const pleBody = pinnedPle && plePosInt(c.vocab_size) ? checkpointSanityParams(c, layerCount) : null;
+  const pleParamsProvenance = Boolean(resolvedEvidence) ||
+    (parameterSource === 'uniform-checkpoint' && Number.isSafeInteger(totalSize) && totalSize > 0);
+  const pleOffloadVerified = Boolean(
+    pinnedPle && pleBody && pleParamsProvenance && totalParams && totalParams - pleParams >= pleBody
+  );
+
   return {
     name: id.split('/').pop(),
     group: 'HuggingFace',
@@ -1808,4 +1895,4 @@ export const DATA_UPDATED = '2026-09';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.14.1';
+export const ENGINE_VERSION = '2.15.0';

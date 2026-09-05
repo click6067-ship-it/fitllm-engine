@@ -113,6 +113,14 @@ const minDevice = LOCAL_MODELS.map((m) => {
   return `| ${m.name} | ${m.totalParams}B | ${g ? g.name : '—'} | ${mac ? mac.name : '—'} |`;
 }).join('\n');
 
+// PLE 전제 공개 — Gemma 4 e2b/e4b GPU 행은 pinned llama.cpp/GGUF 입력층 host 배치에 근거해 PLE 텐서를 제외한다.
+// 수치는 엔진에서 유도한다(카탈로그 pleParams·simulate().pleOffloadGB) — 문서 리터럴 하드코딩 금지(드리프트 방지).
+const pleModels = LOCAL_MODELS.filter((m) => m.pleOffloadVerified === true);
+const pleExcludedGB = (m, bpw) => simulate(m, gpuDevice(GPUS.find((g) => g.name === 'RTX 4090')), 8192, { weightBpw: bpw, kvBits: 16 }).pleOffloadGB.toFixed(2);
+const pleShort = (m) => m.name.replace('Gemma 4 ', '');
+const pleDisclosure = pleModels.length === 0 ? '' : `- **Structural premise disclosed — \`ple-llamacpp-non-gpu-residency\`**: every GPU row for ${pleModels.map((m) => `\`${m.name}\``).join(' and ')} excludes the per-layer-embedding (PLE) tensor — ${pleModels.map((m) => `${m.pleParams}B of ${pleShort(m)}'s ${m.totalParams}B`).join(' and ')} parameters — from \`predicted_param_gb\`, \`predicted_resident_weights_gb\`, \`predicted_total_to_run_gb\`, \`free_gb\`, \`max_context\` and the verdict, because the pinned llama.cpp/GGUF path assigns that input-layer tensor to CPU/host buffers rather than the discrete GPU's memory pool. So \`params_b\` × bytes-per-weight will not reconcile against those columns for those rows (at Q4_K_M the excluded weights are ${pleModels.map((m) => `~${pleExcludedGB(m, 4.8944)} GB for ${pleShort(m)}`).join(' and ')}; at FP16 ${pleModels.map((m) => `~${pleExcludedGB(m, 16)} GB`).join(' and ')}). The excluded bytes still need host/system memory that this census neither budgets nor verifies; a runtime that loads PLE onto the accelerator invalidates those rows; the Mac rows (Apple unified memory) count the full weights. No row treats SSD/NVMe streaming, expert paging or swap as capacity. Premise text and pinned sources: [Structural premises](https://github.com/click6067-ship-it/fitllm-engine#structural-premises).
+`;
+
 const md = `# Local LLM Fit Census v1 — ${generated}
 
 **${rows.length.toLocaleString('en-US')} verdicts**: ${LOCAL_MODELS.length} models × ${devices.length} devices (${GPUS.length} GPUs + ${devices.length - GPUS.length} Mac configs) × per-platform quant tiers.
@@ -136,7 +144,7 @@ ${minDevice}
 
 - [\`census-v1.csv\`](census-v1.csv) / [\`census-v1.json\`](census-v1.json) — every model × device × quant verdict with the full predicted breakdown (\`predicted_total_to_run_gb\` = weights + KV + runtime + reserve — what the verdict uses; \`predicted_resident_weights_gb\` = quantized weights **plus ~12% runtime weight overhead** (non-quantized parts, buffers) — the number resident-weights measurements should be compared against; \`predicted_param_gb\` = quantized weights alone) and max context. Machine-readable; import it, chart it, cite it.
 - **Measurements are typed** (from [\`fixtures/measured.json\`](../fixtures/README.md), community PRs): \`measurement_kind\` says what was measured. \`idle_resident\` readings (e.g. oMLX \`actual_size\`) are a resident-weights **floor** — compare them to \`predicted_resident_weights_gb\`, not to the total; only \`system_total_peak\` is comparable to \`predicted_total_to_run_gb\`. An idle_resident value below the predicted total is expected, not an over-prediction. Ledger holds ${measured.length} entr${measured.length === 1 ? 'y' : 'ies'}; ${(() => { const j = rows.filter((r) => r.measured_peak_gb != null).length; return `${j} join this census (exact model+device+quant match required — the rest cover models/devices outside the catalog or carry unconfirmed attribution)`; })()}.
-
+${pleDisclosure}
 All figures are estimates; real usage varies with runtime, driver and OS state. Verdicts: ✅ fits comfortably · ⚠️ tight · ❌ won't fit.
 `;
 writeFileSync(OUT + 'README.md', md);
