@@ -102,13 +102,19 @@ test('engine source anchors the PLE deduction on pinned input-layer host placeme
 });
 
 test('CLI text, JSON, --why and --top forward the corrected premise on GPU and none on Apple', () => {
-  const text = run(['Gemma 4 e2b', '--gpu', 'RTX 3060 8GB', '--quant', 'FP16']);
-  assert.equal(text.code, 0);
+  // CLI 기본 GPU 환경 프리셋은 엔진 테스트의 linux-headless가 아니라 reserve가 더 큰 기본값이라 RTX 3060 8GB FP16은 CLI에서 no다.
+  // 전제 검사는 fit 여부와 무관하므로 CLI 기본값에서 실제로 fits인 RTX 4090 FP16(used ≈ 8.1 GiB)으로 exit 0 경로를 고정한다.
+  const text = run(['Gemma 4 e2b', '--gpu', 'RTX 4090', '--quant', 'FP16']);
+  assert.equal(text.code, 0, text.out);
   assert.ok(text.out.includes(`premise [${PLE_PREMISE.id}]: ${PLE_PREMISE.statement}`), text.out);
   assert.doesNotMatch(text.out, /lazy-or-host|SSD|NVMe/i);
-  const json = JSON.parse(run(['Gemma 4 e2b', '--gpu', 'RTX 3060 8GB', '--quant', 'FP16', '--json']).out);
+  const json = JSON.parse(run(['Gemma 4 e2b', '--gpu', 'RTX 4090', '--quant', 'FP16', '--json']).out);
   assert.deepEqual(json.structuralAssumptions, [PLE_PREMISE]);
-  const why = JSON.parse(run(['Gemma 4 e2b', '--gpu', 'RTX 3060 8GB', '--quant', 'FP16', '--json', '--why']).out);
+  // 8GB 카드에서는 CLI 기본 환경으로 no(exit 1)지만 전제는 같은 문장으로 그대로 실린다
+  const small = run(['Gemma 4 e2b', '--gpu', 'RTX 3060 8GB', '--quant', 'FP16', '--json']);
+  assert.equal(small.code, 1, small.out);
+  assert.deepEqual(JSON.parse(small.out).structuralAssumptions, [PLE_PREMISE]);
+  const why = JSON.parse(run(['Gemma 4 e2b', '--gpu', 'RTX 4090', '--quant', 'FP16', '--json', '--why']).out);
   assert.deepEqual(why.structuralAssumptions, [PLE_PREMISE]);
   assert.deepEqual(why.basis.structuralAssumptions, [PLE_PREMISE]);
   assert.doesNotMatch(JSON.stringify(why), /lazy-or-host/i);
@@ -122,12 +128,16 @@ test('CLI text, JSON, --why and --top forward the corrected premise on GPU and n
 });
 
 test('composite Action forwards the corrected premise and keeps the exit contract', () => {
-  const affected = runAction({ INPUT_MODEL: 'Gemma 4 e2b', INPUT_GPU: 'RTX 3060 8GB', INPUT_QUANT: 'FP16' });
-  assert.equal(affected.status, 0);
+  const affected = runAction({ INPUT_MODEL: 'Gemma 4 e2b', INPUT_GPU: 'RTX 4090', INPUT_QUANT: 'FP16' });
+  assert.equal(affected.status, 0, affected.output);
   assert.match(affected.output, /exit-code=0/);
   assert.ok(affected.output.includes(PLE_PREMISE.id));
   assert.ok(affected.output.includes(PLE_PREMISE.statement));
   assert.doesNotMatch(affected.output, /lazy-or-host|SSD|NVMe/i);
+  const smallCard = runAction({ INPUT_MODEL: 'Gemma 4 e2b', INPUT_GPU: 'RTX 3060 8GB', INPUT_QUANT: 'FP16' });
+  assert.equal(smallCard.status, 1);
+  assert.match(smallCard.output, /exit-code=1/);
+  assert.ok(smallCard.output.includes(PLE_PREMISE.statement));
   const apple = runAction({ INPUT_MODEL: 'Gemma 4 e2b', INPUT_MAC: '16' });
   assert.equal(apple.status, 0);
   assert.doesNotMatch(apple.output, /structuralAssumptions/);
