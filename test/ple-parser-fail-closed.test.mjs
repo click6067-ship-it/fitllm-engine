@@ -316,3 +316,96 @@ test('catalog rows and plain GQA are unchanged by the parser guard', () => {
   assert.equal(plain.pleOffloadVerified, false);
   assert.equal(simulate(plain, gpu4090, 8192, FP16).structuralAssumptions, undefined);
 });
+
+// ── 독립 Astra review(2026-09-06) R1/R2 회귀 — 잔여 body 하한의 입력 검증과 파라미터 출처 ──────────────────
+// 두 테스트 모두 리뷰어 재현(RTX 3060 12GB · linux-headless · ctx 8192 · weight/KV 16)을 그대로 고정한다.
+const gpu3060x12 = gpu('RTX 3060 12GB', 'linux-headless');
+// 다섯 계산 표면의 full residency에 더해 리뷰어 카드(12GB)에서도 전체 가중치·차감 0·fit 없음을 고정한다.
+const expectClosedOn12GB = (model, label) => {
+  expectFullResidency(model, label);
+  const sim = simulate(model, gpu3060x12, 8192, FP16);
+  close(sim.param, fullWeightsGB(model), 6, `${label} 12GB param`);
+  assert.equal(sim.pleOffloadGB, 0, `${label} 12GB pleOffloadGB`);
+  assert.equal(sim.structuralAssumptions, undefined, `${label} 12GB premise`);
+  assert.equal(sim.verdict, 'no', `${label} 12GB verdict`);
+  assert.equal(sim.maxContext, 0, `${label} 12GB maxContext`);
+  return sim;
+};
+
+test('RED: malformed vocab_size cannot lower the PLE residual-body floor', () => {
+  // 리뷰어 재현 R1: 수축된 E4B 체크포인트(13.6e9 B → 6.8B)는 정상 vocab_size에서 잔여 3.98B < body 4.525B로 닫히지만,
+  // vocab_size=-1은 truthy라 임베딩 항(−0.67B)이 body를 낮춰 verified true → 12GB param 7.4152·verdict yes·ctx 40450.
+  // 바꾸는 키는 vocab_size 하나뿐이다. 두 입력 모두 6.8e9 × 2 B / 1024³ = 12.6660 GiB 전체 상주여야 한다.
+  const deflatedBytes = 13_600_000_000;
+  for (const [v, label] of [[262144, 'deflated honest'], [-1, 'deflated vocab_size=-1']]) {
+    const m = parseHfConfig('google/gemma-4-E4B-it', { ...subset('E4B'), vocab_size: v }, deflatedBytes);
+    matchObject(m, { totalParams: 6.8, pleParams: 2.819, parameterSource: 'uniform-checkpoint' }, label);
+    const sim = expectClosedOn12GB(m, label);
+    close(sim.param, 12.666, 3, `${label} 12GB param`);
+  }
+  // 공식 E4B 체크포인트(7,996,156,490 × 2 B)에서도 vocab_size가 양의 안전 정수가 아니면 PLE 인증만 닫힌다 —
+  // 문자열·소수는 산술 강제변환으로, 음수는 임베딩 항 삭제로 종래 verified true였다(12GB param 9.6504·verdict tight).
+  // 0·null은 body 추정 불가로 이미 닫혀 있던 값이다. 전부 8e9 × 2 B / 1024³ = 14.9012 GiB 전체 상주.
+  for (const v of [-1, '262144', 1.5, 0, null]) {
+    const label = `E4B vocab_size=${JSON.stringify(v)}`;
+    const m = parseHfConfig('google/gemma-4-E4B-it', { ...subset('E4B'), vocab_size: v }, checkpointBytes('E4B'));
+    matchObject(m, { totalParams: 8, pleParams: 2.819, parameterSource: 'uniform-checkpoint' }, label);
+    const sim = expectClosedOn12GB(m, label);
+    close(sim.param, 14.9012, 4, `${label} 12GB param`);
+  }
+  // E2B 공식 체크포인트 + 문자열 vocab_size: 종래 verified true(8GB param 5.1241·verdict yes) → 9.4995 GiB 전체 상주
+  const e2bString = parseHfConfig('google/gemma-4-E2B-it', { ...subset('E2B'), vocab_size: '262144' }, checkpointBytes('E2B'));
+  matchObject(e2bString, { totalParams: 5.1, pleParams: 2.349 }, 'E2B vocab_size="262144"');
+  close(expectClosedOn12GB(e2bString, 'E2B vocab_size="262144"').param, 9.4995, 4, 'E2B string 12GB param');
+  // 비안전 정수(±2^53)는 임베딩 항이 자릿수째 무너져 기존 체크포인트 자릿수 게이트가 먼저 거부한다(throw) — 수치 fit 없음.
+  // E2B의 -1·1.5도 같은 게이트(잔여 body ~1.2B vs 5.1B)에 걸린다. 이 거부는 유지되어야 하며 verified true로 열리면 안 된다.
+  for (const [n, v] of [['E4B', 2 ** 53], ['E4B', -(2 ** 53)], ['E2B', 2 ** 53], ['E2B', -1], ['E2B', 1.5]]) {
+    assert.throws(
+      () => parseHfConfig(`google/gemma-4-${n}-it`, { ...subset(n), vocab_size: v }, checkpointBytes(n)),
+      /자릿수가 달라요/, `${n} vocab_size=${v}`
+    );
+  }
+  // positive control: 공식 subset + 공식 체크포인트는 그대로 인증된다
+  for (const n of ['E2B', 'E4B']) {
+    assert.equal(parseHfConfig(`google/gemma-4-${n}-it`, subset(n), checkpointBytes(n)).pleOffloadVerified, true, n);
+  }
+});
+
+test('RED: model-name parameter estimates cannot certify PLE offload', () => {
+  // 리뷰어 재현 R2: checkpoint bytes도 safetensors 증거도 없는 E4B subset에 이름 단서만 주면 totalParams 7.4(model-name)가
+  // 잔여 하한을 통과해 verified true → 12GB param 8.5328·verdict yes·ctx 19832. 실제 체크포인트 크기를 모르는 상태를
+  // checkpoint-reconciled 차감으로 표시한 것이다. 이름 추정 자체(일반 추정)는 남기되 PLE 인증은 닫는다.
+  const expectedFull = { 'example/7.4B': [7.4, 13.7836], 'example/8B': [8, 14.9012] }; // totalParams · ×1e9×2 B/1024³
+  for (const [id, [totalParams, fullGiB]] of Object.entries(expectedFull)) {
+    for (const totalSize of [null, undefined]) {
+      for (const evidence of [undefined, null]) {
+        const label = `${id} totalSize=${String(totalSize)} evidence=${String(evidence)}`;
+        const m = parseHfConfig(id, subset('E4B'), totalSize, evidence);
+        matchObject(m, { totalParams, pleParams: 2.819, parameterSource: 'model-name' }, label);
+        const sim = expectClosedOn12GB(m, label);
+        close(sim.param, fullGiB, 4, `${label} 12GB param`);
+      }
+    }
+  }
+  // 정수가 아닌 checkpoint bytes는 uniform-checkpoint 추정은 남지만 PLE 인증 출처로는 쓰지 않는다
+  const fractional = parseHfConfig('google/gemma-4-E4B-it', subset('E4B'), checkpointBytes('E4B') + 0.5);
+  matchObject(fractional, { totalParams: 8, pleParams: 2.819, parameterSource: 'uniform-checkpoint' }, 'fractional totalSize');
+  expectClosedOn12GB(fractional, 'fractional totalSize');
+  // positive controls: 실제 출처가 있으면 기존대로 인증된다 — 공식 checkpoint bytes / safetensors 증거 / 둘 다
+  const evidence = {
+    revision: 'ee0ef6023621cff504d758262d4e04895a5af4a2',
+    safetensorsParameters: { BF16: PINNED.E4B.params }, safetensorsTotal: PINNED.E4B.params,
+  };
+  const controls = [
+    ['checkpoint bytes', parseHfConfig('google/gemma-4-E4B-it', subset('E4B'), checkpointBytes('E4B')), 'uniform-checkpoint'],
+    ['safetensors evidence', parseHfConfig('google/gemma-4-E4B-it', subset('E4B'), null, evidence), 'hf-safetensors-parameters'],
+    ['evidence + bytes', parseHfConfig('google/gemma-4-E4B-it', subset('E4B'), checkpointBytes('E4B') + 1_000_000, evidence), 'hf-safetensors-parameters'],
+  ];
+  for (const [label, m, parameterSource] of controls) {
+    matchObject(m, { totalParams: 8, pleParams: 2.819, parameterSource, pleOffloadVerified: true }, label);
+    const sim = simulate(m, gpu3060x12, 8192, FP16);
+    close(sim.param, 9.6504, 4, `${label} 12GB param`);
+    close(sim.pleOffloadGB, 5.2508, 4, `${label} 12GB pleOffloadGB`);
+    assert.deepEqual(sim.structuralAssumptions, [{ id: PLE_PREMISE_ID, statement: PLE_STATEMENT }], `${label} premise`);
+  }
+});
