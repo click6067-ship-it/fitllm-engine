@@ -3,7 +3,7 @@
 FitLLM is an open-source, zero-dependency engine that checks whether a local LLM fits on a GPU or Apple Silicon Mac using architecture-aware memory math.
 
 [![npm](https://img.shields.io/npm/v/fitllm-engine?color=cb3837&label=npm)](https://www.npmjs.com/package/fitllm-engine)
-[![conformance](https://img.shields.io/badge/conformance_vectors-29%2F29-brightgreen)](vectors/fit-vectors-v1.json)
+[![conformance](https://img.shields.io/badge/conformance_vectors-30%2F30-brightgreen)](vectors/fit-vectors-v1.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![zero deps](https://img.shields.io/badge/dependencies-0-success)](package.json)
 
@@ -82,7 +82,7 @@ permissions:
 steps:
   - name: Check model memory before download
     id: preflight
-    uses: click6067-ship-it/fitllm-engine@v2.13.0
+    uses: click6067-ship-it/fitllm-engine@v2.14.0
     with:
       model: Gemma 4 12b
       gpu: RTX 4090
@@ -210,13 +210,13 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 ## Conformance vectors
 
-[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **29 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
+[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **30 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
 
 **Why this matters:** the formulas are easy to copy; a verified answer key is not. If you port this engine to Python, Rust or Go, you don't become an untrusted fork — pass the vectors and you're a **conformant implementation of the same standard**. Port the engine, keep the vectors.
 
 ## The Fit Census — every model × every device, one truth table
 
-[`census/`](census/README.md) holds **8,775 verdicts** (25 models incl. draft tier × 93 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
+[`census/`](census/README.md) holds **9,126 verdicts** (26 models incl. draft tier × 93 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
 
 ## Embed a fit badge
 
@@ -254,7 +254,7 @@ curl 'https://fitllm.run/api/check?model=gemma%204%2031b&gpu=4090'
 # multi-GPU rigs: gpu=5090%2B3090 · Mac: ram=64 · usage: curl https://fitllm.run/api/check
 ```
 
-Open data: the full **Fit Census** (8,775 verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
+Open data: the full **Fit Census** (9,126 verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
 
 ## Principles
 

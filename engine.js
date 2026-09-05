@@ -394,13 +394,48 @@ export const MODELS = [
     benchmarks: null,    // 카드 표의 "GPQA"는 Diamond 명시·체크포인트 귀속이 없고 MMLU-Pro 미공표 → 미기입(엔진 원칙: 공개·검증된 것만)
     desc: 'Dense · 4.1B · 36레이어 · GQA(16/4, head_dim 256) · 슬라이딩512(3:1, full 9/36) · 최대 1M · Apache 2.0',
   },
+  // ==========================================================================
+  //  Granite-4.2-30B (IBM, model_type granite / GraniteForCausalLM) — 2026-09-05 Day-0 (#93)
+  //  구조 = 표준 dense GQA(32 heads / 8 kv-heads, head_dim = hidden 4096 / 32 = 128) · 64 레이어 전부 full attention
+  //  (sliding·layer_types·linear·MoE·MLA·PLE·MTP 키 전무). Granite 고유 스칼라(attention_multiplier 0.0078125 = 1/128 ·
+  //  embedding_multiplier · residual_multiplier · logits_scaling)는 값 스케일링만 하고 텐서 치수·KV 레이아웃을 바꾸지 않는다
+  //  (config-gate BENIGN). trust_remote_code/auto_map 없음(transformers 4.57.1 네이티브); 레포의 granite_thinking_parser.py는
+  //  vLLM 추론 텍스트(<think>) 파서 플러그인, model.sig는 서명 파일 — 둘 다 메모리와 무관.
+  //  1차 출처(전부 pinned revision 9e668ce1c538387ef24d3644e9b0606647762636 — 2026-09-04 모델카드 갱신 커밋.
+  //   config/generation_config/index blob은 이슈 #93 코멘트의 8b445a5c315f32da0f89e1f648bfec0cd601b154 와 byte-identical):
+  //   config.json  https://huggingface.co/ibm-granite/granite-4.2-30b/blob/9e668ce1c538387ef24d3644e9b0606647762636/config.json
+  //   index        https://huggingface.co/ibm-granite/granite-4.2-30b/blob/9e668ce1c538387ef24d3644e9b0606647762636/model.safetensors.index.json
+  //   HF API       https://huggingface.co/api/models/ibm-granite/granite-4.2-30b/revision/9e668ce1c538387ef24d3644e9b0606647762636
+  //   모델카드     https://huggingface.co/ibm-granite/granite-4.2-30b/blob/9e668ce1c538387ef24d3644e9b0606647762636/README.md
+  //  3중 교차검증(바이트 정확 일치): ① HF API safetensors BF16 29,276,770,304 == index total_size 58,553,540,608 ÷ 2
+  //   ② 11개 shard 헤더의 텐서 shape 곱 합계 == 29,276,770,304 (579 텐서 전부 BF16; shard 합 58,553,607,904 − 텐서 = 헤더 67,296 B)
+  //   ③ config 치수 손계산 == 29,276,770,304: 64 × [q 4096×4096 + k 1024×4096 + v 1024×4096 + o 4096×4096
+  //      + MLP 3×4096×32768 + norm 2×4096] + embed 100352×4096 + lm_head 100352×4096(untied) + 최종 norm 4096
+  //  maxContext = config max_position_embeddings 131072(모델카드 "Natively Supports 128K"). 카드의 "512K 확장"은 config에 없어
+  //  미반영(config 기준 원칙). 라이선스 Apache-2.0(모델카드·HF cardData). 3B/8B 형제·base 모델은 이번 변경에 미포함.
+  // ==========================================================================
+  {
+    name: 'Granite-4.2-30B',
+    group: 'Granite',
+    tags: ['dense'],
+    totalParams: 29.277, // 29,276,770,304
+    activeParams: 29.277, // dense — 전 파라미터 활성
+    layerCount: 64,
+    kvHeads: 8,
+    kvHeadDim: 128, // config에 head_dim 키 없음 → 4096/32. shard 헤더 k_proj.weight [1024, 4096] = 8 × 128 로 확인
+    attnHeads: 32,
+    hiddenSize: 4096,
+    maxContext: 131072,
+    benchmarks: null, // 카드 표의 "GPQA"는 Diamond 명시가 없고 체크포인트(thinking 모드) 귀속이 불명 → 미기입(엔진 원칙: 공개·검증된 것만)
+    desc: 'Dense · 29.3B · 64레이어 · GQA(32/8, head_dim 128) · 최대 128K · Apache 2.0',
+  },
 ];
 
 // 카탈로그 표시 순서(최신·화제순). MODELS 배열은 ?m= 공유링크 때문에 append-only라
 // 배열 순서 == 표시 순서가 더 이상 성립하지 않는다. 이 목록이 표시 순서의 단일 출처다.
 // 여기 없는 그룹은 뒤에 배열 순서대로 붙는다(신규 그룹 추가를 잊어도 사라지지 않게).
 export const MODEL_GROUP_ORDER = [
-  'Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5',
+  'Granite', 'Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5',
   'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft',
 ];
 
@@ -1762,4 +1797,4 @@ export const DATA_UPDATED = '2026-09';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.13.0';
+export const ENGINE_VERSION = '2.14.0';

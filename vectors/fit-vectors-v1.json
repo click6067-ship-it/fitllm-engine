@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
+  "version": "1.5.0",
   "generated": "2026-09-05",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
@@ -303,6 +303,15 @@
       "kvBits": 16,
       "expect": 38711328768,
       "note": "interleaved SWA 3:1 at native 1M ctx: all layers 2 x 4 kv-heads x 256 dim x 2 B = 4,096 B/layer/token -> global 9 L x 1,048,576 + local 27 L x window 512 = 4,096 x 9,437,184 + 4,096 x 13,824 = 38,654,705,664 + 56,623,104 = 38,711,328,768 B (36.05 GiB, vs 4.1B bf16 weights ~7.66 GiB — KV residency is the long-context bottleneck; a naive all-layers formula gives 4x = 144 GiB). Source: XHToken/Spark-X2.5-4B config.json at revision 5e10fcc0286756aebf7c41dc52c1e42d95c70281 — layer_types {sliding_attention 27, full_attention 9}, sliding_window 512, num_key_value_heads 4, head_dim 256, max_position_embeddings 1048576"
+    },
+    {
+      "id": "granite42-30b-kv-128k-f16",
+      "kind": "kv_total_bytes",
+      "model": "Granite-4.2-30B",
+      "ctx": 131072,
+      "kvBits": 16,
+      "expect": 34359738368,
+      "note": "dense GQA, every one of the 64 layers keeps a full-context cache: 2 (K+V) x 8 kv-heads x head_dim 128 (hidden 4096 / 32 heads; config has no head_dim key) x 2 B = 4,096 B/layer/token -> 64 L x 4,096 = 262,144 B/token -> x 131,072 ctx = 34,359,738,368 B (exactly 32 GiB; bf16 weights are 58,553,540,608 B = 54.53 GiB, so at native context the F16 KV alone exceeds a 24 GiB card). A formula that uses the 32 query heads instead of the 8 kv-heads gives 4x = 137,438,953,472 B (128 GiB). Source: ibm-granite/granite-4.2-30b config.json at revision 9e668ce1c538387ef24d3644e9b0606647762636 (config blob identical at 8b445a5c315f32da0f89e1f648bfec0cd601b154): num_hidden_layers 64, num_attention_heads 32, num_key_value_heads 8, hidden_size 4096, max_position_embeddings 131072; no sliding_window, layer_types, kv_lora_rank or expert keys"
     }
   ]
 }

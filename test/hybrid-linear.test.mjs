@@ -154,9 +154,10 @@ test('ENGINE_VERSION == package.json version (소비처가 표시하는 버전�
 test('표시 순서: 배열은 append-only여도 신규 그룹이 카탈로그 앞에 온다', async () => {
   const { groupedForDisplay, MODEL_GROUP_ORDER } = await import('../engine.js');
   const order = groupedForDisplay(LOCAL_MODELS).map((g) => g.group);
-  assert.equal(order[0], 'Spark', `첫 그룹이 ${order[0]}`); // 2026-09-05 Spark-X2.5 추가 — 기존 그룹 상대 순서는 그대로
-  assert.equal(order[1], 'Qwen 3.8');
-  assert.equal(order[2], 'Laguna');
+  assert.equal(order[0], 'Granite', `첫 그룹이 ${order[0]}`); // 2026-09-05 Granite-4.2-30B 추가(#93) — 기존 그룹 상대 순서는 그대로
+  assert.equal(order[1], 'Spark'); // 2026-09-05 Spark-X2.5 추가
+  assert.equal(order[2], 'Qwen 3.8');
+  assert.equal(order[3], 'Laguna');
   assert.ok(order.indexOf('Draft') > order.indexOf('Qwen 3.6'), 'Draft는 실모델 뒤');
   // 모델 유실 없음
   assert.equal(groupedForDisplay(LOCAL_MODELS).reduce((n, g) => n + g.items.length, 0), LOCAL_MODELS.length);
