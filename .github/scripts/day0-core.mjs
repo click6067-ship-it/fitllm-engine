@@ -541,7 +541,50 @@ function activationState(value) {
   return 'ambiguous';
 }
 
-export function detectCapabilityBlockers(raw) {
+// Conservative, explicit list of checkpoint tensor namespace prefixes that mean a non-text encoder
+// or a modality projector actually ships in the weights. It is deliberately wider than "vision"
+// (video and audio towers are listed too) because over-blocking is safe here: a false positive only
+// keeps the fail-closed MULTIMODAL_WORKLOAD verdict that already applies today. Matching runs per
+// dot-separated tensor-name segment, so no partial substring can excuse a checkpoint.
+const NON_TEXT_TENSOR_SEGMENT_RE = /^(?:vision|visual|vit|image|images|img|video|pixel|patch_embed|patch_embedding|multi_modal|multimodal|mm_proj|mm_projector|modality_projector|perceiver|resampler|merger|siglip|clip|vqmodel|audio)(?:_|\d|$)/i;
+
+// True when the pinned weight map ships any vision/visual/image-encoder/projector tensor namespace.
+// A weight map that is not a plain object is reported as vision-bearing so callers stay fail-closed.
+export function hasShippedVisionTensor(weightMap) {
+  if (!isPlainObject(weightMap)) return true;
+  return Object.keys(weightMap).some(
+    (name) => name.split('.').some((segment) => NON_TEXT_TENSOR_SEGMENT_RE.test(segment)),
+  );
+}
+
+// A retained `vision_config` wrapper is nonblocking only when the pinned evidence itself proves the
+// shipped checkpoint is text-only. Every clause below must hold; anything missing, oversized,
+// truncated, malformed, summary-only or ambiguous keeps MULTIMODAL_WORKLOAD.
+function provenTextOnlyCheckpoint(evidence) {
+  if (!isPlainObject(evidence) || evidence.lifecycleState !== 'EVIDENCE_PINNED') return false;
+  if (!REVISION_RE.test(evidence.revision || '')) return false;
+  if (evidence.pipelineTag !== 'text-generation') return false;
+  if (!Array.isArray(evidence.failureCodes) || evidence.failureCodes.length > 0) return false;
+  let id;
+  try { id = canonicalCandidateId({ id: evidence.id }); } catch { return false; }
+  const slot = evidence.weightsIndex;
+  if (!isPlainObject(slot)
+      || slot.url !== evidenceUrl(id, evidence.revision, 'model.safetensors.index.json')
+      || !Number.isSafeInteger(slot.bytes) || slot.bytes <= 0
+      || slot.bytes > EVIDENCE_BYTE_LIMITS['model.safetensors.index.json']
+      || !/^[0-9a-f]{64}$/.test(slot.sha256 || '')
+      || typeof slot.etag !== 'string' || slot.etag.length === 0
+      || !Number.isSafeInteger(slot.totalSizeBytes) || slot.totalSizeBytes <= 0) return false;
+  if (!isPlainObject(evidence.rawWeightsIndex)) return false;
+  const weightMap = evidence.rawWeightsIndex.weight_map;
+  if (!isPlainObject(weightMap)) return false;
+  const names = Object.keys(weightMap);
+  if (names.length === 0) return false;
+  if (names.some((name) => !name || typeof weightMap[name] !== 'string' || !weightMap[name])) return false;
+  return !hasShippedVisionTensor(weightMap);
+}
+
+export function detectCapabilityBlockers(raw, evidence = null) {
   if (!isPlainObject(raw)) return null;
   const text = isPlainObject(raw.text_config) ? raw.text_config : raw;
   const unsupportedComponents = [];
@@ -557,7 +600,7 @@ export function detectCapabilityBlockers(raw) {
     ...multimodalFields.filter((field) => hasOwn(raw, field)).map((field) => activationState(raw[field])),
   ];
   if (multimodalStates.includes('active')) {
-    unsupportedComponents.push('MULTIMODAL_WORKLOAD');
+    if (!provenTextOnlyCheckpoint(evidence)) unsupportedComponents.push('MULTIMODAL_WORKLOAD');
   } else if (multimodalStates.includes('ambiguous')) {
     ambiguous = true;
   }
@@ -573,7 +616,7 @@ export function classifyCapability(evidence) {
   if (evidence.pipelineTag === null || evidence.pipelineTag === undefined) {
     return { state: 'CAPABILITY_UNKNOWN', failureCodes: ['PIPELINE_TAG_UNKNOWN'], numericResult: null };
   }
-  const blockers = detectCapabilityBlockers(evidence.rawConfig);
+  const blockers = detectCapabilityBlockers(evidence.rawConfig, evidence);
   if (blockers) return blockers;
   try {
     fitllmEngine.parseHfConfig(evidence.id, evidence.rawConfig, evidence.weightsIndex?.totalSizeBytes);

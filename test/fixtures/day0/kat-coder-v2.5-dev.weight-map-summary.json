@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "fitllm.day0-fixture.weight-map-summary.v1",
+  "note": [
+    "Deterministic lossless namespace summary of the pinned upstream model.safetensors.index.json.",
+    "Expanding every template over its recorded layer set (and expert range) reproduces the exact",
+    "upstream tensor-name set: 31333 names whose sorted newline-joined SHA-256 equals",
+    "tensorNameSetSha256. The 3307579-byte upstream index is therefore not vendored.",
+    "Upstream weight_map key order and per-name shard assignment are NOT preserved: day0",
+    "classification reads tensor namespaces only, and shard assignment in the expanded fixture is",
+    "synthesized by splitting the sorted names into equal contiguous blocks over shardFiles."
+  ],
+  "source": {
+    "modelId": "Kwaipilot/KAT-Coder-V2.5-Dev",
+    "revision": "7be56fe773e72b6f5ca93c1ae45d828ddb893922",
+    "url": "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev/resolve/7be56fe773e72b6f5ca93c1ae45d828ddb893922/model.safetensors.index.json",
+    "treeUrl": "https://huggingface.co/Kwaipilot/KAT-Coder-V2.5-Dev/tree/7be56fe773e72b6f5ca93c1ae45d828ddb893922",
+    "retrievedAt": "2026-09-05",
+    "xRepoCommit": "7be56fe773e72b6f5ca93c1ae45d828ddb893922",
+    "bytes": 3307579,
+    "etag": "\"1937e7e0df779de91793933193e28e066f7d6f78\"",
+    "sha256": "eb0b6ae31ebb719eabf74957c35fbfa56752a4588b07edaf94907a2734ae1bd3"
+  },
+  "metadata": { "total_size": 69321221376 },
+  "entryCount": 31333,
+  "tensorNameSetSha256": "d572d1354e3698cfe2231ecfc29657fdf72a8a01c040888b5443854182fa87ae",
+  "expertCount": 256,
+  "layerIndexSets": {
+    "all": [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+      20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39
+    ],
+    "linearAttention": [
+      0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 16, 17, 18, 20, 21, 22, 24, 25,
+      26, 28, 29, 30, 32, 33, 34, 36, 37, 38
+    ],
+    "fullAttention": [3, 7, 11, 15, 19, 23, 27, 31, 35, 39]
+  },
+  "shardFiles": [
+    "model-00000-of-00013.safetensors",
+    "model-00001-of-00013.safetensors",
+    "model-00002-of-00013.safetensors",
+    "model-00003-of-00013.safetensors",
+    "model-00004-of-00013.safetensors",
+    "model-00005-of-00013.safetensors",
+    "model-00006-of-00013.safetensors",
+    "model-00007-of-00013.safetensors",
+    "model-00008-of-00013.safetensors",
+    "model-00009-of-00013.safetensors",
+    "model-00010-of-00013.safetensors",
+    "model-00011-of-00013.safetensors",
+    "model-00012-of-00013.safetensors"
+  ],
+  "templates": [
+    { "name": "lm_head.weight", "layers": null, "experts": false, "count": 1 },
+    { "name": "model.language_model.embed_tokens.weight", "layers": null, "experts": false, "count": 1 },
+    { "name": "model.language_model.norm.weight", "layers": null, "experts": false, "count": 1 },
+    { "name": "model.language_model.layers.{layer}.input_layernorm.weight", "layers": "all", "experts": false, "count": 40 },
+    { "name": "model.language_model.layers.{layer}.post_attention_layernorm.weight", "layers": "all", "experts": false, "count": 40 },
+    { "name": "model.language_model.layers.{layer}.mlp.gate.weight", "layers": "all", "experts": false, "count": 40 },
+    { "name": "model.language_model.layers.{layer}.mlp.shared_expert.down_proj.weight", "layers": "all", "experts": false, "count": 40 },
+    { "name": "model.language_model.layers.{layer}.mlp.shared_expert.gate_proj.weight", "layers": "all", "experts": false, "count": 40 },
+    { "name": "model.language_model.layers.{layer}.mlp.shared_expert.up_proj.weight", "layers": "all", "experts": false, "count": 40 },
+    { "name": "model.language_model.layers.{layer}.mlp.shared_expert_gate.weight", "layers": "all", "experts": false, "count": 40 },
+    { "name": "model.language_model.layers.{layer}.mlp.experts.{expert}.down_proj.weight", "layers": "all", "experts": true, "count": 10240 },
+    { "name": "model.language_model.layers.{layer}.mlp.experts.{expert}.gate_proj.weight", "layers": "all", "experts": true, "count": 10240 },
+    { "name": "model.language_model.layers.{layer}.mlp.experts.{expert}.up_proj.weight", "layers": "all", "experts": true, "count": 10240 },
+    { "name": "model.language_model.layers.{layer}.linear_attn.A_log", "layers": "linearAttention", "experts": false, "count": 30 },
+    { "name": "model.language_model.layers.{layer}.linear_attn.conv1d.weight", "layers": "linearAttention", "experts": false, "count": 30 },
+    { "name": "model.language_model.layers.{layer}.linear_attn.dt_bias", "layers": "linearAttention", "experts": false, "count": 30 },
+    { "name": "model.language_model.layers.{layer}.linear_attn.in_proj_a.weight", "layers": "linearAttention", "experts": false, "count": 30 },
+    { "name": "model.language_model.layers.{layer}.linear_attn.in_proj_b.weight", "layers": "linearAttention", "experts": false, "count": 30 },
+    { "name": "model.language_model.layers.{layer}.linear_attn.in_proj_qkv.weight", "layers": "linearAttention", "experts": false, "count": 30 },
+    { "name": "model.language_model.layers.{layer}.linear_attn.in_proj_z.weight", "layers": "linearAttention", "experts": false, "count": 30 },
+    { "name": "model.language_model.layers.{layer}.linear_attn.norm.weight", "layers": "linearAttention", "experts": false, "count": 30 },
+    { "name": "model.language_model.layers.{layer}.linear_attn.out_proj.weight", "layers": "linearAttention", "experts": false, "count": 30 },
+    { "name": "model.language_model.layers.{layer}.self_attn.k_norm.weight", "layers": "fullAttention", "experts": false, "count": 10 },
+    { "name": "model.language_model.layers.{layer}.self_attn.k_proj.weight", "layers": "fullAttention", "experts": false, "count": 10 },
+    { "name": "model.language_model.layers.{layer}.self_attn.o_proj.weight", "layers": "fullAttention", "experts": false, "count": 10 },
+    { "name": "model.language_model.layers.{layer}.self_attn.q_norm.weight", "layers": "fullAttention", "experts": false, "count": 10 },
+    { "name": "model.language_model.layers.{layer}.self_attn.q_proj.weight", "layers": "fullAttention", "experts": false, "count": 10 },
+    { "name": "model.language_model.layers.{layer}.self_attn.v_proj.weight", "layers": "fullAttention", "experts": false, "count": 10 }
+  ]
+}
