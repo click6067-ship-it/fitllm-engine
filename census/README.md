@@ -30,8 +30,8 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 |---|---|---|---|
 | GLM-4.7-Flash | 31.2B | RTX 4090 | M6 32GB |
 | GLM-5.2 | 753B | — | M3 Ultra 512GB |
-| gpt-oss-20b | 21B | RTX 5080 | M6 24GB |
-| gpt-oss-120b | 117B | A100 80GB | M5 Ultra 96GB |
+| gpt-oss-20b | 20.9B | RTX 5080 | M6 24GB |
+| gpt-oss-120b | 116.8B | A100 80GB | M5 Ultra 96GB |
 | Qwen 3.6 27B | 27.2B | RTX 4090 | M6 32GB |
 | Qwen 3.6 35B-A3B | 35B | RTX 5090 | M6 32GB |
 | Qwen-AgentWorld-35B-A3B | 34.7B | RTX 5090 | M6 32GB |

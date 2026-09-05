@@ -255,15 +255,16 @@ test('test_census_contains_granite_rows', () => {
 });
 
 test('test_release_version_bumped_and_readme_counts', () => {
-  // 카탈로그 1행 추가 = minor bump 2.13.0 → 2.14.0 (#93) — 버전 표면 3곳과 수치 표면을 함께 현행화
+  // 카탈로그 1행 추가 = minor bump 2.13.0 → 2.14.0 (#93) — 버전 표면 3곳과 수치 표면을 함께 현행화.
+  // 2.14.1 = gpt-oss totalParams를 HF 증거값(20.9/116.8)으로 맞춘 patch bump (#98 잔여).
   const pkg = readJson('../package.json');
   const lock = readJson('../package-lock.json');
-  assert.equal(pkg.version, '2.14.0');
-  assert.equal(lock.version, '2.14.0');
-  assert.equal(ENGINE_VERSION, '2.14.0');
+  assert.equal(pkg.version, '2.14.1');
+  assert.equal(lock.version, '2.14.1');
+  assert.equal(ENGINE_VERSION, '2.14.1');
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.14.0', 'conformance_vectors-30%2F30', '30 language-neutral', '9,126 verdicts', '26 models incl. draft tier']) {
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.14.1', 'conformance_vectors-30%2F30', '30 language-neutral', '9,126 verdicts', '26 models incl. draft tier']) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
   for (const s of ['9,126 verdicts', '30 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);

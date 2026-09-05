@@ -82,7 +82,7 @@ permissions:
 steps:
   - name: Check model memory before download
     id: preflight
-    uses: click6067-ship-it/fitllm-engine@v2.14.0
+    uses: click6067-ship-it/fitllm-engine@v2.14.1
     with:
       model: Gemma 4 12b
       gpu: RTX 4090

@@ -23,15 +23,26 @@ export const MODELS = [
     numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
     desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit)' }, // config.json+index(1.5TB÷2 bf16): zai-org/GLM-5.2
 
-  // --- gpt-oss (OpenAI, MoE + 슬라이딩 128, 절반이 full-attn) — MXFP4 네이티브(파라미터 카운트는 카드 기준) ---
+  // --- gpt-oss (OpenAI, MoE + 슬라이딩 128, 절반이 full-attn) — MXFP4 네이티브 ---
+  // totalParams는 모델카드 반올림(21B/117B)이 아니라 HF API safetensors.parameters(dtype별 *논리* 파라미터 수)의
+  // immutable revision 합계를 parseHfConfig와 같은 0.1B 정밀도로 옮긴 값이다 — 카탈로그 행과 같은 모델의 HF 즉석 파싱이
+  // 같은 판정을 내야 한다(#98 잔여: 21↔20.9, 117↔116.8 차이로 no↔tight 경계 케이스가 갈렸다).
+  // BF16 = attention·router·embedding, U8 = MXFP4 packed expert(논리 수). 검증: src/lib/gpt-oss-hf-parity.test.js
+  //   gpt-oss-20b  @ 6cee5e81ee83917806bbde320786a8fb61efebee — BF16 1,804,459,584 + U8 19,110,297,600 = 20,914,757,184 → 20.9
+  //     https://huggingface.co/api/models/openai/gpt-oss-20b/revision/6cee5e81ee83917806bbde320786a8fb61efebee
+  //     https://huggingface.co/openai/gpt-oss-20b/resolve/6cee5e81ee83917806bbde320786a8fb61efebee/config.json
+  //   gpt-oss-120b @ b5c939de8f754692c1647ca79fbf85e8c1e70f8a — BF16 2,167,371,072 + U8 114,661,785,600 = 116,829,156,672 → 116.8
+  //     https://huggingface.co/api/models/openai/gpt-oss-120b/revision/b5c939de8f754692c1647ca79fbf85e8c1e70f8a
+  //     https://huggingface.co/openai/gpt-oss-120b/resolve/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json
+  // 활성 파라미터 3.6B/5.1B는 OpenAI 모델카드 표기를 유지한다(https://huggingface.co/openai/gpt-oss-20b · https://huggingface.co/openai/gpt-oss-120b).
   { name: 'gpt-oss-20b', group: 'gpt-oss', tags: ['moe'],
-    totalParams: 21, activeParams: 3.6, layerCount: 24, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
+    totalParams: 20.9, activeParams: 3.6, layerCount: 24, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
     numExperts: 32, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 12, benchmarks: null,
-    desc: 'MoE · 21B / 3.6B active · 32 experts(top-4) · 슬라이딩128(full 12/24) · 최대 128K' }, // config.json: openai/gpt-oss-20b
+    desc: 'MoE · 20.9B / 3.6B active · 32 experts(top-4) · 슬라이딩128(full 12/24) · 최대 128K' }, // config.json: openai/gpt-oss-20b @ 6cee5e8
   { name: 'gpt-oss-120b', group: 'gpt-oss', tags: ['moe'],
-    totalParams: 117, activeParams: 5.1, layerCount: 36, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
+    totalParams: 116.8, activeParams: 5.1, layerCount: 36, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
     numExperts: 128, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 18, benchmarks: null,
-    desc: 'MoE · 117B / 5.1B active · 128 experts(top-4) · 슬라이딩128(full 18/36) · 최대 128K' }, // config.json: openai/gpt-oss-120b
+    desc: 'MoE · 116.8B / 5.1B active · 128 experts(top-4) · 슬라이딩128(full 18/36) · 최대 128K' }, // config.json: openai/gpt-oss-120b @ b5c939d
 
   // === Qwen 3.6 27B (dense, 하이브리드 linear+full attn ~3:1) — HF config.json ===
   {
@@ -1797,4 +1808,4 @@ export const DATA_UPDATED = '2026-09';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.14.0';
+export const ENGINE_VERSION = '2.14.1';

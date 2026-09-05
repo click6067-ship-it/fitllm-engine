@@ -74,7 +74,7 @@ test('README pins three sourced premises and bans a fixed 71x multiplier', () =>
 
 test('distribution preflight examples stay present and reproducible', () => {
   for (const required of [
-    'uses: click6067-ship-it/fitllm-engine@v2.14.0',
+    'uses: click6067-ship-it/fitllm-engine@v2.14.1',
     'npx fitllm "Gemma 4 12b" --detect --json --why',
     '&& ollama pull gemma4:12b',
     '&& llama-cli -m',
