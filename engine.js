@@ -91,6 +91,7 @@ export const MODELS = [
     // 출처: google/gemma-4-E2B-it config.json(text_config) + GGUF per_layer_token_embd 실측 산술 일치
     // (unsloth GGUF discussion: 1,837MiB = 262144×256×35 × Q6_K 6.5625bpw 정확 재현). GPU 상주 제외 근거는 residentParamsB 참조.
     pleParams: 2.349,
+    pleOffloadVerified: true,
     layerCount: 35,
     kvHeads: 1,
     kvHeadDim: 256,
@@ -113,6 +114,7 @@ export const MODELS = [
     // PLE 텐서 = 262144 × 256 × 42L = 2,818,572,288 — google/gemma-4-E4B-it config.json(text_config).
     // 공식 유효치 역산 정합: raw 7,996.2M − PLE 2,818.6M − token_embd 671.1M ≈ 4,506M = "4.5B effective" (모델카드·HF 블로그)
     pleParams: 2.819,
+    pleOffloadVerified: true,
     layerCount: 42,
     kvHeads: 2,
     kvHeadDim: 256,
@@ -658,21 +660,50 @@ const quantAdjust = {
   'Gemma 4 26b A4B': { 16: 1.01, 8: 1.1, 4: 1.2 }, // 실측 1.012 / 1.096 / 1.203
 };
 
-// PLE(Per-Layer Embeddings, Gemma 4 e2b/e4b) 상주 분리 — 이슈 #7.
-// llama.cpp는 *기본값으로* per_layer_token_embd를 시스템 RAM에 상주시킴(-ngl 무관, ggml-org/llama.cpp#14430)
-// → GPU VRAM에는 non-PLE(totalParams−pleParams)만 필요. 단 절대 불가는 아님: K-quant GGUF는 CUDA 강제
-// 배치(-ot)가 getrows 미지원으로 크래시, non-K(Q4_1/Q5_1 등)만 opt-in 오프로드 가능(unsloth GGUF discussion).
-// 실측 근거는 E-시리즈 PLE 스택(전세대 구현 + unsloth per_layer_token_embd 1,837MiB RAM 실측) —
-// gemma-4 파일 직접 실측은 미확보(verifier 2026-07-12, 이슈 #7에 measurement 요청).
-// Apple 통합메모리는 시스템 RAM = 액셀러레이터 메모리(같은 풀) → totalParams 유지.
-// ⚠️ vLLM은 PLE를 GPU에 통째 로드(vLLM gemma4 model: VocabParallelEmbedding, CPU 캐싱 없음 — VERIFIED) —
-// 엔진 GPU 모드의 런타임 앵커는 GGUF/llama.cpp 기본 동작(GPU_QUANTS가 GGUF 티어)이므로 제외가 정본.
-// 가드: pleParams ≥ totalParams는 데이터 오류(parseHfConfig는 임의 공개 config를 받음) —
-// 음수 상주가 거짓 "fits"를 만들지 않게 무시(음수 ctx 가드와 같은 공개-입력 계열).
-// simulate의 pleOffloadGB도 같은 가드를 타야 함(가드된 판정 + 비가드 표시값 모순 방지 — Codex 리뷰).
+// Exact Gemma text-family identity:
+// https://huggingface.co/google/gemma-4-E2B-it/blob/main/config.json
+// Pinned llama.cpp/GGUF lazy-or-host-resident evidence; this does not prove
+// unconditional host-RAM residency, and accelerator loading invalidates the estimate:
+// https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/models/gemma4.cpp
+// https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.h
+// https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.cpp
+const PLE_OFFLOAD_FAMILIES = new Set(['gemma4_text']);
+
+// MLA cache structure:
+// https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py
+// https://github.com/ggml-org/llama.cpp/blob/master/src/llama-kv-cache.cpp
+// MTP trunk/draft separation:
+// https://github.com/ggml-org/llama.cpp/blob/master/src/llama-hparams.cpp
+// https://github.com/ggml-org/llama.cpp/blob/master/src/llama-model.cpp
+const STRUCTURAL_ASSUMPTIONS = Object.freeze({
+  mla: Object.freeze({
+    id: 'mla-compressed-latent-cache',
+    statement: 'KV memory assumes a compressed-latent MLA artifact or mode; legacy non-MLA GGUF or an explicitly uncompressed mode invalidates this estimate.',
+  }),
+  ple: Object.freeze({
+    id: 'ple-llamacpp-non-gpu-residency',
+    statement: 'GPU weight memory excludes the verified Gemma 4 PLE tensors only under the pinned llama.cpp/GGUF lazy-or-host-resident path; an accelerator-loading runtime invalidates this estimate.',
+  }),
+  mtp: Object.freeze({
+    id: 'mtp-ordinary-generation',
+    statement: 'KV memory assumes ordinary non-speculative generation; an MTP draft context is not included.',
+  }),
+});
+
 function guardedPleParamsB(model) {
-  return model.pleParams && model.pleParams < model.totalParams ? model.pleParams : 0;
+  return model.pleOffloadVerified === true && model.pleParams && model.pleParams < model.totalParams
+    ? model.pleParams
+    : 0;
 }
+
+export function structuralAssumptions(model, device) {
+  const result = [];
+  if (model.mlaKvLoraRank) result.push(STRUCTURAL_ASSUMPTIONS.mla);
+  if (device?.type === 'gpu' && guardedPleParamsB(model)) result.push(STRUCTURAL_ASSUMPTIONS.ple);
+  if (model.mtpLayerCount > 0) result.push(STRUCTURAL_ASSUMPTIONS.mtp);
+  return result.map((item) => ({ ...item }));
+}
+
 function residentParamsB(model, device) {
   const ple = guardedPleParamsB(model);
   return device && device.type === 'gpu' && ple ? model.totalParams - ple : model.totalParams;
@@ -768,9 +799,8 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight(파라미터) ↔ KV 비트 분리
   const param = calcParamMemory(model, weightBpw, device).totalGB; // PLE 모델은 GPU에서 상주분만 (residentParamsB)
   const kv = calcKVCache(model, ctx, kvBits).totalGB;
-  // PLE가 시스템 RAM에 스트리밍되는 *근사* 크기 — 같은 bpw 가정. 실제 GGUF는 PLE를 상위 티어(Q6_K 등)로
-  // 별도 양자화하는 경우가 있어 실호스트 RAM은 수백 MiB 더 클 수 있음(unsloth 실측: Q4 파일의 PLE가 Q6_K).
-  // UI 각주용 정보값이며 used/verdict에는 불포함(GPU 모드는 시스템 RAM을 모델링하지 않음).
+  // 검증된 pinned llama.cpp/GGUF lazy-or-host-resident 경로에서 GPU에 상주하지 않는 PLE 근사 크기.
+  // accelerator-loading runtime에서는 이 추정과 GPU weight 차감이 모두 무효다.
   const pleOffloadGB = device.type === 'gpu' ? (guardedPleParamsB(model) * 1e9 * (weightBpw / 8)) / 1024 ** 3 : 0;
 
   // 단일 reserve 방정식(Codex council): used = param + kv + rtDyn + reserve. reserve는 1회만.
@@ -793,6 +823,7 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
 
   const os = device._os ?? 0; // Apple 표시 호환
   const rt = rtDyn + ov.fixedOverheadGB; // 기존 rt = 동적 + 고정(Apple 2.0 / GPU 0 — calcRuntimeOverhead가 결정)
+  const assumptions = structuralAssumptions(model, device);
 
   return {
     model,
@@ -812,13 +843,14 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
     rtDyn,
     reserve,
     system: os + rt, // 비전공자용 묶음
-    pleOffloadGB, // >0이면 PLE 가중치가 시스템 RAM 상주(GPU/llama.cpp 경로) — UI 각주용
+    pleOffloadGB, // >0이면 pinned llama.cpp/GGUF lazy-or-host-resident 경로에서 GPU에 상주하지 않는 PLE 근사분 — UI 각주용(판정 미포함)
     used,
     free,
     headroom,
     verdict,
     pct: used / device.memoryGB,
     maxContext: calcMaxContext(model, device, { weightBpw, kvBits }),
+    ...(assumptions.length ? { structuralAssumptions: assumptions } : {}),
   };
 }
 
@@ -835,19 +867,30 @@ export function simulateStack(entries, deviceOrRam) {
     const kv = calcKVCache(model, c, kb).totalGB;
     const ov = calcRuntimeOverhead(model, c, { weightBpw, kvBits: kb }, device);
     const rtDyn = ov.paramOverheadGB + ov.kvOverheadGB + ov.activationOverheadGB;
-    return { model, ctx: c, weightBpw, kvBits: kb, param, kv, rtDyn, subtotal: param + kv + rtDyn };
+    const assumptions = structuralAssumptions(model, device);
+    return {
+      model, ctx: c, weightBpw, kvBits: kb, param, kv, rtDyn,
+      subtotal: param + kv + rtDyn,
+      ...(assumptions.length ? { structuralAssumptions: assumptions } : {}),
+    };
   });
   const reserve = device.reserveGB;
   const used = parts.reduce((s, p) => s + p.subtotal, 0) + reserve;
   const free = device.memoryGB - used;
   const headroom = device.memoryGB * device.headroomRatio;
   const verdict = free < 0 ? 'no' : free < headroom ? 'tight' : 'yes';
+  // 중복 제거한 뒤 다시 복제한다 — Map은 part가 들고 있는 *바로 그* 객체를 담으므로,
+  // 복제하지 않으면 스택 레벨 item을 만진 소비자가 part의 값까지 바꾼다(순수 결과 규율).
+  const assumptions = [...new Map(
+    parts.flatMap((part) => part.structuralAssumptions || []).map((item) => [item.id, item])
+  ).values()].map((item) => ({ ...item }));
   return {
     parts, device, memoryGB: device.memoryGB, reserve, used, free, headroom, verdict,
     pct: used / device.memoryGB,
     param: parts.reduce((s, p) => s + p.param, 0),
     kv: parts.reduce((s, p) => s + p.kv, 0),
     rt: parts.reduce((s, p) => s + p.rtDyn, 0),
+    ...(assumptions.length ? { structuralAssumptions: assumptions } : {}),
   };
 }
 
@@ -1247,6 +1290,22 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     throw new Error('cross-attention 융합 멀티모달은 아직 지원하지 않아요');
   }
   const c = inner;
+  const modelType = familyOf(c.model_type || raw.model_type);
+  // MTP는 디코더 본체 밖이라 KV·가중치 계산에 들어가지 않는 메타데이터지만, 공시(structuralAssumptions)의
+  // 입력이다. 래퍼(top-level)에만 이 키가 있는 config은 구조 키 정책이 이미 통과시키므로
+  // (num_nextn_predict_layers=BENIGN, mtp_num_hidden_layers=qwen3_5 family key) text body만 읽으면
+  // 공시가 조용히 사라졌다. text body를 우선하고 래퍼를 fallback으로 정규화한다.
+  // 읽는 스코프가 늘었으므로 값 검증도 같은 스코프에 적용한다 — 검증 없는 새 입력 경로는 만들지 않는다.
+  const mtpScopes = raw === inner ? [c] : [c, raw];
+  for (const key of ['num_nextn_predict_layers', 'mtp_num_hidden_layers']) {
+    for (const scope of mtpScopes) {
+      if (scope[key] != null && !(Number.isInteger(scope[key]) && scope[key] >= 0)) {
+        throw new Error(`config의 ${key} 값이 비음수 정수가 아니에요 — 계산하지 않습니다`);
+      }
+    }
+  }
+  const mtpField = (key) => (c[key] != null ? c[key] : (raw !== inner ? raw[key] : undefined)) || 0;
+  const mtpLayerCount = Math.max(mtpField('num_nextn_predict_layers'), mtpField('mtp_num_hidden_layers')) || undefined;
   if ((c.num_loops || 1) !== 1) {
     throw new Error('반복 레이어(num_loops) 아키텍처는 아직 지원하지 않아요');
   }
@@ -1277,7 +1336,7 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   }
   // 미지 구조 필드 게이트(#87) — 구조에 영향 줄 수 있는 이름인데 의미를 모르는 키가 있으면 거부.
   // 특정 실패 패턴을 막는 위 검사들보다 뒤에 둔다(그쪽이 더 정확한 메시지를 준다).
-  const familyKeys = FAMILY_STRUCTURAL_KEYS.get(familyOf(c.model_type || raw.model_type));
+  const familyKeys = FAMILY_STRUCTURAL_KEYS.get(modelType);
   // 두 스코프를 모두 스캔한다 — 종래엔 text_config만 봐서 최상위에 구조 필드를 두면 그대로 통과했다.
   const scanScopes = raw === inner ? [inner] : [inner, raw];
   const unknownStructural = [...new Set(scanScopes.flatMap((s) => Object.keys(s)))].filter(
@@ -1386,10 +1445,13 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   const isMoe = !!numExperts;
 
   // PLE(Per-Layer Embeddings, Gemma e2b/e4b류) 감지 — config에 두 필드가 있으면 텐서 크기 결정론 산출.
-  // GPU fit에서 이 분량은 시스템 RAM 상주(residentParamsB 참조). 카탈로그의 손계산 값과 같은 식.
+  // 검증된 gemma4_text 계열에 한해 pinned llama.cpp/GGUF lazy-or-host-resident 경로에서만 GPU weight
+  // 차감 대상이 된다(residentParamsB·pleOffloadVerified 참조). 그 밖의 계열은 전체 상주로 fail-close.
+  // 카탈로그의 손계산 값과 같은 식.
   const pleParams = c.vocab_size_per_layer_input && c.hidden_size_per_layer_input
     ? (c.vocab_size_per_layer_input * c.hidden_size_per_layer_input * layerCount) / 1e9
     : undefined;
+  const pleOffloadVerified = Boolean(pleParams && PLE_OFFLOAD_FAMILIES.has(modelType));
 
   // MLA(Multi-head Latent Attention) 감지 — kv_lora_rank 있으면 압축 KV 경로(GLM-5.2/GLM-4.7-Flash 등).
   // ⚠ DeepSeek-V4류(kv_lora_rank 부재 + MQA/compressor)는 MLA 아님 → 표준 경로 유지.
@@ -1548,7 +1610,9 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     expertsPerToken,
     mlaKvLoraRank,
     mlaRopeDim,
+    mtpLayerCount,
     pleParams: pleParams ? +pleParams.toFixed(3) : undefined,
+    pleOffloadVerified,
     maxContext: c.max_position_embeddings || 131072,
     // MLA가 우선 경로 → MLA 모델엔 sliding 필드 미설정(계산은 MLA 먼저 타지만 dead data 방지, correct-by-construction)
     slidingWindow: mlaKvLoraRank ? undefined : sliding || undefined,

@@ -332,3 +332,9 @@ test('최종 방어선: used/free가 비유한수면 verdict가 yes가 되지 �
   const s = simulate(broken, gpuDevice(GPUS[0]), 8192, { weightBpw: 4, kvBits: 16 });
   assert.notEqual(s.verdict, 'yes', `verdict ${s.verdict} — NaN인데 yes가 나왔다`);
 });
+
+test('negative MTP layer metadata is rejected before a numeric result', () => {
+  assert.throws(() => parseHfConfig('example/bad-mtp', {
+    ...BASE, model_type: 'llama', num_nextn_predict_layers: -1,
+  }, 16e9), /num_nextn_predict_layers/);
+});
