@@ -361,13 +361,46 @@ export const MODELS = [
     benchmarks: null,    // 카드 벤치표에 SWE-bench Verified·GPQA·MMLU-Pro 없음(Multilingual/Pro/Terminal만) → 미기입
     desc: 'MoE · 117.6B / 8B active · 256 experts(top-10) · 슬라이딩512(full 12/48) · 최대 1M · OpenMDW-1.1',
   },
+
+  // ==========================================================================
+  //  Spark-X2.5 (XHToken) — 2026-09 Day-0 (#103). model_type spark2_5: 표준 GQA(16/4, head_dim 256) + SWA(512) 3:1 인터리브.
+  //  ⚠️ 배열 끝 append 고정(?m= 링크 보존). 1차 출처(전부 pinned revision 5e10fcc0286756aebf7c41dc52c1e42d95c70281):
+  //   config.json  https://huggingface.co/XHToken/Spark-X2.5-4B/blob/5e10fcc0286756aebf7c41dc52c1e42d95c70281/config.json
+  //   modeling     https://huggingface.co/XHToken/Spark-X2.5-4B/blob/5e10fcc0286756aebf7c41dc52c1e42d95c70281/modeling_spark.py
+  //   index        https://huggingface.co/XHToken/Spark-X2.5-4B/blob/5e10fcc0286756aebf7c41dc52c1e42d95c70281/model.safetensors.index.json
+  //   HF API       https://huggingface.co/api/models/XHToken/Spark-X2.5-4B/revision/5e10fcc0286756aebf7c41dc52c1e42d95c70281
+  //  3중 교차검증(바이트 정확 일치): ① HF API safetensors BF16 4,112,079,360 == index total_parameters == total_size 8,224,158,720 ÷ 2
+  //   ② 5개 shard 헤더의 텐서 shape 곱 합계 == 4,112,079,360
+  //   ③ config 치수 손계산 == 4,112,079,360: 36 × [q_k_v_proj 2560×6144 + out_proj 4096×2560 + g_proj 2560×16
+  //      + MLP 3×2560×10240 + norm 2×2560] + embedding 131072×2560(tied) + 최종 norm 2560
+  //  g_proj(hidden→num_heads)는 어텐션 출력에 곱하는 헤드별 게이트(modeling_spark.py Spark2_5Attention) — 가중치 40,960/layer만
+  //  늘고 K/V 캐시 shape(4 kvh × 256)는 불변. 라이선스 Apache-2.0(모델카드·LICENSE). 1.7B 형제 모델은 이번 변경에 미포함.
+  // ==========================================================================
+  {
+    name: 'Spark-X2.5-4B',
+    group: 'Spark',
+    tags: ['dense'],
+    totalParams: 4.112, // 4,112,079,360
+    activeParams: 4.112, // dense — 전 파라미터 활성
+    layerCount: 36,
+    globalAttnLayers: 9,   // layer_types: full_attention 9 (idx 3,7,…,35) / sliding_attention 27
+    slidingWindow: 512,    // config sliding_window
+    slidingPattern: '3:1', // 27:9 실카운트 — 모델카드 "one full-attention layer with three sliding-window attention layers"
+    kvHeads: 4,
+    kvHeadDim: 256,
+    attnHeads: 16,
+    hiddenSize: 2560,
+    maxContext: 1048576, // config max_position_embeddings — 모델카드 "native context windows of up to 1M tokens"
+    benchmarks: null,    // 카드 표의 "GPQA"는 Diamond 명시·체크포인트 귀속이 없고 MMLU-Pro 미공표 → 미기입(엔진 원칙: 공개·검증된 것만)
+    desc: 'Dense · 4.1B · 36레이어 · GQA(16/4, head_dim 256) · 슬라이딩512(3:1, full 9/36) · 최대 1M · Apache 2.0',
+  },
 ];
 
 // 카탈로그 표시 순서(최신·화제순). MODELS 배열은 ?m= 공유링크 때문에 append-only라
 // 배열 순서 == 표시 순서가 더 이상 성립하지 않는다. 이 목록이 표시 순서의 단일 출처다.
 // 여기 없는 그룹은 뒤에 배열 순서대로 붙는다(신규 그룹 추가를 잊어도 사라지지 않게).
 export const MODEL_GROUP_ORDER = [
-  'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5',
+  'Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5',
   'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft',
 ];
 
@@ -1057,6 +1090,13 @@ function paramsFromName(id) {
   return m ? parseFloat(m[1]) : null;
 }
 
+// 슬라이딩:글로벌 레이어 수를 최대공약수로 약분한 라벨 — 카탈로그 표기('5:1'·'4:1'·'3:1')와 같은 규약.
+function slidingPatternLabel(slidingLayers, globalLayers) {
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const g = gcd(slidingLayers, globalLayers);
+  return `${slidingLayers / g}:${globalLayers / g}`;
+}
+
 // 모델링이 끝난 아키텍처만 좁게 허용한다(allowlist). qwen3_5 계열 = Gated DeltaNet 하이브리드로,
 // full/linear 레이어 분리와 고정 순환 상태를 엔진이 실제로 계산한다(calcLinearState + fullAttnLayers).
 // 파생 finetune이 매우 많아(Qwen3.8-27B 계열) 이 계열만 열어두는 가치가 크다.
@@ -1134,6 +1174,17 @@ const FAMILY_STRUCTURAL_KEYS = new Map([
     'mlp_only_layers',         // MoE 대신 dense MLP인 레이어 — FFN 구조, KV 불변
     'mtp_num_hidden_layers',   // Multi-Token Prediction 추가 레이어. 디코더 본체 밖(가중치만)
     'mamba_ssm_dtype',         // dtype 힌트. 실제 SSM 스케줄은 layers_block_type 게이트가 따로 본다
+  ])],
+  // spark2_5 = 표준 GQA + SWA(512) 3:1 인터리브(XHToken/Spark-X2.5). 두 키는 어텐션 *출력*에 곱하는 헤드별 게이트다:
+  //   g_proj = nn.Linear(hidden_size, num_heads) → sigmoid|silu(gate) × attn_output → out_proj. K/V는 그 앞에서
+  //   num_key_value_heads × head_dim 그대로 캐시된다 — 가중치(레이어당 hidden×heads)만 늘고 KV 레이아웃 불변.
+  //   pinned 1차 출처(revision 5e10fcc0286756aebf7c41dc52c1e42d95c70281):
+  //   https://huggingface.co/XHToken/Spark-X2.5-4B/blob/5e10fcc0286756aebf7c41dc52c1e42d95c70281/modeling_spark.py
+  //   https://huggingface.co/XHToken/Spark-X2.5-4B/blob/5e10fcc0286756aebf7c41dc52c1e42d95c70281/config.json
+  //   카탈로그 Spark-X2.5-4B + 벡터(spark-x25-4b-kv-1m-f16)로 검증. 정확히 'spark2_5'만 — 파생 model_type은 fail-closed.
+  ['spark2_5', new Set([
+    'gate_attn_act_mode',        // 게이트 활성함수(sigmoid|silu) — 활성화 경로만, 텐서 치수 무관
+    'headwise_attn_output_gate', // g_proj 유무 — 가중치만 늘고 KV 불변
   ])],
 ]);
 
@@ -1458,6 +1509,16 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   const mlaKvLoraRank = c.kv_lora_rank || undefined;
   const mlaRopeDim = mlaKvLoraRank ? (c.qk_rope_head_dim || 0) : undefined;
 
+  // 슬라이딩 패턴 라벨은 layer_types 실카운트로 유도한다(gcd 약분 sliding:full). 종래엔 슬라이딩이면 무조건 '5:1'
+  // (Gemma 4 관례)이라 Laguna(30:10)·Spark(27:9) 같은 3:1 배치에도 '5:1'이 붙었다. 라벨은 표시·감사용이고
+  // KV 계산은 globalAttnLayers(실카운트)를 쓰므로 바이트는 불변. 카운트를 못 얻는 경우(full 0 또는 전층)는
+  // slidingSplit이 실제로 5:1 비율로 나누므로 라벨도 '5:1'을 유지한다 — 계산과 라벨이 어긋나지 않게.
+  let slidingPattern;
+  if (sliding && !mlaKvLoraRank) {
+    const slidingCount = Array.isArray(c.layer_types) ? c.layer_types.filter((t) => String(t).includes('sliding')).length : 0;
+    slidingPattern = globalAttnLayers && slidingCount ? slidingPatternLabel(slidingCount, globalAttnLayers) : '5:1';
+  }
+
   // 파라미터 수: safetensors total_size(저장 dtype 바이트)에서 역산, 없으면 이름 추정
   let totalParams = null;
   let parameterSource = null;
@@ -1616,7 +1677,7 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     maxContext: c.max_position_embeddings || 131072,
     // MLA가 우선 경로 → MLA 모델엔 sliding 필드 미설정(계산은 MLA 먼저 타지만 dead data 방지, correct-by-construction)
     slidingWindow: mlaKvLoraRank ? undefined : sliding || undefined,
-    slidingPattern: mlaKvLoraRank ? undefined : sliding ? '5:1' : undefined,
+    slidingPattern,
     benchmarks: null,
     desc: id,
   };
@@ -1697,8 +1758,8 @@ export function resolveByName(list, query, { limit = 5 } = {}) {
 export const resolveLocalModel = (query, opts) => resolveByName(LOCAL_MODELS, query, opts);
 export const resolveGpuByName = (query, opts) => resolveByName(GPUS, query, opts);
 
-export const DATA_UPDATED = '2026-08';
+export const DATA_UPDATED = '2026-09';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.12.0';
+export const ENGINE_VERSION = '2.13.0';
