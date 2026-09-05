@@ -18,7 +18,7 @@ test('README: 낡은/과장 문구 금지', () => {
   assert.doesNotMatch(README, /every number from official config\.json/i);
   assert.doesNotMatch(SERVER, /exact VRAM|exact.*math/i);
   assert.doesNotMatch(CENSUS_GENERATOR, /every number[^\n]*official/i);
-  assert.equal(README.includes('8,000+'), false, 'census 수치는 8,424 exact');
+  assert.equal(README.includes('8,000+'), false, 'census 수치는 8,775 exact');
 });
 
 test('Quick start 첫 예시는 실제로 성공(FITS) 데모 — Gemma 4 12b × RTX 4090 E2E', () => {
@@ -31,7 +31,7 @@ test('Quick start 첫 예시는 실제로 성공(FITS) 데모 — Gemma 4 12b ×
 
 test('README: 현행 사실 필수 표기', () => {
   for (const required of [
-    '28 language-neutral', '× 93 GPUs', 'M1–M6', '28%2F28', '8,424 verdicts',
+    '29 language-neutral', '× 93 GPUs', 'M1–M6', '29%2F29', '8,775 verdicts',
     'npm install fitllm-engine', '?template=measurement.yml',
     "from 'fitllm-engine'",
     'The CLI, API, and MCP use a curated catalog pinned to official configs.', // 문법 파손 정정문(감사 제안) 고정
@@ -74,7 +74,7 @@ test('README pins three sourced premises and bans a fixed 71x multiplier', () =>
 
 test('distribution preflight examples stay present and reproducible', () => {
   for (const required of [
-    'uses: click6067-ship-it/fitllm-engine@v2.12.0',
+    'uses: click6067-ship-it/fitllm-engine@v2.13.0',
     'npx fitllm "Gemma 4 12b" --detect --json --why',
     '&& ollama pull gemma4:12b',
     '&& llama-cli -m',
