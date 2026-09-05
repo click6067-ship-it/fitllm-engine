@@ -117,3 +117,26 @@ test('--top exits 1 when nothing in catalog fits', () => {
   const { code } = run(['--top', '--mac', '8']);
   assert.equal(code, 1);
 });
+
+test('default text and JSON expose only active structural assumptions', () => {
+  const affectedText = run(['GLM-4.7-Flash', '--gpu', 'RTX 4090']);
+  assert.equal(affectedText.code, 0);
+  assert.match(affectedText.out, /premise \[mla-compressed-latent-cache\]/);
+  const affectedJson = JSON.parse(run(['GLM-4.7-Flash', '--gpu', 'RTX 4090', '--json']).out);
+  assert.equal(affectedJson.structuralAssumptions[0].id, 'mla-compressed-latent-cache');
+
+  const plain = JSON.parse(run(['Llama-3.1-8B-Instruct', '--gpu', 'RTX 4090', '--json']).out);
+  assert.deepEqual(Object.keys(plain), [
+    'model', 'hardware', 'quant', 'kvBits', 'ctx', 'verdict', 'usedGB', 'memoryGB',
+    'freeGB', 'breakdown', 'maxContext', 'engine',
+  ]);
+  assert.equal('structuralAssumptions' in plain, false);
+});
+
+test('--top attaches premises to affected rows only', () => {
+  const result = JSON.parse(run(['--top', '--gpu', 'RTX 4090', '--json']).out);
+  const mla = result.fits.find((row) => row.model === 'GLM-4.7-Flash');
+  const plain = result.fits.find((row) => row.model === 'Llama-3.1-8B-Instruct');
+  assert.equal(mla.structuralAssumptions[0].id, 'mla-compressed-latent-cache');
+  assert.equal('structuralAssumptions' in plain, false);
+});

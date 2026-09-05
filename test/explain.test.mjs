@@ -124,3 +124,10 @@ test('remote model provenance and detected hardware stay explicit', () => {
   assert.match(basis.limitations.join('\n'), /not a speed prediction/i);
   assert.match(basis.limitations.join('\n'), /runtime.*reserve.*estimates/i);
 });
+
+test('structured basis forwards active premises without adding an empty key', () => {
+  const affected = explain('GLM-4.7-Flash');
+  assert.deepEqual(affected.explanation.structuralAssumptions, affected.simulation.structuralAssumptions);
+  const plain = explain('Llama-3.1-8B-Instruct');
+  assert.equal('structuralAssumptions' in plain.explanation, false);
+});

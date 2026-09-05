@@ -33,7 +33,7 @@ inputs:
 
 outputs:
   result:
-    description: Full FitLLM JSON result, including its auditable basis.
+    description: Full conditional FitLLM JSON result, including active structural premises and its auditable basis.
     value: ${{ steps.preflight.outputs.result }}
   exit-code:
     description: FitLLM exit contract (0 fits/tight, 1 will not fit, 2 invalid input).

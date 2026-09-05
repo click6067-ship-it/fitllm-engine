@@ -44,3 +44,21 @@ test('fp32 and int8 dtype paths preserved', () => {
   const int8 = parseHfConfig('test/int8', { ...BASE, torch_dtype: 'int8' }, 16e9);
   assert.ok(Math.abs(int8.totalParams - 16) < 0.1, `int8 ${int8.totalParams}B ≠ 16B`);
 });
+
+test('PLE and MTP metadata are normalized without broadening the family allowlist', () => {
+  const base = {
+    dtype: 'bfloat16', num_hidden_layers: 35, num_attention_heads: 8,
+    num_key_value_heads: 1, head_dim: 256, hidden_size: 1536,
+    max_position_embeddings: 131072, vocab_size_per_layer_input: 262144,
+    hidden_size_per_layer_input: 256,
+  };
+  const verified = parseHfConfig('google/gemma-4-E2B-it', {
+    model_type: 'gemma4', text_config: { ...base, model_type: 'gemma4_text' },
+  }, 10246356102);
+  const unverified = parseHfConfig('example/field-lookalike', {
+    ...base, model_type: 'llama', num_nextn_predict_layers: 1,
+  }, 10246356102);
+  assert.equal(verified.pleOffloadVerified, true);
+  assert.equal(unverified.pleOffloadVerified, false);
+  assert.equal(unverified.mtpLayerCount, 1);
+});

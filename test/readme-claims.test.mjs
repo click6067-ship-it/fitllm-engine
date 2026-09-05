@@ -54,9 +54,27 @@ test('test_approved_cli_workflows', () => {
   assert.doesNotMatch(readme, /most accurate|#1 accuracy/i);
 });
 
+test('README pins three sourced premises and bans a fixed 71x multiplier', () => {
+  assert.doesNotMatch(README, /\b71(?:\.1)?\s*(?:x|×)\b/i);
+  assert.doesNotMatch(README, /keeps per-layer token embeddings in host RAM/i);
+  for (const id of [
+    'mla-compressed-latent-cache',
+    'ple-llamacpp-non-gpu-residency',
+    'mtp-ordinary-generation',
+  ]) assert.ok(README.includes(id), `missing structural premise ${id}`);
+  assert.ok(README.includes('GPU weight memory excludes the verified Gemma 4 PLE tensors only under the pinned llama.cpp/GGUF lazy-or-host-resident path; an accelerator-loading runtime invalidates this estimate.'));
+  for (const url of [
+    'https://huggingface.co/google/gemma-4-E2B-it/blob/main/config.json',
+    'https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/models/gemma4.cpp',
+    'https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.h',
+    'https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.cpp',
+  ]) assert.ok(README.includes(url), `missing pinned PLE source ${url}`);
+  assert.ok(README.includes('structuralAssumptions'), 'library example must name the structuralAssumptions export');
+});
+
 test('distribution preflight examples stay present and reproducible', () => {
   for (const required of [
-    'uses: click6067-ship-it/fitllm-engine@v2.9.0',
+    'uses: click6067-ship-it/fitllm-engine@v2.12.0',
     'npx fitllm "Gemma 4 12b" --detect --json --why',
     '&& ollama pull gemma4:12b',
     '&& llama-cli -m',
