@@ -124,5 +124,8 @@ export function buildExplanation({
       'This is a memory-capacity estimate, not a speed prediction.',
       'Runtime overhead and reserve are estimates; real usage varies by runtime, OS, drivers, and workload.',
     ],
+    ...(simulation.structuralAssumptions
+      ? { structuralAssumptions: simulation.structuralAssumptions }
+      : {}),
   };
 }

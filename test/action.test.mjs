@@ -78,3 +78,16 @@ test('multiline output delimiter cannot be injected with a model input line', ()
   assert.equal(lines.filter((line) => line === delimiter).length, 1);
   assert.equal(lines.at(-1), 'exit-code=2');
 });
+
+test('action forwards conditional premises and preserves exit contracts', () => {
+  const affected = runAction({ INPUT_MODEL: 'GLM-4.7-Flash', INPUT_GPU: 'RTX 4090' });
+  assert.equal(affected.status, 0);
+  assert.match(affected.output, /mla-compressed-latent-cache/);
+  const plain = runAction({ INPUT_MODEL: 'Llama-3.1-8B-Instruct', INPUT_GPU: 'RTX 4090' });
+  assert.equal(plain.status, 0);
+  assert.doesNotMatch(plain.output, /structuralAssumptions/);
+  const noFit = runAction({ INPUT_MODEL: 'GLM-5.2', INPUT_GPU: 'RTX 4090' });
+  assert.equal(noFit.status, 1);
+  const invalid = runAction({ INPUT_MODEL: 'not-a-model', INPUT_GPU: 'RTX 4090' });
+  assert.equal(invalid.status, 2);
+});

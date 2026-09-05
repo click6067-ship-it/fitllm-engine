@@ -180,6 +180,7 @@ if (TOP) {
       fits: top.map(({ m, t, s, maxCtx }) => ({
         model: m.name, params_b: m.totalParams, quant: t.label, verdict: s.verdict,
         usedGB: +s.used.toFixed(2), freeGB: +s.free.toFixed(2), maxContext: maxCtx,
+        ...(s.structuralAssumptions ? { structuralAssumptions: s.structuralAssumptions } : {}),
       })),
       engine: 'fitllm-engine', detection, modelSource,
     }, null, 2));
@@ -193,6 +194,9 @@ if (TOP) {
       top.forEach(({ m, t, s, maxCtx }, i) => {
         const mark = s.verdict === 'tight' ? '△' : '✓';
         console.log(`  ${String(i + 1).padStart(2)}. ${m.name.padEnd(W)}  ${String(m.totalParams).padStart(6)}B  ${t.label.padEnd(6)}  ${mark} ${fmtGB(s.used)}/${s.memoryGB} GB${maxCtx >= 1024 ? `  max ctx ~${formatTokens(maxCtx, EN)}` : ''}`);
+        for (const { id, statement } of s.structuralAssumptions || []) {
+          console.log(`      premise [${id}]: ${statement}`);
+        }
       });
       console.log('  architecture inputs pinned to official configs; runtime/OS reserves are estimates — audit: github.com/click6067-ship-it/fitllm-engine');
     }
@@ -265,6 +269,7 @@ if (has('--json')) {
     verdict: s.verdict, usedGB: +s.used.toFixed(2), memoryGB: s.memoryGB, freeGB: +s.free.toFixed(2),
     breakdown: { paramGB: +s.param.toFixed(2), kvGB: +s.kv.toFixed(2), linearStateGB: +s.linearState.toFixed(2), overheadGB: +s.rtDyn.toFixed(2), reserveGB: +s.reserve.toFixed(2) }, // reserve 병기 분해는 rtDyn(s.rt는 Apple 고정 2GB 중복). linearState=선형어텐션 고정상태(표준 어텐션은 0)
     maxContext: maxCtx, engine: 'fitllm-engine', detection, modelSource,
+    ...(s.structuralAssumptions ? { structuralAssumptions: s.structuralAssumptions } : {}),
     ...(basis ? { basis } : {}),
   }, null, 2));
 } else {
@@ -273,6 +278,9 @@ if (has('--json')) {
   console.log(`${mark} ${WORD[s.verdict]} — ${model.name} on ${hwLabel} @ ${quantLabel}, ${formatTokens(ctx, EN)}${kvBits !== 16 ? `, KV Q${kvBits}` : ''}`);
   const lsPart = s.linearState > 0 ? ` + linear-state ${fmtGB(s.linearState)}` : ''; // 하이브리드 선형 어텐션만 표시(표준 어텐션은 0이라 생략)
   console.log(`  weights ${fmtGB(s.param)} + KV ${fmtGB(s.kv)}${lsPart} + overhead ${fmtGB(s.rtDyn)} + reserve ${fmtGB(s.reserve)} = ${fmtGB(s.used)} / ${s.memoryGB} GB  (${s.verdict === 'no' ? 'short by ' + fmtGB(-s.free) : 'free ' + fmtGB(s.free)} GB)`);
+  for (const { id, statement } of s.structuralAssumptions || []) {
+    console.log(`  premise [${id}]: ${statement}`);
+  }
   if (detection?.kind === 'gpu' && detection.adapters.length > 1) {
     const adapters = detection.adapters.map((adapter) => `${adapter.name}${adapter.vramGB ? ` ${adapter.vramGB}GB` : ''}`).join(' + ');
     console.log(`  detected adapters: ${adapters}`);

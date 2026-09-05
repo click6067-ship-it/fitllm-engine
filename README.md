@@ -82,7 +82,7 @@ permissions:
 steps:
   - name: Check model memory before download
     id: preflight
-    uses: click6067-ship-it/fitllm-engine@v2.9.0
+    uses: click6067-ship-it/fitllm-engine@v2.12.0
     with:
       model: Gemma 4 12b
       gpu: RTX 4090
@@ -132,7 +132,7 @@ An 11× error flips the verdict: a naive calculator says Gemma 4 31B *won't fit*
 2. **Hybrid / linear attention** (Qwen 3.6 / 3.8, many 2026 models): linear-attention layers use a fixed-size recurrent state, not a growing KV cache. That state is modeled too, as its own component (`linearState`) — it is a constant per sequence, so it never inflates the context curve.
 3. **MLA — Multi-head Latent Attention** (GLM-5.2, GLM-4.7-Flash, DeepSeek family): the cache is a single low-rank latent (`kv_lora_rank` + RoPE dims) shared across all heads — per-head "2 × heads × head_dim" formulas over-count by an order of magnitude. Verified against the DeepSeek-V2 paper (arXiv:2405.04434) and the official DeepSeek-V3 inference code.
 4. **Heterogeneous head dims + MoE**: global layers can use a different `head_dim` (Gemma 4: 512 vs 256). MoE keeps every expert in memory while activating only a few per token.
-5. **PLE — Per-Layer Embeddings** (Gemma 4 e2b/e4b): llama.cpp keeps the `per_layer_token_embd` tensor in **system RAM by default** regardless of `-ngl` (forcing it onto CUDA crashes for K-quant GGUFs; only non-K quants can opt in — ggml-org/llama.cpp#14430), so only the non-PLE weights need VRAM. Counting all 5.1B params against a GPU over-predicts e2b's resident weights by ~1.9× and flips small-card verdicts. On Apple Silicon system RAM *is* accelerator memory, so total params stay correct there. (Caveats: vLLM loads PLE fully onto the GPU — this engine's GPU math is anchored to the default GGUF/llama.cpp behavior its quant tiers come from; the residency measurements are from the E-series PLE stack, and a direct measurement on a Gemma 4 GGUF is welcome in issue #7.)
+5. **PLE — Per-Layer Embeddings** (Gemma 4 e2b/e4b): under the pinned llama.cpp/GGUF path the `per_layer_token_embd` tensor is read lazily or stays host-resident instead of being loaded as an ordinary GPU-resident weight, so only the non-PLE weights are counted against VRAM for the verified Gemma 4 e2b/e4b entries. Counting all 5.1B params against a GPU over-predicts e2b's resident weights by ~1.9× and flips small-card verdicts. This deduction is conditional: it holds only under that pinned path, a runtime that loads PLE tensors onto the accelerator (vLLM, for example) invalidates the estimate, and unverified families keep their full weights resident. On Apple Silicon system RAM *is* accelerator memory, so total params stay correct there. The exact premise and its pinned sources are listed under [Structural premises](#structural-premises); a direct measurement on a Gemma 4 GGUF is welcome in issue #7.
 
 This engine models each layer type separately, verified against official HuggingFace `config.json` files.
 
@@ -149,17 +149,37 @@ Total = Parameters (quantization-adjusted)
 
 Plus a `parseHfConfig()` that turns configs from verified, modeled Hugging Face architecture families into the model shape above; unsupported structures fail closed instead of returning a guess. (No token/s prediction — deliberately: speed depends on runtime/backend in ways a static model can't claim honestly. Fit is a verifiable claim; speed is not.)
 
+## Structural premises
+
+Some verdicts are valid only under a structural premise about the artifact or the runtime path. The engine derives the active premises from the same normalized model fields the calculation uses and attaches them to affected results as `structuralAssumptions`, an array of `{ id, statement }`. Unaffected results, such as plain GQA models, carry no such key, so legacy JSON shapes are unchanged. The CLI prints each active premise as a `premise [id]:` line in text mode and includes the array in `--json` (also per row in `--top --json`); `--why` and the composite Action forward the same array. There is no runtime selector, no confidence score, and no speed claim: a premise tells you what the memory math assumes, not how fast the model runs.
+
+- `mla-compressed-latent-cache` — KV memory assumes a compressed-latent MLA artifact or mode; legacy non-MLA GGUF or an explicitly uncompressed mode invalidates this estimate. Sources: [DeepSeek-V3 inference `model.py`](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py) · [llama.cpp `convert_hf_to_gguf.py`](https://github.com/ggml-org/llama.cpp/blob/master/convert_hf_to_gguf.py) · [llama.cpp `llama-kv-cache.cpp`](https://github.com/ggml-org/llama.cpp/blob/master/src/llama-kv-cache.cpp).
+- `ple-llamacpp-non-gpu-residency` — GPU weight memory excludes the verified Gemma 4 PLE tensors only under the pinned llama.cpp/GGUF lazy-or-host-resident path; an accelerator-loading runtime invalidates this estimate. Sources: [Gemma 4 E2B `config.json`](https://huggingface.co/google/gemma-4-E2B-it/blob/main/config.json) (text body `model_type` is exactly `gemma4_text`) · pinned llama.cpp `8b4b3558f1459c13e4aa38d5c94d306a00dc6acd`: [Gemma 4 construction](https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/models/gemma4.cpp) · [loader header](https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.h) · [loader implementation](https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.cpp). The deduction applies only to the catalog entries `Gemma 4 e2b` and `Gemma 4 e4b` (`pleOffloadVerified: true`) and to parsed configs whose text body is exactly `gemma4_text`; a look-alike field on any other family keeps the full weights resident on the GPU, so an unverified config cannot flip a verdict toward "fits".
+- `mtp-ordinary-generation` — KV memory assumes ordinary non-speculative generation; an MTP draft context is not included. Sources: [llama.cpp `llama-hparams.cpp`](https://github.com/ggml-org/llama.cpp/blob/master/src/llama-hparams.cpp) · [llama.cpp `llama-model.cpp`](https://github.com/ggml-org/llama.cpp/blob/master/src/llama-model.cpp) · [llama.cpp `convert_hf_to_gguf.py`](https://github.com/ggml-org/llama.cpp/blob/master/convert_hf_to_gguf.py) · [vLLM `qwen3_next_mtp.py`](https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/models/qwen3_next_mtp.py).
+
+```bash
+npx fitllm "GLM-4.7-Flash" --gpu "RTX 4090"          # text adds:  premise [mla-compressed-latent-cache]: KV memory assumes …
+npx fitllm "GLM-4.7-Flash" --gpu "RTX 4090" --json   # adds "structuralAssumptions": [{ "id": "…", "statement": "…" }]
+npx fitllm "Llama-3.1-8B-Instruct" --gpu "RTX 4090" --json   # plain GQA: no structuralAssumptions key at all
+```
+
 ## Usage
 
 ```js
 // from npm:  npm install fitllm-engine
-import { simulate, LOCAL_MODELS, parseHfConfig } from 'fitllm-engine';
+import { simulate, structuralAssumptions, LOCAL_MODELS, GPUS, gpuDevice, parseHfConfig } from 'fitllm-engine';
 // …or vendored single-file:
-// import { simulate, LOCAL_MODELS, parseHfConfig } from './engine.js';
+// import { simulate, structuralAssumptions, LOCAL_MODELS, GPUS, gpuDevice, parseHfConfig } from './engine.js';
 
 const model = LOCAL_MODELS.find((m) => m.name === 'Gemma 4 31b');
 const sim = simulate(model, /*ram*/ 64, /*ctx*/ 131072, /*bits*/ 8);
 // → { used, free, verdict: 'yes'|'tight'|'no', param, kv, rt, os, maxContext, ... }
+
+// affected results carry the active structural premises; plain GQA results have no such key:
+const gpu = gpuDevice(GPUS.find((g) => g.name === 'RTX 4090'));
+const mla = simulate(LOCAL_MODELS.find((m) => m.name === 'GLM-4.7-Flash'), gpu, 8192, { weightBpw: 4.8944, kvBits: 16 });
+mla.structuralAssumptions; // → [{ id: 'mla-compressed-latent-cache', statement: '…' }]
+structuralAssumptions(model, gpu); // → [] for an unaffected model (pure; same inputs as the calculation)
 
 // a config from a modeled Hugging Face architecture family:
 const m = parseHfConfig('Qwen/Qwen3-32B', configJson, totalSizeBytes);
