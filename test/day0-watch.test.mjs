@@ -690,7 +690,12 @@ test('runDay0Watch dry-run은 GET 외 GitHub 호출 없이 temp evidence만 쓴�
     policy: await sourcePolicy(), fetchImpl, ghClient, now: new Date('2026-09-03T00:00:00Z'),
   }, { outputDir, sourceRoot: new URL('..', import.meta.url).pathname, mode: 'dry-run' });
   assert.equal(result.summary.mode, 'dry-run');
-  assert.equal(result.records[0].manifest.lifecycleState, 'UNSUPPORTED_ARCHITECTURE');
+  // Queue order now puts text-generation and unknown-pipeline candidates first; look the multimodal
+  // fixture up by id instead of assuming it is the first evaluated record.
+  const flashNext = result.records.find(({ manifest }) => manifest.candidateId.startsWith('Qwen/Qwen3.8-Flash-Next@'));
+  assert.equal(flashNext.manifest.lifecycleState, 'UNSUPPORTED_ARCHITECTURE');
+  assert.deepEqual(result.records.map(({ manifest }) => manifest.pipelineTag),
+    ['text-generation', null, 'image-text-to-text']);
   assert.deepEqual(githubCalls.map(([method]) => method), ['GET']);
   assert.equal(JSON.parse(await readFile(path.join(outputDir, 'summary.json'), 'utf8')).mode, 'dry-run');
 });
@@ -779,4 +784,111 @@ test('선두 12개 revision이 invalid여도 13번째 valid 후보를 evidence c
   assert.ok(result.issuePlan.operations.some(({ action, modelId }) => action === 'create' && modelId === 'Qwen/M'));
   assert.equal(result.issuePlan.mutationCount, 1);
   assert.ok(result.issuePlan.dropped.some(({ candidateId, reason }) => candidateId.startsWith('Qwen/L@') && reason === 'EVALUATION_LIMIT'));
+});
+
+async function mixedPipelineFixture() {
+  const policy = await sourcePolicy();
+  policy.officialNamespaces = policy.officialNamespaces.slice(0, 1);
+  const bytesByName = {
+    'config.json': Buffer.from(JSON.stringify({
+      model_type: 'llama', num_hidden_layers: 2, num_attention_heads: 2,
+      num_key_value_heads: 2, hidden_size: 128, head_dim: 64,
+      intermediate_size: 256, vocab_size: 1024, torch_dtype: 'bfloat16',
+    })),
+    'model.safetensors.index.json': Buffer.from(JSON.stringify({ metadata: { total_size: 1_000_000 } })),
+    LICENSE: Buffer.from('MIT'),
+  };
+  // Newest first: one unknown-pipeline and three image-text-to-text checkpoints are newer than
+  // every text-generation checkpoint, so createdAt order alone would starve the text tier.
+  const models = [
+    ['Unknown-P', null, 21],
+    ['Img-A', 'image-text-to-text', 20],
+    ['Img-B', 'image-text-to-text', 19],
+    ['Img-C', 'image-text-to-text', 18],
+    ['Text-U', 'text-generation', 17],
+    ['Text-N1', 'text-generation', 16],
+    ['Text-N2', 'text-generation', 15],
+  ].map(([name, pipelineTag, day], index) => ({
+    id: `Qwen/${name}`,
+    sha: (index + 1).toString(16).repeat(40),
+    ...(pipelineTag === null ? {} : { pipeline_tag: pipelineTag }),
+    createdAt: new Date(Date.UTC(2026, 8, day)).toISOString(),
+    tags: ['license:mit'],
+    siblings: Object.keys(bytesByName).map((rfilename) => ({ rfilename })),
+  }));
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/models') return jsonResponse(parsed.searchParams.has('author') ? models : []);
+    const [, revision, filename] = parsed.pathname.match(/\/resolve\/([0-9a-f]{40})\/(.+)$/);
+    return new Response(bytesByName[filename], { headers: { 'x-repo-commit': revision, etag: `"${filename}"` } });
+  };
+  const now = new Date('2026-09-22T12:00:00Z');
+  const discovery = await discoverCandidates({ policy, fetchImpl, now });
+  const trustedIssueFor = async (modelId, verifierSchemaVersion) => {
+    const candidate = discovery.candidates.find(({ id }) => id === modelId);
+    const evidence = await pinEvidence(candidate, { fetchImpl });
+    const manifest = buildEvidenceManifest(evidence, classifyCapability(evidence), verifierSchemaVersion);
+    return {
+      number: 100 + discovery.candidates.indexOf(candidate),
+      title: `day0: ${modelId}`,
+      body: buildIssueBotBlock(manifest, null),
+      user: { login: 'github-actions[bot]' },
+      labels: [{ name: 'day0-candidate' }],
+    };
+  };
+  const run = async (existingIssues, prefix) => runDay0Watch({ policy, fetchImpl, existingIssues, now }, {
+    outputDir: await mkdtemp(path.join(tmpdir(), prefix)),
+    sourceRoot: new URL('..', import.meta.url).pathname,
+    mode: 'dry-run',
+  });
+  return { discovery, trustedIssueFor, run };
+}
+
+const mutationOps = (plan) => plan.operations
+  .filter(({ action }) => action === 'create' || action === 'update')
+  .map(({ action, modelId }) => [action, modelId]);
+
+test('mixed pipeline queue는 mutation cap 전에 text-generation candidates를 new-before-update 순으로 먼저 평가한다', async () => {
+  const { discovery, trustedIssueFor, run } = await mixedPipelineFixture();
+  assert.equal(discovery.candidates.length, 7);
+  assert.deepEqual(discovery.candidates.slice(0, 4).map(({ pipelineTag }) => pipelineTag),
+    [null, 'image-text-to-text', 'image-text-to-text', 'image-text-to-text']);
+  // Text-U already has a trusted managed issue with a stale digest, so it is an update and must
+  // queue behind the two issue-less text candidates even though it is newer than both.
+  const result = await run([await trustedIssueFor('Qwen/Text-U', 'capability-v0')], 'fitllm-day0-mixed-cap-');
+  assert.equal(result.summary.sourceFailures, 0);
+  assert.equal(result.issuePlan.mutationCount, 3);
+  assert.deepEqual(mutationOps(result.issuePlan), [
+    ['create', 'Qwen/Text-N1'],
+    ['create', 'Qwen/Text-N2'],
+    ['update', 'Qwen/Text-U'],
+  ]);
+  for (const modelId of ['Qwen/Unknown-P', 'Qwen/Img-A', 'Qwen/Img-B', 'Qwen/Img-C']) {
+    assert.ok(
+      result.issuePlan.dropped.some(({ candidateId, reason }) => candidateId.startsWith(`${modelId}@`) && reason === 'MUTATION_LIMIT'),
+      `${modelId} must stay queued behind the mutation cap, not be excluded`,
+    );
+  }
+});
+
+test('text-generation candidates가 noop으로 capacity를 비우면 unknown pipeline 다음에 image-text-to-text가 남아 있다', async () => {
+  const { trustedIssueFor, run } = await mixedPipelineFixture();
+  const existingIssues = await Promise.all(
+    ['Qwen/Text-U', 'Qwen/Text-N1', 'Qwen/Text-N2'].map((modelId) => trustedIssueFor(modelId, 'capability-v1')),
+  );
+  const result = await run(existingIssues, 'fitllm-day0-mixed-freed-');
+  // The text tier is still evaluated first (deterministic createdAt order inside the tier) ...
+  assert.deepEqual(result.issuePlan.operations.slice(0, 3).map(({ action, modelId }) => [action, modelId]), [
+    ['noop', 'Qwen/Text-U'],
+    ['noop', 'Qwen/Text-N1'],
+    ['noop', 'Qwen/Text-N2'],
+  ]);
+  // ... and the freed slots go to unknown-pipeline before image-text-to-text, in discovery order.
+  assert.equal(result.issuePlan.mutationCount, 3);
+  assert.deepEqual(mutationOps(result.issuePlan), [
+    ['create', 'Qwen/Unknown-P'],
+    ['create', 'Qwen/Img-A'],
+    ['create', 'Qwen/Img-B'],
+  ]);
+  assert.ok(result.issuePlan.dropped.some(({ candidateId, reason }) => candidateId.startsWith('Qwen/Img-C@') && reason === 'MUTATION_LIMIT'));
 });
