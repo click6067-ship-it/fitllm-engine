@@ -192,6 +192,14 @@ function isExcludedFullPrecisionVariant(id) {
   return FULL_PRECISION_VARIANT_RE.test(id.split('/')[1]);
 }
 
+// Valid-revision evaluation tier: text-generation first, unknown pipeline next, everything else
+// (currently only the reviewed image-text-to-text tag) last. Priority only; nothing is excluded.
+function pipelinePriority(tag) {
+  if (tag === 'text-generation') return 0;
+  if (tag === null || tag === undefined) return 1;
+  return 2;
+}
+
 function candidateSort(a, b) {
   const variantDelta = Number(a.checkpointKind !== 'base') - Number(b.checkpointKind !== 'base');
   if (variantDelta) return variantDelta;
@@ -1063,17 +1071,14 @@ export async function runDay0Watch(deps, options = {}) {
       : candidatesWithInvalidRevision;
     target.push(candidate);
   }
-  const candidatesWithoutTrustedIssue = [];
-  const candidatesWithTrustedIssue = [];
-  for (const candidate of candidatesWithValidRevision) {
-    const target = trustedManagedIssueForModel(existingIssues, candidate.id, trustedAuthors)
-      ? candidatesWithTrustedIssue
-      : candidatesWithoutTrustedIssue;
-    target.push(candidate);
-  }
+  const issuePriorityById = new Map(candidatesWithValidRevision.map((candidate) => [
+    candidate.id,
+    trustedManagedIssueForModel(existingIssues, candidate.id, trustedAuthors) ? 1 : 0,
+  ]));
   const evaluationCandidates = [
-    ...candidatesWithoutTrustedIssue,
-    ...candidatesWithTrustedIssue,
+    ...[...candidatesWithValidRevision].sort((a, b) => pipelinePriority(a.pipelineTag) - pipelinePriority(b.pipelineTag)
+      || issuePriorityById.get(a.id) - issuePriorityById.get(b.id)
+      || candidateSort(a, b)),
     ...candidatesWithInvalidRevision,
   ];
   const records = [];
