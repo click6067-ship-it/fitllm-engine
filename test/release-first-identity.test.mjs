@@ -76,5 +76,5 @@ test('CLI and Action refuse a fake Flash derivative with exit 2 and no numeric v
 test('keeps indices 0 through 25 and appends GLM-5.3 at 26', () => {
   assert.deepEqual(LOCAL_MODELS.slice(0, 26).map((model) => model.name), BASELINE_NAMES);
   assert.equal(LOCAL_MODELS[26]?.name, 'GLM-5.3');
-  assert.equal(LOCAL_MODELS.length, 27);
+  assert.equal(LOCAL_MODELS.length, 30);
 });

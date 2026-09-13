@@ -193,14 +193,14 @@ test('test_catalog_append_index_and_group_order_stable', () => {
   ];
   // ?m= 공유링크 인덱스 0–24 불변, Spark는 배열 끝 append(인덱스 25)
   assert.deepEqual(MODELS.slice(0, BASE_NAMES.length).map((m) => m.name), BASE_NAMES);
-  assert.equal(MODELS.length, BASE_NAMES.length + 3); // 2026-09-05 Granite-4.2-30B append(인덱스 26, #93) + 2.15.0 GLM-5.3 append(인덱스 27)
+  assert.equal(MODELS.length, BASE_NAMES.length + 7); // Granite(26) + GLM-5.3(27) + 2026-09-14 배치 4종(MiniCPM5-2B · Opus 5 · Nex mini · Nex Pro)
   assert.equal(MODELS[BASE_NAMES.length].name, 'Spark-X2.5-4B');
   assert.equal(LOCAL_MODELS[24].name, 'Spark-X2.5-4B'); // ?m=24 불변
   assert.equal(MODELS.filter((m) => /spark/i.test(m.name)).length, 1); // 1.7B sibling은 이번 변경에 넣지 않는다
-  assert.equal(LOCAL_MODELS.length, 27); // 26(2.14.x) + GLM-5.3(2.15.0, 인덱스 26)
+  assert.equal(LOCAL_MODELS.length, 30); // 27(2.15.0) + 2026-09-14 로컬 3종
   // 기존 그룹의 상대 순서 불변 + Spark 그룹 등재
   const BASE_ORDER = ['Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5', 'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft'];
-  assert.deepEqual(MODEL_GROUP_ORDER.filter((g) => g !== 'Spark' && g !== 'Granite'), BASE_ORDER);
+  assert.deepEqual(MODEL_GROUP_ORDER.filter((g) => !['Spark', 'Granite', 'Nex'].includes(g)), BASE_ORDER);
   assert.ok(MODEL_GROUP_ORDER.includes('Spark'));
   // 이름 해석: 정확 일치 + 토큰 일치, 다른 카탈로그 항목과 충돌 없음
   assert.equal(resolveLocalModel('Spark-X2.5-4B').matchedBy, 'exact');
@@ -235,7 +235,7 @@ test('test_census_contains_spark_rows', () => {
   const manifest = readJson('../census/manifest.json');
   const sparkRows = census.data.filter((r) => r.model === 'Spark-X2.5-4B');
   assert.equal(sparkRows.length, 57 * 3 + 36 * 5); // Mac 57구성 × 3 tiers + GPU 36종 × 5 tiers = 351 rows/model
-  const total = LOCAL_MODELS.length * (57 * 3 + 36 * 5); // 27 × 351 = 9,477 (2.15.0: GLM-5.3 1행 추가)
+  const total = LOCAL_MODELS.length * (57 * 3 + 36 * 5); // 30 × 351 = 10,530 (2.16.0: 로컬 3행 추가)
   assert.equal(census.verdicts, total);
   assert.equal(census.data.length, total);
   assert.equal(manifest.rows, total);
@@ -245,19 +245,19 @@ test('test_census_contains_spark_rows', () => {
 test('test_release_version_and_readme_counts', () => {
   const pkg = readJson('../package.json');
   const lock = readJson('../package-lock.json');
-  assert.equal(pkg.version, '2.15.0');
-  assert.equal(lock.version, '2.15.0');
-  assert.equal(lock.packages[''].version, '2.15.0');
-  assert.equal(ENGINE_VERSION, '2.15.0');
+  assert.equal(pkg.version, '2.16.0');
+  assert.equal(lock.version, '2.16.0');
+  assert.equal(lock.packages[''].version, '2.16.0');
+  assert.equal(ENGINE_VERSION, '2.16.0');
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
   const verdicts = `${readJson('../census/manifest.json').rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.15.0', 'conformance_vectors-30%2F30', '30 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.16.0', 'conformance_vectors-33%2F33', '33 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
-  for (const s of [verdicts, '30 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
+  for (const s of [verdicts, '33 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
   const vectors = readJson('../vectors/fit-vectors-v1.json');
-  assert.equal(vectors.vectors.length, 30); // 2026-09-05 Granite 벡터 1개 추가(#93) — Spark 벡터는 id로 고정
+  assert.equal(vectors.vectors.length, 33); // 2026-09-05 Granite 벡터 1개 추가(#93) — Spark 벡터는 id로 고정
   const sparkVector = vectors.vectors.find((v) => v.id === 'spark-x25-4b-kv-1m-f16');
   assert.deepEqual(sparkVector, {
     id: 'spark-x25-4b-kv-1m-f16', kind: 'kv_total_bytes', model: 'Spark-X2.5-4B', ctx: 1048576, kvBits: 16, expect: 38711328768,

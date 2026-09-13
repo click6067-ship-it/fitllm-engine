@@ -36,7 +36,7 @@ test('Quick start 첫 예시는 실제로 성공(FITS) 데모 — Gemma 4 12b ×
 
 test('README: 현행 사실 필수 표기', () => {
   for (const required of [
-    '30 language-neutral', '× 93 GPUs', 'M1–M6', '30%2F30', CENSUS_VERDICTS,
+    '33 language-neutral', '× 93 GPUs', 'M1–M6', '33%2F33', CENSUS_VERDICTS,
     'npm install fitllm-engine', '?template=measurement.yml',
     "from 'fitllm-engine'",
     'The CLI, API, and MCP use a curated catalog pinned to official configs.', // 문법 파손 정정문(감사 제안) 고정
@@ -82,7 +82,7 @@ test('README pins three sourced premises and bans a fixed 71x multiplier', () =>
 
 test('distribution preflight examples stay present and reproducible', () => {
   for (const required of [
-    'uses: click6067-ship-it/fitllm-engine@v2.15.0',
+    'uses: click6067-ship-it/fitllm-engine@v2.16.0',
     'npx fitllm "Gemma 4 12b" --detect --json --why',
     '&& ollama pull gemma4:12b',
     '&& llama-cli -m',
