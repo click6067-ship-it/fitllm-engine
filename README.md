@@ -15,6 +15,27 @@ FitLLM is an open-source, zero-dependency engine that checks whether a local LLM
 > 
 > Zero dependencies. One readable file: [`engine.js`](engine.js). Conformance-vector tested. MIT.
 
+## Install
+
+```bash
+# self-contained binary — no Node required
+curl -fsSL https://fitllm.run/install.sh | sh
+
+# Homebrew (tap)
+brew tap click6067-ship-it/fitllm https://github.com/click6067-ship-it/fitllm-engine
+brew install fitllm
+
+# Windows (Scoop)
+scoop install https://raw.githubusercontent.com/click6067-ship-it/fitllm-engine/master/packaging/fitllm.json
+
+# already have Node? nothing to install
+npx fitllm "Gemma 4 12b" --gpu "RTX 4090"
+```
+
+Binaries for macOS (arm64/x64), Linux (x64/arm64, glibc and musl) and Windows x64 are attached to every [release](https://github.com/click6067-ship-it/fitllm-engine/releases) with a `.sha256` next to each one; `install.sh` verifies the checksum and installs nothing if it does not match.
+
+Two things stated plainly rather than buried: each binary embeds its JavaScript runtime, so it is **60–94 MB** — much larger than an equivalent Rust or Go tool, which is the price of not forking the engine into a second language. And this is a Homebrew **tap**, not homebrew-core: core's bar for a self-submitted project is 225 stars / 90 forks / 90 watchers, which this project does not meet yet.
+
 ## Quick start
 
 ```bash

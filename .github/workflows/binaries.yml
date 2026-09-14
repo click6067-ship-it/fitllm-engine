@@ -1,0 +1,72 @@
+name: binaries
+
+# 태그가 붙으면 단일 실행 바이너리를 만들어 그 릴리스에 첨부한다.
+# npm 발행(publish.yml)과는 독립이다 — 한쪽이 막혀도 다른 쪽은 나간다.
+#
+# 재현성: 빌드는 **태그가 가리키는 커밋에서만** 돌고, 산출물마다 sha256 을 같이 올린다.
+# install.sh / brew / scoop 가 전부 그 체크섬을 검증하므로, 이 파일이 조용히 다른 바이트를
+# 올리면 설치 쪽에서 fail-closed 로 걸린다(그게 설계다).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Exact tag to build and attach (for example v2.16.0)'
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 릴리스 자산 업로드에만 필요
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # 엔진 자체가 깨진 채로 바이너리를 내보내지 않는다.
+      - name: Engine tests and conformance vectors
+        run: npm test
+
+      - name: Build binaries
+        run: node scripts/build-binaries.mjs --out dist-bin
+
+      - name: Generate Homebrew formula and Scoop manifest
+        run: node scripts/gen-packaging.mjs --manifest dist-bin/manifest.json --out packaging
+
+      # 생성된 패키징 파일이 워크트리의 커밋본과 다르면, 릴리스마다 사람이 갱신해야 한다는 뜻이다.
+      # 그 사실을 로그에 남긴다(실패시키지는 않는다 — 태그 시점엔 이미 커밋돼 있어야 정상).
+      - name: Report packaging drift
+        run: git --no-pager diff --stat -- packaging || true
+
+      - name: Attach assets to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -eu
+          gh release upload "$TAG" \
+            dist-bin/fitllm-* \
+            dist-bin/manifest.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fitllm-binaries-${{ github.run_id }}
+          path: dist-bin
+          retention-days: 14
