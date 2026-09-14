@@ -90,7 +90,12 @@ async function main() {
   const policy = loadSourcePolicy(await readFile(path.join(SOURCE_ROOT, '.github/day0-sources.json'), 'utf8'));
   const outputDir = valueFor('--output-dir') || await mkdtemp(path.join(tmpdir(), 'fitllm-day0-'));
   const mode = args.has('--plan') ? 'plan' : 'dry-run';
-  const result = await runDay0Watch({ policy, fetchImpl: fetch, ghClient: githubClient() }, {
+  // 카탈로그는 엔진이 정본 — 이미 있는 모델이 발견 예산을 먹지 않게 한다(day0-core.isAlreadyInCatalog).
+  const { LOCAL_MODELS } = await import('../../engine.js');
+  const catalogModelNames = LOCAL_MODELS.map((model) => model.name);
+  const result = await runDay0Watch({
+    policy, fetchImpl: fetch, ghClient: githubClient(), catalogModelNames,
+  }, {
     outputDir,
     sourceRoot: SOURCE_ROOT,
     mode,

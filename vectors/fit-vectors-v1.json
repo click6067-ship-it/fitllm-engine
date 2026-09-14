@@ -1,5 +1,5 @@
 {
-  "version": "1.5.0",
+  "version": "1.6.0",
   "generated": "2026-09-05",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
@@ -312,6 +312,33 @@
       "kvBits": 16,
       "expect": 34359738368,
       "note": "dense GQA, every one of the 64 layers keeps a full-context cache: 2 (K+V) x 8 kv-heads x head_dim 128 (hidden 4096 / 32 heads; config has no head_dim key) x 2 B = 4,096 B/layer/token -> 64 L x 4,096 = 262,144 B/token -> x 131,072 ctx = 34,359,738,368 B (exactly 32 GiB; bf16 weights are 58,553,540,608 B = 54.53 GiB, so at native context the F16 KV alone exceeds a 24 GiB card). A formula that uses the 32 query heads instead of the 8 kv-heads gives 4x = 137,438,953,472 B (128 GiB). Source: ibm-granite/granite-4.2-30b config.json at revision 9e668ce1c538387ef24d3644e9b0606647762636 (config blob identical at 8b445a5c315f32da0f89e1f648bfec0cd601b154): num_hidden_layers 64, num_attention_heads 32, num_key_value_heads 8, hidden_size 4096, max_position_embeddings 131072; no sliding_window, layer_types, kv_lora_rank or expert keys"
+    },
+    {
+      "id": "minicpm5-2b-kv-128k-f16",
+      "kind": "kv_total_bytes",
+      "model": "MiniCPM5-2B",
+      "ctx": 131072,
+      "kvBits": 16,
+      "expect": 5637144576,
+      "note": "dense GQA, all 42 layers keep a full-context cache: 2 (K+V) x 2 kv-heads x head_dim 128 x 2 B = 1,024 B/layer/token -> 42 L x 1,024 = 43,008 B/token -> x 131,072 ctx = 5,637,144,576 B (5.25 GiB). Using the 16 query heads instead of the 2 kv-heads gives 8x = 45,097,156,608 B (42 GiB). Source: openbmb/MiniCPM5-2B config.json at revision 12a3808a956f869c767195e9266b59c4d21d92e2 — model_type llama, num_hidden_layers 42, num_key_value_heads 2, head_dim 128, max_position_embeddings 131072."
+    },
+    {
+      "id": "nex-n25-mini-kv-128k-f16",
+      "kind": "kv_total_bytes",
+      "model": "Nex-N2.5-mini",
+      "ctx": 131072,
+      "kvBits": 16,
+      "expect": 2684354560,
+      "note": "hybrid Gated DeltaNet + Gated Attention: only the 10 full_attention layers keep a KV cache; the 30 linear_attention layers hold a fixed recurrent state that does not grow with ctx (modeled separately as linearState). 2 (K+V) x 2 kv-heads x head_dim 256 x 2 B = 2,048 B/layer/token -> 10 L x 2,048 = 20,480 B/token -> x 131,072 ctx = 2,684,354,560 B (2.50 GiB). Charging all 40 layers gives 4x = 10,737,418,240 B (10 GiB). Source: nex-agi/Nex-N2.5-mini config.json at revision 87420286149d9cce9bd46cd335ef9bda33c37c1b — layer_types {linear_attention 30, full_attention 10}, num_key_value_heads 2, head_dim 256."
+    },
+    {
+      "id": "nex-n25-pro-kv-128k-f16",
+      "kind": "kv_total_bytes",
+      "model": "Nex-N2.5-Pro",
+      "ctx": 131072,
+      "kvBits": 16,
+      "expect": 4026531840,
+      "note": "same hybrid rule at a larger scale: 15 of 60 layers are full_attention. 2 (K+V) x 2 kv-heads x head_dim 256 x 2 B = 2,048 B/layer/token -> 15 L x 2,048 = 30,720 B/token -> x 131,072 ctx = 4,026,531,840 B (3.75 GiB). Charging all 60 layers gives 4x = 16,106,127,360 B (15 GiB). Note the KV is tiny next to the weights (396.8B logical params), which is the point: for this family the weight residency, not the cache, decides the verdict. Source: nex-agi/Nex-N2.5-Pro config.json at revision 0f389abfca976dcbab5c7638268d01cfe8ace4fe — layer_types {linear_attention 45, full_attention 15}, num_key_value_heads 2, head_dim 256."
     }
   ]
 }

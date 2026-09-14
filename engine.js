@@ -239,6 +239,12 @@ export const MODELS = [
     desc: 'Dense · 1.0B · MQA(4/1) · 슬라이딩 512(글로벌 4레이어) — Gemma 계열 draft · 최대 32K' }, // google/gemma-3-1b-it(gated) ↔ unsloth·mlx 미러 + gemma_pytorch
 
   // === Claude Opus 4.7 — Cloud (벤치마크 기준점, 메모리 시뮬 제외) ===
+  // 출처: Claude Opus 4.7 System Card, Table 8.1.A(p.190-191) 및 §8.2 — 2026-09-14 원문 직접 확인.
+  //   https://www-cdn.anthropic.com/037f06850df7fbe871e206dad004c3db5fd50340/Claude%20Opus%204.7%20System%20Card.pdf
+  //   SWE-bench Verified 87.6% · GPQA Diamond 94.2% (둘 다 adaptive thinking max effort, 5회 평균)
+  // ⚠️ MMLU-Pro = null: Anthropic은 이 모델에 MMLU-Pro를 공표한 적이 없다(공표하는 건 MMMLU 91.5% §8.5,
+  //   GMMLU 평균 89.9% §8.12.1). 2026-09-14 이전까지 이 자리에 있던 0.899 는 그 GMMLU 89.9% 와 정확히
+  //   일치해 다른 벤치가 MMLU-Pro 칸에 들어간 것으로 판단하고 제거했다 — 출처 없는 숫자는 남기지 않는다.
   {
     name: 'Claude Opus 4.7',
     group: 'Claude (Cloud)',
@@ -252,7 +258,7 @@ export const MODELS = [
     hiddenSize: null,
     maxContext: 1000000,
     isCloud: true,
-    benchmarks: { GPQA: 0.942, 'MMLU-Pro': 0.899, 'SWE-Bench': 0.876 },
+    benchmarks: { GPQA: 0.942, 'MMLU-Pro': null, 'SWE-Bench': 0.876 },
     contextLimit: '1M',
     desc: 'Cloud 모델 — 벤치마크 기준점 (로컬 설치 불가, 비교용)',
   },
@@ -463,13 +469,116 @@ export const MODELS = [
     totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
     numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
     desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit) · GLM-5.2와 같은 base(post-training만 차이)' },
+
+  // ==========================================================================
+  //  MiniCPM5-2B (openbmb) — 2026-09-14 Day-0. 기존 MiniCPM5-1B와 같은 표준 llama GQA 경로(신규 수학 없음).
+  //  ⚠️ 배열 끝 append 고정(?m= 링크 보존). 1차 출처(전부 pinned revision 12a3808a956f869c767195e9266b59c4d21d92e2):
+  //   config.json  https://huggingface.co/openbmb/MiniCPM5-2B/blob/12a3808a956f869c767195e9266b59c4d21d92e2/config.json
+  //   index        https://huggingface.co/openbmb/MiniCPM5-2B/blob/12a3808a956f869c767195e9266b59c4d21d92e2/model.safetensors.index.json
+  //   HF API       https://huggingface.co/api/models/openbmb/MiniCPM5-2B
+  //  3중 교차검증(바이트 정확 일치, 2,516,756,480): ① HF API safetensors BF16 == index total_size 5,033,512,960 ÷ 2
+  //   ② config 치수 손계산 == 2,516,756,480: 42 × [q 2048×2048 + k 2048×256 + v 2048×256 + o 2048×2048
+  //      + MLP 3×2048×6144 + norm 2×2048] + embed 130560×2048 + lm_head 130560×2048(untied) + 최종 norm 2048
+  //   ③ 단일 shard(model-00000-of-00001.safetensors) 파일 하나라 index total_size가 곧 실파일 바이트다.
+  //  maxContext = config max_position_embeddings 131072(rope_scaling null — 확장 없음). 라이선스 Apache-2.0(HF cardData).
+  //  벤치 미기입: 모델카드 표에 GPQA Diamond·MMLU-Pro·SWE-Bench Verified 귀속 표기가 없다(엔진 원칙).
+  // ==========================================================================
+  { name: 'MiniCPM5-2B', group: 'MiniCPM', tags: ['dense'],
+    totalParams: 2.517, activeParams: 2.517, layerCount: 42, kvHeads: 2, kvHeadDim: 128, attnHeads: 16, hiddenSize: 2048,
+    maxContext: 131072, benchmarks: null,
+    desc: 'Dense · 2.5B · 42레이어 · GQA(16/2) · on-device/edge · 최대 128K · Apache 2.0' },
+
+  // ==========================================================================
+  //  Claude Opus 5 — Cloud (2026-07-24 공개). 2026-09-14 추가.
+  //  ⚠️ 배열 끝 append 고정(?m= 링크 보존). 벤치 기준점(OPUS·opusPct)은 **4.7 그대로 둔다** —
+  //     Opus 5 공식 발표는 GPQA Diamond·MMLU-Pro·SWE-bench Verified 중 **어느 것도 공표하지 않는다**
+  //     (Frontier-Bench v0.1 · CursorBench 3.2 · ARC-AGI 3 · OSWorld 2.0 · GDPval-AA v2 · HLE 등 에이전틱 평가만).
+  //     https://www.anthropic.com/news/claude-opus-5
+  //     엔진 원칙상 그 세 가지 외의 벤치는 기입하지 않으므로 benchmarks = null 이다. 카탈로그에 최신 모델이
+  //     보이되 비교 숫자는 지어내지 않는 상태 — "틀린 숫자 > 없는 숫자" 규칙 그대로.
+  //  maxContext 1,000,000 = 공식 모델 사양(컨텍스트 1M). 구조 필드는 비공개라 전부 null(메모리 시뮬 제외).
+  // ==========================================================================
+  {
+    name: 'Claude Opus 5',
+    group: 'Claude (Cloud)',
+    tags: ['cloud', 'dense'],
+    totalParams: null,
+    activeParams: null,
+    layerCount: null,
+    kvHeads: null,
+    kvHeadDim: null,
+    attnHeads: null,
+    hiddenSize: null,
+    maxContext: 1000000,
+    isCloud: true,
+    benchmarks: null,
+    contextLimit: '1M',
+    desc: 'Cloud 모델 — 최신 Claude (공식 GPQA/MMLU-Pro/SWE-V 미공표라 비교 수치 없음)',
+  },
+
+  // ==========================================================================
+  //  Nex-N2.5 (nex-agi) — 2026-09-14 Day-0. model_type qwen3_5_moe(Gated DeltaNet 3 : Gated Attention 1).
+  //  현 엔진의 linearAttn + fullAttnLayers 경로로 그대로 계산된다(신규 수학 불필요).
+  //  ⚠️ 배열 끝 append 고정(?m= 링크 보존).
+  //  ⚠️ totalParams 는 비전 타워(vision_config depth 27)를 **포함한 체크포인트 전체**다 — Qwen 3.8 27B 행의
+  //     확정 관례(2026-08-24)와 같다. 텍스트 전용 가중치만 재려면 별도 근거가 필요하므로 하지 않는다.
+  //  ⚠️ activeParams = null: 모델카드가 활성 파라미터를 공표하지 않는다(Hy3 "Activated: 21B", Laguna
+  //     "3B activated" 같은 표기가 없음). 산술 추정치를 카드값처럼 적지 않는다.
+  //  라이선스 Apache-2.0(HF cardData). 형제 Nex-N2.5-Max 는 model_type deepseek_v4(compressed_sparse_attention
+  //  + index_topk) 라 미모델링 — 추가하지 않는다.
+  // ==========================================================================
+  {
+    // 35,107,181,936 = HF API safetensors BF16 == index total_size 70,214,363,872 ÷ 2 (바이트 정확 일치)
+    // https://huggingface.co/nex-agi/Nex-N2.5-mini/blob/87420286149d9cce9bd46cd335ef9bda33c37c1b/config.json
+    name: 'Nex-N2.5-mini',
+    group: 'Nex',
+    tags: ['moe', 'vlm'],
+    totalParams: 35.107,
+    activeParams: null, // 모델카드 미공표
+    layerCount: 40,
+    fullAttnLayers: 10, // layer_types: full_attention 10 / linear_attention 30
+    kvHeads: 2,
+    kvHeadDim: 256,
+    attnHeads: 16,
+    hiddenSize: 2048,
+    linearAttn: { layers: 30, numKHeads: 16, numVHeads: 32, headKDim: 128, headVDim: 128, convKernel: 4 }, // config linear_* 필드
+    numExperts: 256,
+    expertsPerToken: 8,
+    maxContext: 262144,
+    benchmarks: null, // 카드 벤치표에 GPQA Diamond·MMLU-Pro·SWE-Bench Verified 귀속 표기 없음
+    desc: 'MoE · 35.1B(비전 인코더 포함) · 256 experts(top-8) · 풀어텐션 10/40(DeltaNet 30) · 최대 256K · Apache 2.0',
+  },
+  {
+    // 396,802,360,816 = HF API safetensors 논리 파라미터 합(BF16 10,255,304,176 + F8_E4M3 386,547,056,640).
+    // 핀 리비전은 FP8 블록 양자화 배포본이지만 판정 입력은 사용자가 고르는 양자화라 행은 논리 수만 갖는다
+    // (GLM-5.3 · Hy3-FP8 관례). F8 텐서 수는 config 손계산과 정확 일치: 60 × 512 × 3 × 4096 × 1024.
+    // index total_size 407,104,850,912 B 와의 차이는 FP8 블록 스케일 텐서(파라미터 아님)로 설명된다.
+    // https://huggingface.co/nex-agi/Nex-N2.5-Pro/blob/0f389abfca976dcbab5c7638268d01cfe8ace4fe/config.json
+    name: 'Nex-N2.5-Pro',
+    group: 'Nex',
+    tags: ['moe', 'vlm'],
+    totalParams: 396.802,
+    activeParams: null, // 모델카드 미공표
+    layerCount: 60,
+    fullAttnLayers: 15, // layer_types: full_attention 15 / linear_attention 45
+    kvHeads: 2,
+    kvHeadDim: 256,
+    attnHeads: 32,
+    hiddenSize: 4096,
+    linearAttn: { layers: 45, numKHeads: 16, numVHeads: 64, headKDim: 128, headVDim: 128, convKernel: 4 },
+    numExperts: 512,
+    expertsPerToken: 10,
+    maxContext: 262144,
+    benchmarks: null,
+    desc: 'MoE · 396.8B(FP8 배포·논리 파라미터) · 512 experts(top-10) · 풀어텐션 15/60(DeltaNet 45) · 최대 256K · Apache 2.0',
+  },
 ];
 
 // 카탈로그 표시 순서(최신·화제순). MODELS 배열은 ?m= 공유링크 때문에 append-only라
 // 배열 순서 == 표시 순서가 더 이상 성립하지 않는다. 이 목록이 표시 순서의 단일 출처다.
 // 여기 없는 그룹은 뒤에 배열 순서대로 붙는다(신규 그룹 추가를 잊어도 사라지지 않게).
 export const MODEL_GROUP_ORDER = [
-  'Granite', 'Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5',
+  'Nex', 'Granite', 'Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5',
   'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft',
 ];
 
@@ -1895,4 +2004,4 @@ export const DATA_UPDATED = '2026-09';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.15.0';
+export const ENGINE_VERSION = '2.16.0';

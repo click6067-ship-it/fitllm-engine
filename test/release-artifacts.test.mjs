@@ -6,18 +6,19 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { ENGINE_VERSION, GPUS, GPU_QUANTS, LOCAL_MODELS, MACBOOK_RAM_GROUPS } from '../engine.js';
 
-const RELEASE_VERSION = '2.15.0';
-const RELEASE_DATE = '2026-09-06';
+const RELEASE_VERSION = '2.16.0';
+const RELEASE_DATE = '2026-09-13'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — KST 2026-09-14 01:40 = UTC 09-13
 const url = (rel) => new URL(`../${rel}`, import.meta.url);
 const read = (rel) => readFileSync(url(rel), 'utf8');
 const readJson = (rel) => JSON.parse(read(rel));
 const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).digest('hex');
 
-// 2.14.1(619585f57396523d8d173179180340cbd881c324)의 vectors 바이트 — 2.15.0은 벡터를 추가·수정·재수출하지 않는다.
-const VECTORS_JSON_SHA256 = 'bcc806a79eef9192e08152ded754c5228f4d0dfd54b53c9eb87904e6a8fcd8b8';
+// 2.16.0 vectors 바이트 — 이번 릴리스는 신규 3모델의 kv_total_bytes 벡터 3개만 append 하고 기존 30개는 손대지 않는다.
+// 러너(run.mjs) 바이트는 2.14.1 이후 불변이다(아래 SHA) — 벡터가 늘어도 검증 코드는 안 바뀐다는 게 요점.
+const VECTORS_JSON_SHA256 = 'b195263d5aea12cc0997cadcebfe31f5c9bc64e9f3dc8c2ec562893ab33c2742';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
-test('release version surfaces agree on 2.15.0 and the package contract is unchanged', () => {
+test('release version surfaces agree on 2.16.0 and the package contract is unchanged', () => {
   const pkg = readJson('package.json');
   const lock = readJson('package-lock.json');
   assert.equal(pkg.version, RELEASE_VERSION);
@@ -45,15 +46,19 @@ test('release version surfaces agree on 2.15.0 and the package contract is uncha
   assert.equal(read('AGENTS.md').includes('2.14.1'), false);
 });
 
-test('the 30 conformance vectors are byte-identical to 2.14.1 with 12/3/4/11 kinds and no new export paths', () => {
+test('the 33 conformance vectors append only the three new-model anchors, with 15/3/4/11 kinds and no new export paths', () => {
   assert.equal(sha256('vectors/fit-vectors-v1.json'), VECTORS_JSON_SHA256);
   assert.equal(sha256('vectors/run.mjs'), VECTORS_RUNNER_SHA256);
   const { version, vectors } = readJson('vectors/fit-vectors-v1.json');
-  assert.equal(version, '1.5.0');
-  assert.equal(vectors.length, 30);
+  assert.equal(version, '1.6.0');
+  assert.equal(vectors.length, 33);
   const kinds = {};
   for (const v of vectors) kinds[v.kind] = (kinds[v.kind] || 0) + 1;
-  assert.deepEqual(kinds, { kv_total_bytes: 12, kv_per_token_bytes: 3, linear_state_bytes: 4, verdict: 11 });
+  assert.deepEqual(kinds, { kv_total_bytes: 15, kv_per_token_bytes: 3, linear_state_bytes: 4, verdict: 11 });
+  // 2026-09-14 append 된 3개 — 손계산 근거는 각 벡터의 note에 있다.
+  for (const id of ['minicpm5-2b-kv-128k-f16', 'nex-n25-mini-kv-128k-f16', 'nex-n25-pro-kv-128k-f16']) {
+    assert.ok(vectors.some((v) => v.id === id), `missing vector: ${id}`);
+  }
   assert.equal(vectors.some((v) => v.model === 'GLM-5.3'), false); // GLM-5.3은 벡터를 추가하지 않는다(GLM-5.2와 수학 동일)
   const pkg = readJson('package.json');
   assert.equal('./vectors' in pkg.exports, false);
@@ -69,7 +74,7 @@ test('census counts, date, schema, URLs, licence boundary and checksums are deri
   const devices = GPUS.length + macConfigs;
   const rowsPerModel = GPUS.length * GPU_QUANTS.length + macConfigs * 3;
   const rows = LOCAL_MODELS.length * rowsPerModel;
-  assert.equal(LOCAL_MODELS.length, 27);
+  assert.equal(LOCAL_MODELS.length, 30);
   assert.equal(devices, 93);
   assert.equal(census.version, 1);
   assert.equal(census.schema_version, 2);
@@ -125,7 +130,7 @@ test('README and AGENTS model/verdict counts are derived from the catalog and ce
   assert.ok(readme.includes(`**${verdicts}** (${LOCAL_MODELS.length} models incl. draft tier × ${manifest.devices} GPUs/Macs × quant tiers)`), 'README census sentence');
   assert.ok(readme.includes(`Open data: the full **Fit Census** (${verdicts}, **CC0**)`), 'README open-data sentence');
   assert.ok(agents.includes(`${verdicts}, model × device × quant`), 'AGENTS census line');
-  assert.ok(agents.includes('30 byte-exact anchors'));
+  assert.ok(agents.includes('33 byte-exact anchors'));
 });
 
 test('README and CONTRIBUTING claims stay bounded: GLM-5.3 is listed as supported, never as universally runnable or more accurate', () => {

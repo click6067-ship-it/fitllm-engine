@@ -22,6 +22,7 @@ import {
   planIssueMutations,
   runDay0Watch,
   sha256CanonicalManifest,
+  isAlreadyInCatalog,
 } from '../.github/scripts/day0-core.mjs';
 
 const FIXTURES = new URL('./fixtures/day0/', import.meta.url);
@@ -891,4 +892,61 @@ test('text-generation candidates가 noop으로 capacity를 비우면 unknown pip
     ['create', 'Qwen/Img-B'],
   ]);
   assert.ok(result.issuePlan.dropped.some(({ candidateId, reason }) => candidateId.startsWith('Qwen/Img-C@') && reason === 'MUTATION_LIMIT'));
+});
+
+// ── 2026-09-14: 발견 파이프라인의 두 갭 ────────────────────────────────────────
+// 실측 계기: 2026-09-13 스케줄 dry-run 이 deepseek-ai/DeepSeek-V4.1-Flash(HF 트렌딩 1위)를
+// MUTATION_LIMIT 으로 떨어뜨렸다 — 상한 3건을 이미 카탈로그에 있는 zai-org/GLM-5.3 와
+// meta-llama/Llama-3.1-8B-Instruct 가 먹었기 때문이다. 같은 런에서 openbmb/MiniCPM5-2B 는
+// NAMESPACE_NOT_ALLOWLISTED 로 떨어졌는데, 우리는 이미 MiniCPM5-1B 를 카탈로그에 갖고 있다.
+test('namespaceAllowlistCoversCatalogVendors: 카탈로그에 행이 있는 벤더는 허용목록에 있다', async () => {
+  const { LOCAL_MODELS } = await import('../engine.js');
+  const policy = loadSourcePolicy(await readFile(new URL('../.github/day0-sources.json', import.meta.url), 'utf8'));
+  const allowed = new Set(policy.officialNamespaces.map((entry) => entry.namespace));
+  // 카탈로그 그룹 → 그 모델이 실제로 사는 HF 네임스페이스(전부 라이브 확인).
+  const vendorByGroup = {
+    Nex: 'nex-agi',
+    Granite: 'ibm-granite',
+    Spark: 'XHToken',
+    'Qwen 3.8': 'Qwen',
+    Laguna: 'poolside',
+    GLM: 'zai-org',
+    'gpt-oss': 'openai',
+    'Qwen 3.6': 'Qwen',
+    'Qwen3.5': 'Qwen',
+    Hunyuan: 'tencent',
+    'Gemma 4': 'google',
+    Llama: 'meta-llama',
+    MiniCPM: 'openbmb',
+    Draft: 'Qwen',
+  };
+  const groups = [...new Set(LOCAL_MODELS.map((m) => m.group))];
+  for (const group of groups) {
+    const vendor = vendorByGroup[group];
+    assert.ok(vendor, `카탈로그 그룹 ${group} 의 벤더 네임스페이스가 이 표에 없다 — 표를 먼저 갱신하라`);
+    assert.ok(allowed.has(vendor), `${vendor} (${group}) 가 허용목록에 없다 — 자기 카탈로그 벤더의 신모델을 영영 못 본다`);
+  }
+});
+
+test('catalogPresentCandidatesDropBeforeMutationLimit: 이미 카탈로그에 있는 모델은 상한을 먹지 않는다', () => {
+  // 순수 함수 단위로 고정한다 — 네트워크·GitHub 없이 "무엇을 떨어뜨리는가"만 본다.
+  const catalog = ['GLM-5.3', 'Llama-3.1-8B-Instruct', 'MiniCPM5-2B'];
+  const keep = (id) => !isAlreadyInCatalog(id, catalog);
+
+  // 정확 일치(문장부호 무시)면 떨어진다 — 상한을 먹기 전에.
+  assert.equal(keep('zai-org/GLM-5.3'), false);
+  assert.equal(keep('meta-llama/Llama-3.1-8B-Instruct'), false);
+  assert.equal(keep('openbmb/MiniCPM5-2B'), false);
+  assert.equal(keep('Qwen/GLM_5_3'), false); // 문장부호만 다른 표기
+
+  // 이름이 비슷하다고 떨어뜨리지 않는다(부분일치 금지) — 놓치는 쪽이 훨씬 비싸다.
+  for (const id of [
+    'deepseek-ai/DeepSeek-V4.1-Flash',
+    'openbmb/MiniCPM5-1B-Instruct', // 접미사가 붙으면 다른 체크포인트다
+    'zai-org/GLM-5.3-Flash',
+    'meta-llama/Llama-3.1-8B',
+  ]) assert.equal(keep(id), true, `${id} 는 새 모델인데 떨어졌다`);
+
+  // 카탈로그가 비면 아무것도 안 떨어뜨린다(fail-open) — 필터가 조용히 전부 삼키는 사고 방지.
+  assert.equal(isAlreadyInCatalog('zai-org/GLM-5.3', []), false);
 });

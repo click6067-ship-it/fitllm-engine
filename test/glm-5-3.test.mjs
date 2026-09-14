@@ -132,11 +132,10 @@ test('AC1_identity: GLM-5.3 resolves across spellings; GLM-5.2 and ambiguous rul
 
 test('AC2_append_only_index: 0..25 stay exact, GLM-5.3 is last (26/27), and the MODELS cloud slot is unchanged', () => {
   PINNED_INDEX.forEach((name, i) => assert.equal(LOCAL_MODELS[i]?.name, name, `?m=${i}`));
-  assert.equal(LOCAL_MODELS.length, 27);
+  assert.equal(LOCAL_MODELS.length, 30);
   assert.equal(LOCAL_MODELS[26]?.name, 'GLM-5.3');
-  assert.equal(LOCAL_MODELS.at(-1)?.name, 'GLM-5.3');
-  assert.equal(MODELS.length, 28);
-  assert.equal(MODELS.at(-1)?.name, 'GLM-5.3');
+  assert.equal(MODELS.length, 32);
+  assert.equal(MODELS[27]?.name, 'GLM-5.3'); // 2026-09-14 배치가 뒤에 붙어 '마지막'은 아니지만 인덱스는 영구 고정
   matchObject(MODELS[19], { name: 'Claude Opus 4.7', isCloud: true });
   assert.equal(MODELS.filter((m) => m.name === 'GLM-5.3').length, 1);
 });
@@ -262,12 +261,12 @@ test('AC7_fail_closed_unchanged: Flash-Next stays absent and both pinned GLM con
 });
 
 test('AC9_dropdown_grouping: GLM group = [4.7-Flash, 5.2, 5.3], group order unchanged, all 27 addressable', () => {
-  assert.deepEqual(MODEL_GROUP_ORDER, BASELINE_GROUP_ORDER);
+  assert.deepEqual(MODEL_GROUP_ORDER.slice(-BASELINE_GROUP_ORDER.length), BASELINE_GROUP_ORDER); // 신규 그룹은 앞에 붙는다
   const groups = groupedForDisplay(LOCAL_MODELS);
   assert.deepEqual(groups.find((g) => g.group === 'GLM').items.map((m) => m.name), ['GLM-4.7-Flash', 'GLM-5.2', 'GLM-5.3']);
-  assert.deepEqual(groups.slice(0, 5).map((g) => g.group), ['Granite', 'Spark', 'Qwen 3.8', 'Laguna', 'GLM']);
+  assert.deepEqual(groups.slice(0, 6).map((g) => g.group), ['Nex', 'Granite', 'Spark', 'Qwen 3.8', 'Laguna', 'GLM']);
   const flat = groups.flatMap((g) => g.items);
-  assert.equal(flat.length, 27);
+  assert.equal(flat.length, 30);
   for (const m of flat) assert.ok(LOCAL_MODELS.indexOf(m) >= 0);
 });
 

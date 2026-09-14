@@ -1049,6 +1049,23 @@ function safeCandidateDirectory(manifest) {
   return manifest.candidateId.replaceAll('/', '--').replaceAll('@', '--at--').replace(/[^A-Za-z0-9._-]/g, '_');
 }
 
+// 이미 카탈로그에 있는 모델은 후보 평가·이슈 상한을 먹으면 안 된다 (2026-09-14).
+// 실측 계기: 2026-09-13 dry-run 이 상한 3건을 zai-org/GLM-5.3 · meta-llama/Llama-3.1-8B-Instruct
+// (둘 다 이미 카탈로그) 로 채워, HF 트렌딩 1위 신모델이 MUTATION_LIMIT 으로 탈락했다.
+// 비교는 **정확 일치(문장부호·대소문자 무시)** 다. 부분일치로 넓히면 MiniCPM5-1B 가 MiniCPM5-2B 를,
+// GLM-5.3 가 GLM-5.3-Flash 를 삼킨다 — 신모델을 놓치는 쪽이 중복 이슈 한 건보다 훨씬 비싸다.
+// catalogModelNames 가 비면 아무것도 떨어뜨리지 않는다(fail-open): 카탈로그를 못 읽었을 때
+// 필터가 조용히 전부 삼키는 것이 최악의 실패다.
+const normalizeModelKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+export function isAlreadyInCatalog(candidateId, catalogModelNames) {
+  if (!Array.isArray(catalogModelNames) || catalogModelNames.length === 0) return false;
+  const basename = String(candidateId || '').split('/').pop();
+  const key = normalizeModelKey(basename);
+  if (!key) return false;
+  return catalogModelNames.some((name) => normalizeModelKey(name) === key);
+}
+
 export async function runDay0Watch(deps, options = {}) {
   const {
     policy,
@@ -1057,6 +1074,7 @@ export async function runDay0Watch(deps, options = {}) {
     existingIssues: suppliedIssues,
     now = new Date(),
     verifierSchemaVersion = 'capability-v1',
+    catalogModelNames = [],
   } = deps;
   const outputDir = safeOutputDirectory(options.outputDir, options.sourceRoot || process.cwd());
   const discovery = await discoverCandidates({ policy, fetchImpl, now });
@@ -1066,6 +1084,11 @@ export async function runDay0Watch(deps, options = {}) {
   const candidatesWithValidRevision = [];
   const candidatesWithInvalidRevision = [];
   for (const candidate of discovery.candidates) {
+    // 카탈로그 중복은 evidence 예산과 mutation 상한 **이전에** 떨어진다.
+    if (isAlreadyInCatalog(candidate.id, catalogModelNames)) {
+      discovery.droppedCandidates.push({ candidateId: candidate.id, reason: 'CATALOG_ALREADY_PRESENT' });
+      continue;
+    }
     const target = REVISION_RE.test(candidate.revision || '') && !candidate.discoveryRevisionConflict
       ? candidatesWithValidRevision
       : candidatesWithInvalidRevision;
