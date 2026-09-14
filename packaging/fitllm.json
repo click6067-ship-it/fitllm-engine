@@ -1,0 +1,28 @@
+{
+  "version": "2.16.0",
+  "description": "Will this LLM fit on your GPU or Mac? Architecture-accurate memory estimates",
+  "homepage": "https://fitllm.run",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v2.16.0/fitllm-v2.16.0-windows-x64.exe",
+      "hash": "4a0e3d09fbc80eb3ccf613dfc8dd63bd8ac8312f1e64a638e3818c742ec687e9",
+      "bin": [
+        [
+          "fitllm-v2.16.0-windows-x64.exe",
+          "fitllm"
+        ]
+      ]
+    }
+  },
+  "checkver": {
+    "github": "https://github.com/click6067-ship-it/fitllm-engine"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v$version/fitllm-v$version-windows-x64.exe"
+      }
+    }
+  }
+}
