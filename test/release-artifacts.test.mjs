@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { ENGINE_VERSION, GPUS, GPU_QUANTS, LOCAL_MODELS, MACBOOK_RAM_GROUPS } from '../engine.js';
 
-const RELEASE_VERSION = '2.17.0';
+const RELEASE_VERSION = '2.18.0';
 const RELEASE_DATE = '2026-09-13'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — KST 2026-09-14 01:40 = UTC 09-13
 const url = (rel) => new URL(`../${rel}`, import.meta.url);
 const read = (rel) => readFileSync(url(rel), 'utf8');
@@ -18,7 +18,7 @@ const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).dige
 const VECTORS_JSON_SHA256 = 'b195263d5aea12cc0997cadcebfe31f5c9bc64e9f3dc8c2ec562893ab33c2742';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
-test('release version surfaces agree on 2.17.0 and the package contract is unchanged', () => {
+test('release version surfaces agree on 2.18.0 and the package contract is unchanged', () => {
   const pkg = readJson('package.json');
   const lock = readJson('package-lock.json');
   assert.equal(pkg.version, RELEASE_VERSION);
