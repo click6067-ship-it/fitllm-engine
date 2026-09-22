@@ -53,6 +53,21 @@ if (has('--list')) {
 const TOP = has('--top'); // --top 모드는 모델 인자 불필요 (전 카탈로그 스캔)
 const MEASURE = positional[0] === 'measure';
 
+// `fitllm measure --from-ollama` — 런타임이 이미 보고한 상주량을 회수한다.
+// 기존 measure 경로(--measured 를 손으로 넣는 쪽)와 인자 해석이 다르므로 여기서 끝낸다.
+if (MEASURE && has('--from-ollama')) {
+  const { buildRuntimeMeasurements, renderRuntimeMeasurements } = await import('./measure-from-runtime.mjs');
+  try {
+    const ctxFlag = Number(flag('--ctx'));
+    const result = await buildRuntimeMeasurements({ ctx: Number.isFinite(ctxFlag) ? ctxFlag : undefined });
+    console.log(has('--json') ? JSON.stringify(result, null, 2) : renderRuntimeMeasurements(result));
+    process.exit(0); // 회수는 판정이 아니다.
+  } catch (error) {
+    console.error(`measure --from-ollama failed: ${error.message}`);
+    process.exit(2);
+  }
+}
+
 // `fitllm scan` — 설치된 런타임의 모델을 읽어 판정한다. 기존 인자 해석 경로를 타지 않고
 // 여기서 끝낸다(scan 은 모델 인자를 받지 않으므로 아래 해석 로직과 섞이면 안 된다).
 if (positional[0] === 'scan') {

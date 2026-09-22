@@ -152,6 +152,34 @@ jobs:
             console.log("ok:", hit.installedId, "->", hit.catalogModel, hit.reported.sizeBytes, "bytes");
           '
 
+      - name: measure --from-ollama recovers what the runtime reports
+        run: |
+          set -eux
+          # 모델을 실제로 로드해야 /api/ps 에 올라온다. 짧은 생성 한 번으로 상주시킨다.
+          ollama run qwen3:0.6b "hi" --keepalive 5m >/dev/null 2>&1 || true
+          curl -fsS http://127.0.0.1:11434/api/ps | tee "$RUNNER_TEMP/ps.json"
+          node bin/fitllm.mjs measure --from-ollama --json > "$RUNNER_TEMP/measure.json"
+          cat "$RUNNER_TEMP/measure.json"
+          node -e '
+            const fs = require("fs");
+            const r = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/measure.json", "utf8"));
+            const ps = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/ps.json", "utf8"));
+            // 러너에는 GPU 가 없다. 그러면 size_vram 이 0 이고 게이트가 거부해야 한다 —
+            // 거부되는 것이 정답인 환경이므로, 여기서 검증하는 것은 "거부가 조용히
+            // 통과로 바뀌지 않는가" 다.
+            const loaded = (ps.models || []).length;
+            if (loaded > 0 && r.ok) {
+              const vramZero = ps.models.every((m) => !m.size_vram);
+              if (vramZero && r.candidates.length > 0) {
+                throw new Error("gate leaked: produced a VRAM measurement with size_vram=0");
+              }
+              console.log("loaded:", loaded, "candidates:", r.candidates.length, "skipped:", r.skipped.length);
+            } else {
+              console.log("nothing loaded or runtime unavailable:", r.note || "");
+            }
+            if (/tok\/s/i.test(JSON.stringify(r))) throw new Error("speed claim leaked");
+          '
+
       - name: scan exits 0 even when nothing fits
         run: |
           set -eu
