@@ -163,3 +163,39 @@ test('measurePassesThroughListRunningShape: provider 반환 모양이 계약대�
   assert.equal(out.version, '0.12.3');
   assert.equal(out.running[0].id, 'qwen3:0.6b');
 });
+
+test('measurePairsLikeWithLike: idle_resident 에는 상주 예측을 짝지어야 한다', async () => {
+  const { simulate, LOCAL_MODELS } = await import('../engine.js');
+  const result = await buildRuntimeMeasurements({
+    fetchImpl: stubFetch({ models: [psEntry()] }), env: {}, device: device(),
+  });
+  const c = result.candidates[0].report.candidate;
+  const sim = simulate(LOCAL_MODELS.find((m) => m.name === 'Qwen3-0.6B'), device(), 8192,
+    { weightBpw: 4.8944, kvBits: 16 });
+
+  // 측정한 양과 예측한 양이 같아야 비교가 성립한다.
+  assert.equal(c.predictedGB, sim.param + sim.kv + sim.linearState);
+  assert.equal(c.predictedMetric, 'resident_weights_plus_kv_gb',
+    '예측이 무엇인지 라벨이 없으면 검토자가 다른 양과 비교하게 된다');
+
+  // generation_peak 용 값(used-reserve)을 짝지으면 안 된다 — 런타임 오버헤드가 섞여 있다.
+  assert.notEqual(c.predictedGB, sim.used - sim.reserve);
+  assert.ok(Math.abs((sim.used - sim.reserve) - c.predictedGB) > 0.3,
+    '두 양이 사실상 같다면 이 테스트가 지키는 구분이 사라진 것이다');
+});
+
+// Grok 교차검수(2026-09-23) 지적: Number() 강제변환에 기대면 타입이 다른 값이 통과한다.
+// Ollama JSON 으로 도달하기는 어렵지만, 이 게이트가 막기로 한 것이 정확히 "해석할 수 없는 값"이다.
+test('measureGateRequiresRealByteCounts: 강제변환으로 통과하는 값을 막는다', () => {
+  const coercible = [
+    [true, true], ['100', '100'], [[100], [100]], ['0x100', 256], ['1e3', 1000],
+    [' 100 ', 100], [1.5, 1.5], [Number.MAX_SAFE_INTEGER + 2, Number.MAX_SAFE_INTEGER + 2],
+  ];
+  for (const [size, vram] of coercible) {
+    const out = residentFromPsEntry({ model: 'm', size, size_vram: vram });
+    assert.ok(out === null || out.residentBytes === null,
+      `size=${String(size)} vram=${String(vram)} 가 통과했다`);
+  }
+  // 진짜 정수 바이트는 그대로 통과한다.
+  assert.equal(residentFromPsEntry({ model: 'm', size: 100, size_vram: 100 }).residentBytes, 100);
+});

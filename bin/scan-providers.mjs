@@ -107,9 +107,13 @@ export function residentFromPsEntry(entry) {
     ? entry.model
     : (typeof entry.name === 'string' ? entry.name : '');
   if (!id) return null;
-  const size = Number(entry.size);
-  const vram = Number(entry.size_vram);
-  if (!Number.isFinite(size) || !Number.isFinite(vram)) return null;
+  // 바이트 수는 **정수인 number** 여야 한다. Number() 강제변환에 기대면 true·[1]·'0x100'·1.5·
+  // MAX_SAFE_INTEGER 초과값이 전부 통과한다(Grok 교차검수 2026-09-23 지적). Ollama 의 JSON 으로
+  // 그런 값이 오기는 어렵지만, 타입이 다른 값은 그 자체로 "해석할 수 없는 값"이고 이 게이트가
+  // 막기로 한 것이 정확히 그것이다. 강제변환 대신 타입을 요구한다.
+  const isByteCount = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= Number.MAX_SAFE_INTEGER;
+  const { size, size_vram: vram } = entry;
+  if (!isByteCount(size) || !isByteCount(vram)) return null;
   if (vram <= 0) return { id, residentBytes: null, reason: 'not resident in VRAM' };
   if (vram !== size) return { id, residentBytes: null, reason: 'only part of the model is in VRAM' };
   return { id, residentBytes: vram, reason: null };

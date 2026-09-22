@@ -74,7 +74,13 @@ export async function buildRuntimeMeasurements(deps = {}) {
         kind: 'idle_resident',
         unit: 'GiB',
         runtime: `Ollama ${runtime.version}`,
-        predicted: sim.used - sim.reserve,
+        // ⚠️ 예측값은 **측정 종류와 같은 양**이어야 한다. idle_resident 는 상주 가중치+KV 이므로
+        //    param+kv+linearState 를 쓴다. 기존 measure 경로가 generation_peak 에 쓰는
+        //    used-reserve 는 런타임 오버헤드를 포함해 여기서는 34% 가량 크다(Qwen3-0.6B/4090
+        //    기준 1.632 vs 1.215). 그 값을 짝지으면 검토자가 "엔진이 과대예측한다"고 읽고
+        //    엔진을 실측에 맞추려 들 수 있다 — 이 레포가 '54GB 앵커'로 한 번 겪은 실패다.
+        predicted: sim.param + sim.kv + sim.linearState,
+        predictedMetric: 'resident_weights_plus_kv_gb',
       });
       candidates.push({ installedId: entry.id, report, predictedTotalGB: sim.used });
     } catch (error) {
