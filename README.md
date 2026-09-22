@@ -21,8 +21,9 @@ FitLLM is an open-source, zero-dependency engine that checks whether a local LLM
 # self-contained binary — no Node required
 curl -fsSL https://fitllm.run/install.sh | sh
 
-# Homebrew (tap)
+# Homebrew (tap) — the trust line is required for any third-party tap
 brew tap click6067-ship-it/fitllm
+brew trust click6067-ship-it/fitllm
 brew install fitllm
 
 # Windows (Scoop)
@@ -44,8 +45,29 @@ npx fitllm --top --gpu 4090                    # what can this hardware run?
 npx fitllm --top --detect --json               # detect every supported local GPU; agent-ready JSON
 npx fitllm Qwen/Qwen3-32B --detect --json      # public Hugging Face ID or URL; unsupported configs fail closed
 npx fitllm "Gemma 4 12b" --detect --json --why # include architecture, evidence, assumptions, and exact memory inputs
+npx fitllm scan                                # what you already downloaded — does it fit this machine?
 npm install fitllm-engine                      # use the same engine as a library (see Usage)
 ```
+
+### `fitllm scan` — start from what you already have
+
+Instead of typing a model name, read the ones already on disk:
+
+```bash
+$ fitllm scan
+Hardware: RTX 4090 (24GB) · quant Q4_K_M · ctx 8,192
+
+ollama (3)
+  ✓ FITS  qwen3:0.6b  →  Qwen3-0.6B
+          1.2 GB used, 22.8 GB free  (on disk: 0.5 GB · Q4_K_M)
+  ?       some-finetune:latest  —  not in the catalog, no verdict  (on disk: 6.7 GB · Q5_K_M)
+```
+
+It reads **Ollama** through its loopback API and **LM Studio** through `lms ls --json`. Both are read-only: no pull, no load, no settings written, and nothing is sent anywhere. A non-loopback `OLLAMA_HOST` is refused rather than queried.
+
+A model the catalog does not know gets **no estimate** — only the size and quant the runtime itself reported. Guessing from a similar name would hand you another model's numbers, which is worse than no number.
+
+Verification status, stated plainly: the Ollama path is exercised end-to-end in CI against a real Ollama install (`verify-install-paths.yml`). The LM Studio path is covered by fixtures only — there is no LM Studio on the machine this was written on, so it has not been run against the real CLI.
 
 ## Remote MCP server
 
