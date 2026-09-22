@@ -2004,4 +2004,4 @@ export const DATA_UPDATED = '2026-09';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.17.0';
+export const ENGINE_VERSION = '2.18.0';

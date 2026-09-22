@@ -262,13 +262,13 @@ test('test_release_version_bumped_and_readme_counts', () => {
   // 2.15.0 = PLE parser fail-closed + residency-policy 정정 + text-only GLM-5.3 (minor bump, 카탈로그 27행).
   const pkg = readJson('../package.json');
   const lock = readJson('../package-lock.json');
-  assert.equal(pkg.version, '2.17.0');
-  assert.equal(lock.version, '2.17.0');
-  assert.equal(ENGINE_VERSION, '2.17.0');
+  assert.equal(pkg.version, '2.18.0');
+  assert.equal(lock.version, '2.18.0');
+  assert.equal(ENGINE_VERSION, '2.18.0');
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
   const verdicts = `${readJson('../census/manifest.json').rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.17.0', 'conformance_vectors-33%2F33', '33 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.18.0', 'conformance_vectors-33%2F33', '33 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
   for (const s of [verdicts, '33 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
