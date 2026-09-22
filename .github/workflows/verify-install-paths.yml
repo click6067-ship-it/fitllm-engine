@@ -93,3 +93,63 @@ jobs:
             exit 1
           fi
           echo "tampered download refused, nothing written"
+
+  ollama-scan:
+    name: fitllm scan against a real Ollama
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # scan 의 유닛테스트는 픽스처를 쓴다. 픽스처는 "우리가 생각하는 Ollama" 를 증명할 뿐
+      # "진짜 Ollama" 를 증명하지 못한다 — 개발 머신에 Ollama 가 없어서 그 간극이 계속 남는다.
+      # 이 job 이 그 간극을 닫는다.
+      - name: Install and start Ollama
+        run: |
+          set -eux
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:11434/api/tags
+
+      - name: Pull a model this catalog knows
+        run: ollama pull qwen3:0.6b
+
+      - name: scan finds it and maps it to the catalog
+        run: |
+          set -eux
+          node bin/fitllm.mjs scan | tee "$RUNNER_TEMP/scan.txt"
+          grep -q 'qwen3:0.6b' "$RUNNER_TEMP/scan.txt"
+          # 매핑이 실제로 붙는지가 핵심 — 목록만 나오고 판정이 안 붙으면 반쪽이다.
+          grep -q 'Qwen3-0.6B' "$RUNNER_TEMP/scan.txt"
+
+      - name: --json carries the same facts and the schema holds
+        run: |
+          set -eu
+          node bin/fitllm.mjs scan --json > "$RUNNER_TEMP/scan.json"
+          node -e '
+            const s = JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/scan.json", "utf8"));
+            const ollama = s.providers.find((p) => p.provider === "ollama");
+            if (!ollama || ollama.ok !== true) throw new Error("ollama provider did not answer");
+            const hit = ollama.models.find((m) => m.installedId === "qwen3:0.6b");
+            if (!hit) throw new Error("scan did not see the pulled model");
+            if (hit.catalogModel !== "Qwen3-0.6B") throw new Error("catalog mapping failed: " + hit.catalogModel);
+            if (!Number.isFinite(hit.reported.sizeBytes) || hit.reported.sizeBytes <= 0) {
+              throw new Error("runtime-reported size missing");
+            }
+            if (/tok\/s/i.test(JSON.stringify(s))) throw new Error("speed claim leaked into scan output");
+            console.log("ok:", hit.installedId, "->", hit.catalogModel, hit.reported.sizeBytes, "bytes");
+          '
+
+      - name: scan exits 0 even when nothing fits
+        run: |
+          set -eu
+          node bin/fitllm.mjs scan >/dev/null
+          echo "scan exited 0 (a lookup is not a verdict)"

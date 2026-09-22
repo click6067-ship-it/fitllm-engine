@@ -52,6 +52,21 @@ if (has('--list')) {
 
 const TOP = has('--top'); // --top 모드는 모델 인자 불필요 (전 카탈로그 스캔)
 const MEASURE = positional[0] === 'measure';
+
+// `fitllm scan` — 설치된 런타임의 모델을 읽어 판정한다. 기존 인자 해석 경로를 타지 않고
+// 여기서 끝낸다(scan 은 모델 인자를 받지 않으므로 아래 해석 로직과 섞이면 안 된다).
+if (positional[0] === 'scan') {
+  const { buildScan, renderScan } = await import('./scan.mjs');
+  try {
+    const ctxFlag = Number(flag('--ctx'));
+    const scan = await buildScan({ ctx: Number.isFinite(ctxFlag) ? ctxFlag : undefined });
+    console.log(has('--json') ? JSON.stringify(scan, null, 2) : renderScan(scan));
+    process.exit(0); // 조회는 판정이 아니다 — fit 여부로 exit 코드를 흔들지 않는다.
+  } catch (error) {
+    console.error(`scan failed: ${error.message}`);
+    process.exit(2);
+  }
+}
 let model = null;
 let receiptCatalogModel = true;
 let modelSource;
