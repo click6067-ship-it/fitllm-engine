@@ -200,9 +200,30 @@ function pipelinePriority(tag) {
   return 2;
 }
 
-function candidateSort(a, b) {
+// 후보 순서의 수요 신호. 원시 숫자가 아니라 밴드인 이유: 다운로드가 몇 건 흔들릴 때마다
+// 순서가 뒤집히면 같은 후보가 주마다 올랐다 내렸다 한다. 계단이면 안정적이다.
+//
+// 계기(2026-09-22): 상한 3칸이 likes 8/dl 0 인 논문 레포, dl 5,920 인 GGUF, dl 5,501 인
+// 이미지 편집 보조로 찼고 셋 다 트리아지에서 탈락했다. 그 사이 dl 3,547,021 인 모델이
+// MUTATION_LIMIT 으로 밀렸다. "사람이 실제로 물어볼 모델인가"가 순서에 없었다.
+//
+// 임계는 정책의 priorityThresholds(likes 100 / downloads 10,000)를 게이트가 아니라
+// **밴드 경계**로 재사용한다. tier 0 은 그 10배 — 확실한 수요다.
+export function demandTier(modelInfo) {
+  const likes = Number.isFinite(modelInfo?.likes) ? modelInfo.likes : 0;
+  const downloads = Number.isFinite(modelInfo?.downloads) ? modelInfo.downloads : 0;
+  if (likes >= 1000 || downloads >= 100000) return 0;
+  if (likes >= 100 || downloads >= 10000) return 1;
+  return 2;
+}
+
+export function candidateSort(a, b) {
+  // base/variant 는 수요보다 앞선다 — 우리는 base 체크포인트를 카탈로그에 넣고,
+  // 다운로드 수가 그 원칙을 이기면 GGUF 미러가 맨 위로 올라온다.
   const variantDelta = Number(a.checkpointKind !== 'base') - Number(b.checkpointKind !== 'base');
   if (variantDelta) return variantDelta;
+  const demandDelta = demandTier(a.modelInfo) - demandTier(b.modelInfo);
+  if (demandDelta) return demandDelta;
   const releaseDelta = Number(!a.discoverySources.includes('hf_official_namespace_release'))
     - Number(!b.discoverySources.includes('hf_official_namespace_release'));
   if (releaseDelta) return releaseDelta;

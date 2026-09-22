@@ -24,6 +24,8 @@ import {
   sha256CanonicalManifest,
   isAlreadyInCatalog,
   renderRunSummary,
+  demandTier,
+  candidateSort,
 } from '../.github/scripts/day0-core.mjs';
 
 const FIXTURES = new URL('./fixtures/day0/', import.meta.url);
@@ -1027,4 +1029,47 @@ test('runSummaryIsHonestWhenNothingFound: 후보 0건이면 그렇게 적고 소
   assert.match(md, /No candidates cleared the gates/);
   assert.match(md, /1 discovery source\(s\) failed/);
   assert.doesNotMatch(md, /apply-issues/); // 할 일이 없으면 행동 유도도 없다
+});
+
+// ── 2026-09-22: 후보 순서에 수요 신호가 없다 ──────────────────────────────────
+// 실측 계기: 9/22 런의 상한 3칸이 Simple-Attention-Sparsification(likes 8, dl 0),
+// MiniCPM5-2B-DSpark-GGUF(dl 5,920), Qwen-Image-2.1-PE-I2I(dl 5,501)로 찼다.
+// 셋 다 트리아지에서 "추가 불가"가 났다. 정렬 기준이 base/variant → 릴리스출처 →
+// 최신순이라, "사람이 실제로 물어볼 모델인가"가 순서에 전혀 안 들어간다.
+//
+// 밴드로 나누는 이유: 원시 숫자로 정렬하면 다운로드가 몇 건 흔들릴 때마다 순서가 바뀌어
+// 같은 주에 같은 후보가 올랐다 내렸다 한다. 계단이면 안정적이다.
+test('demandTierBandsNotRawCounts: 수요는 밴드로 나뉘고 경계가 고정된다', () => {
+  // tier 0 = 확실한 수요, tier 1 = 게이트는 통과, tier 2 = 그 아래
+  assert.equal(demandTier({ likes: 2525, downloads: 3547021 }), 0); // GLM-5.3-Flash 급
+  assert.equal(demandTier({ likes: 1307, downloads: 150110 }), 0);  // MiniCPM5-2B 급
+  assert.equal(demandTier({ likes: 40, downloads: 150000 }), 0);    // 다운로드만 높아도 0
+  assert.equal(demandTier({ likes: 1200, downloads: 50 }), 0);      // likes만 높아도 0
+  assert.equal(demandTier({ likes: 621, downloads: 30289 }), 1);    // Nex-N2.5-Pro 급
+  assert.equal(demandTier({ likes: 24, downloads: 5920 }), 2);      // DSpark-GGUF 급
+  assert.equal(demandTier({ likes: 8, downloads: 0 }), 2);          // 논문 레포 급
+  assert.equal(demandTier({}), 2);                                  // 값이 없으면 최하위(추측 금지)
+});
+
+test('candidateOrderPutsDemandAheadOfRecency: 수요 높은 후보가 최신 저수요보다 먼저 온다', () => {
+  const make = (id, likes, downloads, createdAt, kind = 'base') => ({
+    id, checkpointKind: kind, discoverySources: ['hf_official_namespace_trending'],
+    createdAt, modelInfo: { likes, downloads },
+  });
+  // 9/22 런의 실제 구도: 저수요 신규가 고수요를 밀어냈다.
+  const highDemandOlder = make('zai-org/GLM-5.3-Flash', 2525, 3547021, '2026-08-25T00:00:00Z');
+  const lowDemandNewer = make('tencent/Simple-Attention-Sparsification', 8, 0, '2026-09-20T00:00:00Z');
+  assert.ok(candidateSort(highDemandOlder, lowDemandNewer) < 0,
+    '고수요 후보가 저수요 신규보다 뒤로 갔다 — 상한이 또 낭비된다');
+
+  // base/variant 구분은 수요보다 **앞선다**: 우리는 base 체크포인트를 카탈로그에 넣는다.
+  const hugeVariant = make('someone/Whatever-GGUF', 9999, 9999999, '2026-09-21T00:00:00Z', 'quantized_variant');
+  const modestBase = make('vendor/Real-Model', 120, 12000, '2026-09-01T00:00:00Z');
+  assert.ok(candidateSort(modestBase, hugeVariant) < 0,
+    'base 보다 양자화 미러가 앞섰다 — 다운로드 수가 원칙을 이겨선 안 된다');
+
+  // 같은 밴드면 기존 기준(최신순)이 그대로 유지된다.
+  const a = make('v/A', 200, 20000, '2026-09-10T00:00:00Z');
+  const b = make('v/B', 210, 21000, '2026-09-01T00:00:00Z');
+  assert.ok(candidateSort(a, b) < 0, '같은 수요 밴드에서 최신순이 깨졌다');
 });
