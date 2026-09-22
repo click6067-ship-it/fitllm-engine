@@ -1,0 +1,95 @@
+name: verify-install-paths
+
+# 배포 경로를 **실제로 설치해서** 확인한다. 이 레포의 테스트는 엔진 수학을 지키지만,
+# "brew install 이 되는가"는 그걸로 알 수 없다 — formula 의 URL·sha256 이 릴리스 자산과
+# 어긋나거나, tap 이 안 올라가 있거나, 바이너리가 그 플랫폼에서 안 돌 수 있다.
+#
+# macOS 를 특히 보는 이유: 리눅스 경로는 개발 머신에서 직접 확인되지만 macOS 는 안 된다.
+# arm64 Mac 이 이 도구의 주 사용자층이기도 하다.
+#
+# 릴리스마다 + 주 1회 돈다. 매 push 마다 돌리지 않는 건 macOS 러너가 느리고 비싸서고,
+# 이 검증이 잡는 건 push 가 아니라 **릴리스 자산과 패키징의 어긋남**이라 주기가 맞다.
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: '41 6 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  brew-tap:
+    name: brew install from the tap
+    runs-on: macos-latest
+    steps:
+      - name: Install from the tap
+        run: |
+          set -eux
+          brew tap click6067-ship-it/fitllm
+          brew install fitllm
+
+      - name: The binary runs and the verdict is the expected one
+        run: |
+          set -eux
+          out="$(fitllm 'Gemma 4 31b' --gpu 'RTX 4090' || true)"
+          printf '%s\n' "$out"
+          # 24GB 카드에 31B dense 는 빠듯하다 — 이 판정이 바뀌면 배포된 엔진이 우리 것이 아니다.
+          printf '%s' "$out" | grep -q 'TIGHT'
+          printf '%s' "$out" | grep -q 'Gemma 4 31b'
+
+      - name: Exit contract still holds (0 fits/tight, 1 will not fit)
+        run: |
+          set -eu
+          fitllm 'Gemma 4 31b' --gpu 'RTX 4090' >/dev/null
+          echo "tight exited 0"
+          if fitllm 'Qwen 3.8 2.4T-A95B' --gpu 'RTX 4090' >/dev/null; then
+            echo "expected a non-zero exit for a model that cannot fit" >&2
+            exit 1
+          fi
+          echo "no-fit exited non-zero"
+
+  install-script:
+    name: curl pipe sh on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install via the published script
+        run: |
+          set -eux
+          curl -fsSL https://fitllm.run/install.sh | FITLLM_INSTALL_DIR="$RUNNER_TEMP/bin" sh
+          "$RUNNER_TEMP/bin/fitllm" 'Gemma 4 31b' --gpu 'RTX 5090' | tee "$RUNNER_TEMP/out.txt"
+          grep -q 'FITS' "$RUNNER_TEMP/out.txt"
+
+      - name: A tampered download is refused and nothing is written
+        run: |
+          set -eu
+          # 체크섬 검증이 실제로 도는지 확인한다. 스텁 curl 이 바이너리 URL 에만
+          # 쓰레기를 주고 .sha256 은 진짜를 통과시킨다 — 불일치가 강제된다.
+          mkdir -p "$RUNNER_TEMP/stub" "$RUNNER_TEMP/tamper"
+          cat > "$RUNNER_TEMP/stub/curl" <<'STUB'
+          #!/bin/sh
+          for a in "$@"; do case "$a" in *releases/download/*fitllm-v*) TAMPER=1;; esac; done
+          case "$*" in *.sha256*) TAMPER="";; esac
+          if [ -n "${TAMPER:-}" ]; then
+            out=""; next=""
+            for a in "$@"; do [ "$next" = "1" ] && { out="$a"; next=""; }; [ "$a" = "-o" ] && next=1; done
+            printf 'TAMPERED' > "$out"; exit 0
+          fi
+          exec /usr/bin/curl "$@"
+          STUB
+          chmod +x "$RUNNER_TEMP/stub/curl"
+          if PATH="$RUNNER_TEMP/stub:$PATH" FITLLM_INSTALL_DIR="$RUNNER_TEMP/tamper" \
+               sh -c 'curl -fsSL https://fitllm.run/install.sh | sh'; then
+            echo "installer accepted a tampered binary" >&2
+            exit 1
+          fi
+          if [ -e "$RUNNER_TEMP/tamper/fitllm" ]; then
+            echo "installer wrote a binary despite the checksum mismatch" >&2
+            exit 1
+          fi
+          echo "tampered download refused, nothing written"
