@@ -1058,12 +1058,70 @@ function safeCandidateDirectory(manifest) {
 // 필터가 조용히 전부 삼키는 것이 최악의 실패다.
 const normalizeModelKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
+// 재배포본의 양자화 접미사. **끝에서부터 반복해서** 떼어 base 이름을 복원한다:
+//   MiniCPM5-2B-GGUF        -> MiniCPM5-2B
+//   MiniCPM5-2B.Q4_K_M.gguf -> MiniCPM5-2B
+//   GLM-5.3-mlx             -> GLM-5.3
+// 여기 없는 토큰은 절대 떼지 않는다 — MiniCPM5-2B-DSpark-GGUF 는 GGUF 만 떨어져
+// MiniCPM5-2B-DSpark 가 남고, 그건 draft 레이어가 붙은 **별개 체크포인트**라 우리 것이 아니다.
+// 신모델의 GGUF 가 원본보다 먼저 뜨는 일은 흔하고 그건 우리가 봐야 할 신호이므로,
+// 접미사를 뗀 이름이 카탈로그에 실제로 있을 때만 중복으로 판정한다.
+const QUANT_SUFFIX_RE = /[-_.](?:gguf|awq|gptq|mlx|bnb|exl2|int[48]|nvfp4|mxfp4|fp4|fp8|bf16|fp16|f16|[234568]bit|q\d+(?:_[a-z0-9]+)*)$/i;
+
+export function stripQuantSuffixes(basename) {
+  let out = String(basename || '');
+  for (let guard = 0; guard < 6; guard += 1) {
+    const next = out.replace(QUANT_SUFFIX_RE, '');
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
 export function isAlreadyInCatalog(candidateId, catalogModelNames) {
   if (!Array.isArray(catalogModelNames) || catalogModelNames.length === 0) return false;
   const basename = String(candidateId || '').split('/').pop();
-  const key = normalizeModelKey(basename);
-  if (!key) return false;
-  return catalogModelNames.some((name) => normalizeModelKey(name) === key);
+  const catalogKeys = new Set(catalogModelNames.map((name) => normalizeModelKey(name)));
+  for (const candidate of [basename, stripQuantSuffixes(basename)]) {
+    const key = normalizeModelKey(candidate);
+    if (key && catalogKeys.has(key)) return true;
+  }
+  return false;
+}
+
+// 스케줄 런은 읽기 전용이라 이슈를 만들지 않는다(의도된 설계). 그 대신 계획이 **로그 고고학
+// 없이** 보이게 한다 — 그러지 않으면 발견은 매일 일어나는데 아무도 모른다(실측: 9/15~9/22
+// 사이 후보가 계속 잡혔지만 인박스에 올라온 건 0건이었다).
+// 실패시키지는 않는다: 상시 빨간불은 사람이 곧 무시하게 되고, 그게 무음 실패보다 나쁘다.
+export function renderRunSummary(summary) {
+  const ops = summary.operations || [];
+  const dropped = summary.droppedCandidates || [];
+  const reasons = new Map();
+  for (const item of dropped) reasons.set(item.reason, (reasons.get(item.reason) || 0) + 1);
+  const lines = [
+    `## day0-watch — ${summary.mode || 'dry-run'}`,
+    '',
+    `discovered **${summary.discovered ?? 0}** · evaluated **${summary.evaluated ?? 0}** · planned issue mutations **${summary.issueMutationsPlanned ?? 0}**`,
+    '',
+  ];
+  if (ops.length) {
+    lines.push('### Candidates this run', '', '| action | model |', '|---|---|');
+    for (const op of ops) lines.push(`| ${op.action} | \`${op.modelId}\` |`);
+    lines.push('', 'Nothing was filed — this run is read-only. To open these as issues, dispatch **day0-watch** with `mode: apply-issues`.', '');
+  } else {
+    lines.push('No candidates cleared the gates this run.', '');
+  }
+  if (reasons.size) {
+    lines.push('### Why the rest dropped', '', '| reason | count |', '|---|---|');
+    for (const [reason, count] of [...reasons].sort((a, b) => b[1] - a[1])) {
+      lines.push(`| \`${reason}\` | ${count} |`);
+    }
+    lines.push('');
+  }
+  if ((summary.sourceFailures || []).length) {
+    lines.push(`⚠️ ${summary.sourceFailures.length} discovery source(s) failed this run.`, '');
+  }
+  return lines.join('\n');
 }
 
 export async function runDay0Watch(deps, options = {}) {

@@ -9,6 +9,7 @@ import {
   attachArtifactRef,
   fetchJsonWithRetry,
   loadSourcePolicy,
+  renderRunSummary,
   runDay0Watch,
 } from './day0-core.mjs';
 
@@ -70,6 +71,11 @@ async function writeGithubOutput(name, value) {
   await appendFile(process.env.GITHUB_OUTPUT, `${name}=${value}\n`, 'utf8');
 }
 
+async function writeJobSummary(summary) {
+  if (!process.env.GITHUB_STEP_SUMMARY) return;
+  await appendFile(process.env.GITHUB_STEP_SUMMARY, `${renderRunSummary(summary)}\n`, 'utf8');
+}
+
 async function main() {
   const apply = args.has('--apply-issues');
   if (apply) {
@@ -107,6 +113,7 @@ async function main() {
   });
   await writeGithubOutput('mutations', result.issuePlan.mutationCount);
   await writeGithubOutput('output-dir', result.outputDir);
+  await writeJobSummary(result.summary);
   console.log(JSON.stringify({ ...result.summary, outputDir: result.outputDir }, null, 2));
 }
 
