@@ -11,8 +11,13 @@ name: verify-install-paths
 # 이 검증이 잡는 건 push 가 아니라 **릴리스 자산과 패키징의 어긋남**이라 주기가 맞다.
 
 on:
-  release:
-    types: [published]
+  # 릴리스가 아니라 **binaries 워크플로가 끝난 뒤** 돈다.
+  # 둘 다 release:published 에 걸어 뒀더니 경쟁이 나서, 자산이 업로드되기 전에 설치를 시도해
+  # 404 로 죽었다(2026-09-22 v2.18.0 에서 실측). 사용자에게 보이는 버그는 아니지만 검증이
+  # 불안정하면 사람이 빨간불을 무시하게 되고, 그러면 검증이 없는 것과 같아진다.
+  workflow_run:
+    workflows: [binaries]
+    types: [completed]
   schedule:
     - cron: '41 6 * * 1'
   workflow_dispatch:
@@ -23,6 +28,7 @@ jobs:
   brew-tap:
     name: brew install from the tap
     runs-on: macos-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Install from the tap
         run: |
@@ -61,6 +67,7 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Install via the published script
         run: |
@@ -101,6 +108,7 @@ jobs:
   ollama-scan:
     name: fitllm scan against a real Ollama
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v5
         with:
