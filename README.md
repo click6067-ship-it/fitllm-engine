@@ -140,7 +140,20 @@ Agents can collect a typed measurement without uploading anything:
 npx fitllm measure "Qwen 3.6 27B" --detect --measured 15.3 --kind system_total_peak --unit GiB --runtime "llama.cpp b6400"
 ```
 
-The command validates the conditions and prints a candidate JSON object plus a prefilled GitHub issue URL. Submission remains a human action. Public Hugging Face IDs (`org/model`) are fetched with a bounded config/index reader and accepted only when `parseHfConfig()` supports the architecture.
+The command validates the conditions and prints a candidate JSON object plus a prefilled GitHub issue URL. Submission remains a human action.
+
+If you run Ollama, you do not have to measure anything yourself — it already reports the resident size of a loaded model:
+
+```bash
+ollama run qwen3:0.6b        # in one shell
+npx fitllm measure --from-ollama   # in another
+```
+
+This reads `GET /api/ps` and `GET /api/version` over loopback. It is read-only: it does not load, unload, pull, or change anything, and it submits nothing — you get the candidate and the issue link, and you decide.
+
+**What it verifies, and what it does not.** The number is `idle_resident`: weights plus KV resident in VRAM with the model loaded and idle. It is not peak memory during generation, so it checks part of a prediction rather than all of it, and the candidate says so.
+
+**When it refuses.** If `size_vram` differs from `size`, or is zero, no candidate is produced. Ollama's documentation does not define what those fields mean when they disagree, and partial residency is something this engine deliberately does not model — a number nobody can interpret is worse than no number. Models outside the catalog are skipped too: with no prediction, there is nothing to compare against. Public Hugging Face IDs (`org/model`) are fetched with a bounded config/index reader and accepted only when `parseHfConfig()` supports the architecture.
 
 This is the open calculation core of FitLLM. **The math is open so you can audit it.**
 

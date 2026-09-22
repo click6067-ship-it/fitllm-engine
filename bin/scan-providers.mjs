@@ -95,6 +95,60 @@ export function listLmStudio({ execImpl = execFileSync } = {}) {
   return { provider: 'lm-studio', ok: true, models, note: null };
 }
 
+// 로드된 모델의 **런타임이 보고한 상주량**. GET /api/ps 는 읽기 전용이고 아무것도 로드하지 않는다.
+//
+// ⚠️ size 와 size_vram 의 의미는 Ollama 공식 문서에 정의돼 있지 않다(2026-09-23 확인).
+// 둘이 다를 때 부분 오프로드라는 해석은 그럴듯하지만 문서에 없는 추론이고, 부분 상주는
+// 이 엔진이 모델링하지 않는 영역이다. 그래서 **두 값이 같고 0이 아닐 때만** 통과시킨다 —
+// 해석할 수 없는 숫자를 실측이라고 내보내는 것이 이 프로젝트에서 가장 비싼 실수다.
+export function residentFromPsEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const id = typeof entry.model === 'string' && entry.model
+    ? entry.model
+    : (typeof entry.name === 'string' ? entry.name : '');
+  if (!id) return null;
+  // 바이트 수는 **정수인 number** 여야 한다. Number() 강제변환에 기대면 true·[1]·'0x100'·1.5·
+  // MAX_SAFE_INTEGER 초과값이 전부 통과한다(Grok 교차검수 2026-09-23 지적). Ollama 의 JSON 으로
+  // 그런 값이 오기는 어렵지만, 타입이 다른 값은 그 자체로 "해석할 수 없는 값"이고 이 게이트가
+  // 막기로 한 것이 정확히 그것이다. 강제변환 대신 타입을 요구한다.
+  const isByteCount = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= Number.MAX_SAFE_INTEGER;
+  const { size, size_vram: vram } = entry;
+  if (!isByteCount(size) || !isByteCount(vram)) return null;
+  if (vram <= 0) return { id, residentBytes: null, reason: 'not resident in VRAM' };
+  if (vram !== size) return { id, residentBytes: null, reason: 'only part of the model is in VRAM' };
+  return { id, residentBytes: vram, reason: null };
+}
+
+export async function listRunningOllama({ fetchImpl = fetch, env = process.env } = {}) {
+  const base = ollamaBase(env);
+  if (!base) return { provider: 'ollama', ok: false, running: [], version: null, note: 'OLLAMA_HOST is not a loopback address; refusing to query it' };
+  const get = async (path) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const response = await fetchImpl(`${base}${path}`, { method: 'GET', signal: controller.signal });
+      if (!response || response.ok !== true) return null;
+      return await response.json();
+    } finally { clearTimeout(timer); }
+  };
+  let ps; let version;
+  try {
+    ps = await get('/api/ps');
+    version = await get('/api/version');
+  } catch {
+    return { provider: 'ollama', ok: false, running: [], version: null, note: 'not running' };
+  }
+  if (!ps) return { provider: 'ollama', ok: false, running: [], version: null, note: 'not running' };
+  const raw = Array.isArray(ps.models) ? ps.models : [];
+  return {
+    provider: 'ollama',
+    ok: true,
+    running: raw.map(residentFromPsEntry).filter(Boolean),
+    version: typeof version?.version === 'string' ? version.version : null,
+    note: null,
+  };
+}
+
 export const PROVIDERS = Object.freeze([
   { name: 'ollama', run: (deps) => listOllama(deps) },
   { name: 'lm-studio', run: (deps) => listLmStudio(deps) },
