@@ -14,7 +14,7 @@
 import { listRunningOllama } from './scan-providers.mjs';
 import { resolveInstalled, detectDevice } from './scan.mjs';
 import { buildMeasurementReport } from './measurement-report.mjs';
-import { simulate, fmtGB } from '../engine.js';
+import { simulate, fmtGB, gpuDevice, combineGpus, resolveGpuByName, appleDevice } from '../engine.js';
 
 const BYTES_PER_GIB = 1073741824;
 const DEFAULT_CTX = 8192;
@@ -26,6 +26,28 @@ const DEFAULT_QUANT = { weightBpw: 4.8944, kvBits: 16 };
 export const PARTIAL_VERIFICATION_NOTE =
   'idle_resident: weights plus KV resident in VRAM with the model loaded and idle. '
   + 'This does not measure peak memory during generation, so it verifies part of the prediction, not all of it.';
+
+// 하드웨어 자동감지는 NVIDIA 가 아니거나 nvidia-smi 가 없으면 실패한다. 그때 실측을
+// 기여할 방법이 없으면 곤란하다 — 정작 판정이 애매해 실측이 가장 필요한 사람이 그런 기기를
+// 쓰는 경우가 많다. 기존 measure 경로가 이미 --gpu/--mac 을 받으므로 같은 표기를 허용한다.
+// 사용자가 스스로 밝힌 기기는 추측이 아니라 진술이고, 보고서에 그대로 기록된다.
+export function deviceFromFlags({ gpu, mac, count } = {}) {
+  if (mac != null && mac !== '') {
+    const ram = Number(mac);
+    if (!Number.isFinite(ram) || ram <= 0) throw new Error(`--mac must be a positive number of GB, got: ${mac}`);
+    return appleDevice(ram);
+  }
+  if (gpu != null && gpu !== '') {
+    const resolved = resolveGpuByName(String(gpu));
+    if (!resolved || resolved.status !== 'resolved') {
+      throw new Error(`unknown GPU: ${gpu}. Use a catalog name, for example "RTX 4090".`);
+    }
+    const n = Number(count);
+    const card = resolved.gpu || resolved.match || resolved.value;
+    return Number.isInteger(n) && n > 1 ? combineGpus(Array(n).fill(card)) : gpuDevice(card);
+  }
+  return null;
+}
 
 export async function buildRuntimeMeasurements(deps = {}) {
   const runtime = await listRunningOllama(deps);
@@ -111,7 +133,11 @@ export function renderRuntimeMeasurements(result) {
   for (const candidate of result.candidates) {
     const r = candidate.report.candidate || candidate.report;
     lines.push(`${candidate.installedId}  →  ${r.model}`);
-    lines.push(`  measured ${r.measuredPeakGB} GiB (idle_resident) · engine predicted ${fmtGB(candidate.predictedTotalGB)} total`);
+    // 비교 가능한 양을 **먼저·가깝게** 둔다. 총량을 measured 바로 옆에 놓으면 2 vs 3.6 이
+    // 나란히 읽혀 "엔진이 80% 과대예측"으로 오해된다 — JSON 에서 고친 문제가 사람용 줄에
+    // 그대로 남아 있었다(2026-09-23 실제 실행에서 발견).
+    lines.push(`  measured ${r.measuredPeakGB} GiB resident · engine predicts ${fmtGB(r.predictedGB)} resident  ← compare these`);
+    lines.push(`  (the full prediction to run it is ${fmtGB(candidate.predictedTotalGB)}, which includes runtime overhead and reserve — not what this measures)`);
     lines.push('');
     lines.push(JSON.stringify(r, null, 2));
     if (candidate.report.issueUrl) {

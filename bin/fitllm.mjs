@@ -56,10 +56,15 @@ const MEASURE = positional[0] === 'measure';
 // `fitllm measure --from-ollama` — 런타임이 이미 보고한 상주량을 회수한다.
 // 기존 measure 경로(--measured 를 손으로 넣는 쪽)와 인자 해석이 다르므로 여기서 끝낸다.
 if (MEASURE && has('--from-ollama')) {
-  const { buildRuntimeMeasurements, renderRuntimeMeasurements } = await import('./measure-from-runtime.mjs');
+  const { buildRuntimeMeasurements, renderRuntimeMeasurements, deviceFromFlags } = await import('./measure-from-runtime.mjs');
   try {
     const ctxFlag = Number(flag('--ctx'));
-    const result = await buildRuntimeMeasurements({ ctx: Number.isFinite(ctxFlag) ? ctxFlag : undefined });
+    // 자동감지가 안 되는 기기에서도 실측을 기여할 수 있게 기존 measure 와 같은 표기를 받는다.
+    const override = deviceFromFlags({ gpu: flag('--gpu'), mac: flag('--mac'), count: flag('--count') });
+    const result = await buildRuntimeMeasurements({
+      ctx: Number.isFinite(ctxFlag) ? ctxFlag : undefined,
+      ...(override ? { device: override } : {}),
+    });
     console.log(has('--json') ? JSON.stringify(result, null, 2) : renderRuntimeMeasurements(result));
     process.exit(0); // 회수는 판정이 아니다.
   } catch (error) {
