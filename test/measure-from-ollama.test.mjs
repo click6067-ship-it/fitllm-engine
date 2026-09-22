@@ -199,3 +199,26 @@ test('measureGateRequiresRealByteCounts: 강제변환으로 통과하는 값을 
   // 진짜 정수 바이트는 그대로 통과한다.
   assert.equal(residentFromPsEntry({ model: 'm', size: 100, size_vram: 100 }).residentBytes, 100);
 });
+
+// 2026-09-23 실제 CLI 실행에서 발견: 사람용 줄이 총량(3.6)을, JSON 이 상주량(1.21)을 보여
+// 같은 출력 안에 "예측값"이 두 개였다. measured 2 GiB 옆에 3.6 이 붙으면 80% 과대예측으로 읽힌다.
+test('measureRenderComparesLikeWithLike: 사람용 줄이 비교 가능한 양을 나란히 둔다', async () => {
+  const result = await buildRuntimeMeasurements({
+    fetchImpl: stubFetch({ models: [psEntry()] }), env: {}, device: device(),
+  });
+  const text = renderRuntimeMeasurements(result);
+  const r = result.candidates[0].report.candidate;
+
+  // 비교하라고 지목된 줄에는 측정값과 **상주 예측**이 같이 있어야 한다.
+  const compareLine = text.split('\n').find((l) => l.includes('compare these'));
+  assert.ok(compareLine, '비교 지시가 있는 줄이 없다');
+  assert.ok(compareLine.includes(String(r.measuredPeakGB)), '측정값이 비교 줄에 없다');
+  assert.ok(compareLine.includes(r.predictedGB.toFixed(1)) || compareLine.includes(r.predictedGB.toFixed(2)),
+    '상주 예측이 비교 줄에 없다');
+
+  // 총량은 나오되, 그게 이 측정의 대상이 아니라는 말이 붙어야 한다.
+  const totalLine = text.split('\n').find((l) => l.includes('full prediction'));
+  assert.ok(totalLine, '총량 설명 줄이 없다');
+  assert.match(totalLine, /not what this measures/);
+  assert.ok(!compareLine.includes('total'), '비교 줄에 총량이 섞여 있다');
+});
