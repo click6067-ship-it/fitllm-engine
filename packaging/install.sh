@@ -38,6 +38,17 @@ else
   die "need curl or wget"
 fi
 
+# /releases/latest 는 /releases/tag/vX.Y.Z 로 리다이렉트한다. 최종 URL 에서 태그만 떼어낸다.
+redirect_tag() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSLI -o /dev/null -w '%{url_effective}' "$1" 2>/dev/null \
+      | sed -n 's|.*/releases/tag/v\{0,1\}\([^/]*\)$|\1|p'
+  else
+    wget -qS --spider --max-redirect=10 "$1" 2>&1 \
+      | sed -n 's|.*Location:.*/releases/tag/v\{0,1\}\([^ /]*\).*|\1|p' | tail -n 1
+  fi
+}
+
 # --- platform ---------------------------------------------------------------
 os_raw="$(uname -s)"
 arch_raw="$(uname -m)"
@@ -68,7 +79,14 @@ fi
 # --- version ----------------------------------------------------------------
 version="${FITLLM_VERSION:-}"
 if [ -z "$version" ]; then
-  version="$(fetch_stdout "https://api.github.com/repos/$REPO/releases/latest" \
+  # 1순위: /releases/latest 의 리다이렉트 목적지에서 태그를 읽는다.
+  # api.github.com 은 비인증 호출에 IP 당 시간당 60회 제한이 있어, 공유 IP·회사망·CI 에서
+  # 403 이 뜬다(2026-09-22 실측: GitHub Actions 러너에서 재현). 리다이렉트 경로는 그 제한을
+  # 받지 않으므로 이쪽을 먼저 쓰고, API 는 폴백으로만 남긴다.
+  version="$(redirect_tag "https://github.com/$REPO/releases/latest")"
+fi
+if [ -z "$version" ]; then
+  version="$(fetch_stdout "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
     | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([^"]*\)".*/\1/p' \
     | head -n 1)"
 fi
