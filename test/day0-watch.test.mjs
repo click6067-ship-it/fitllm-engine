@@ -23,6 +23,7 @@ import {
   runDay0Watch,
   sha256CanonicalManifest,
   isAlreadyInCatalog,
+  renderRunSummary,
 } from '../.github/scripts/day0-core.mjs';
 
 const FIXTURES = new URL('./fixtures/day0/', import.meta.url);
@@ -949,4 +950,81 @@ test('catalogPresentCandidatesDropBeforeMutationLimit: 이미 카탈로그에 �
 
   // 카탈로그가 비면 아무것도 안 떨어뜨린다(fail-open) — 필터가 조용히 전부 삼키는 사고 방지.
   assert.equal(isAlreadyInCatalog('zai-org/GLM-5.3', []), false);
+});
+
+// ── 2026-09-22: 이미 가진 모델의 양자화 미러가 이슈 상한을 먹는다 ──────────────
+// 실측 계기: 9/22 스케줄 dry-run 이 상한 3칸 중 2칸을 openbmb/MiniCPM5-2B-GGUF 와
+// openbmb/MiniCPM5-2B-DSpark-GGUF 로 채웠다 — 둘 다 **우리가 이미 카탈로그에 가진**
+// MiniCPM5-2B 의 GGUF 재배포본이다. 그 사이 zai-org/GLM-5.3-Flash(카탈로그 벤더의
+// 진짜 신모델)는 MUTATION_LIMIT 으로 탈락했다.
+//
+// 원인: checkpointKind 는 양자화 변종을 **후순위로 정렬**할 뿐 제외하지 않는다(의도된 설계).
+// base 후보가 얇은 주에는 그래서 미러가 그대로 올라온다. 여기서 고치는 건 그 설계가 아니라
+// **"우리가 이미 가진 모델의 미러"** 라는 더 좁은 경우다.
+test('quantVariantOfCatalogModelDrops: 보유 모델의 양자화 미러는 카탈로그 중복으로 떨어진다', () => {
+  const catalog = ['MiniCPM5-2B', 'Qwen 3.8 27B', 'GLM-5.3'];
+
+  // 실제로 상한을 먹었던 순수 미러.
+  assert.equal(isAlreadyInCatalog('openbmb/MiniCPM5-2B-GGUF', catalog), true);
+
+  // 다른 표기의 변종들도 같은 취급.
+  for (const id of [
+    'unsloth/Qwen3.8-27B-GGUF',
+    'nvidia/Qwen3.8-27B-NVFP4',
+    'mlx-community/GLM-5.3-mlx',
+    'someone/MiniCPM5-2B-AWQ',
+    'someone/MiniCPM5-2B.Q4_K_M.gguf',
+  ]) assert.equal(isAlreadyInCatalog(id, catalog), true, `${id} 가 안 떨어졌다`);
+
+  // ⚠️ 접미사를 지웠을 때 카탈로그에 **없는** 모델이면 떨어뜨리면 안 된다 —
+  // 신모델의 GGUF가 먼저 뜨는 일은 흔하고, 그건 우리가 봐야 할 신호다.
+  for (const id of [
+    'zai-org/GLM-5.3-Flash',          // Flash 는 별개 체크포인트다
+    'openbmb/MiniCPM5-2B-DSpark-GGUF', // DSpark 는 draft 레이어가 붙은 별개 체크포인트 —
+                                       // 양자화 접미사만 떼면 MiniCPM5-2B-DSpark 가 남고 그건 우리에게 없다.
+                                       // 정렬(checkpointKind)이 이미 뒤로 보내므로 여기서 지어내 떨어뜨리지 않는다.
+    'unsloth/Xing4.0-29B-A4B-GGUF',   // base 가 카탈로그에 없다
+    'openbmb/MiniCPM5-1B-GGUF',       // 1B 는 2B 가 아니다
+    'someone/MiniCPM5-2B-Instruct',   // 양자화 접미사가 아니다 — 다른 체크포인트
+  ]) assert.equal(isAlreadyInCatalog(id, catalog), false, `${id} 를 잘못 떨어뜨렸다`);
+
+  // 카탈로그가 비면 여전히 아무것도 안 떨어뜨린다(fail-open 유지).
+  assert.equal(isAlreadyInCatalog('openbmb/MiniCPM5-2B-GGUF', []), false);
+});
+
+// 발견 결과가 사람에게 닿는 경로. 스케줄 런은 이슈를 안 만드는 설계라, 이 요약이
+// 유일한 노출 지점이다 — 여기가 비면 발견은 매일 일어나고 아무도 모르는 상태로 돌아간다.
+test('runSummaryShowsCandidatesAndWhyTheRestDropped: 요약이 후보와 탈락 사유를 드러낸다', () => {
+  const md = renderRunSummary({
+    mode: 'dry-run',
+    discovered: 13,
+    evaluated: 3,
+    issueMutationsPlanned: 2,
+    operations: [
+      { action: 'create', modelId: 'zai-org/GLM-5.3-Flash' },
+      { action: 'update', modelId: 'tencent/Simple-Attention-Sparsification' },
+    ],
+    droppedCandidates: [
+      { candidateId: 'a/b', reason: 'CATALOG_ALREADY_PRESENT' },
+      { candidateId: 'c/d', reason: 'CATALOG_ALREADY_PRESENT' },
+      { candidateId: 'e/f', reason: 'MUTATION_LIMIT' },
+    ],
+    sourceFailures: [],
+  });
+  assert.match(md, /discovered \*\*13\*\*/);
+  assert.match(md, /planned issue mutations \*\*2\*\*/);
+  assert.match(md, /GLM-5\.3-Flash/);
+  assert.match(md, /CATALOG_ALREADY_PRESENT.*2|2.*CATALOG_ALREADY_PRESENT/s);
+  // 읽는 사람이 다음에 뭘 해야 하는지까지 적혀 있어야 노출이 완성된다.
+  assert.match(md, /apply-issues/);
+});
+
+test('runSummaryIsHonestWhenNothingFound: 후보 0건이면 그렇게 적고 소스 실패를 숨기지 않는다', () => {
+  const md = renderRunSummary({
+    mode: 'dry-run', discovered: 0, evaluated: 0, issueMutationsPlanned: 0,
+    operations: [], droppedCandidates: [], sourceFailures: [{ source: 'hf', message: 'timeout' }],
+  });
+  assert.match(md, /No candidates cleared the gates/);
+  assert.match(md, /1 discovery source\(s\) failed/);
+  assert.doesNotMatch(md, /apply-issues/); // 할 일이 없으면 행동 유도도 없다
 });
