@@ -21,8 +21,9 @@ FitLLM is an open-source, zero-dependency engine that checks whether a local LLM
 # self-contained binary — no Node required
 curl -fsSL https://fitllm.run/install.sh | sh
 
-# Homebrew (tap)
+# Homebrew (tap) — the trust line is required for any third-party tap
 brew tap click6067-ship-it/fitllm
+brew trust click6067-ship-it/fitllm
 brew install fitllm
 
 # Windows (Scoop)

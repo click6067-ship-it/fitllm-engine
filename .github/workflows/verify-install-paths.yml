@@ -28,6 +28,10 @@ jobs:
         run: |
           set -eux
           brew tap click6067-ship-it/fitllm
+          # 현행 Homebrew 는 서드파티 tap 의 formula 를 명시적 신뢰 없이는 로드하지 않는다
+          # (2026-09-22 실측: "Refusing to load formula ... from untrusted tap").
+          # 사용자가 실제로 쳐야 하는 줄이므로 검증도 그 줄을 포함해야 한다.
+          brew trust click6067-ship-it/fitllm
           brew install fitllm
 
       - name: The binary runs and the verdict is the expected one
