@@ -28,6 +28,8 @@ jobs:
   brew-tap:
     name: brew install from the tap
     runs-on: macos-latest
+    permissions:
+      contents: read # 최신 릴리스 태그를 읽어 tap 이 뒤처졌는지 보는 데에만 쓴다
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Install from the tap
@@ -59,6 +61,24 @@ jobs:
             exit 1
           fi
           echo "no-fit exited non-zero"
+
+      # tap(homebrew-fitllm)은 자기 레포의 sync-formula 크론이 릴리스 자산에서 당겨 갱신한다.
+      # 그 크론이 멈추면 아무도 실패하지 않고 brew 사용자만 조용히 낡은 버전을 받는다 —
+      # 여기가 그걸 잡는 곳이다. 단 workflow_run(릴리스 직후)에서는 건너뛴다: 그 시점엔
+      # 동기화가 아직 안 돌아 정상적으로 뒤처져 있고, 그걸 빨간불로 만들면 사람이 이 검사를
+      # 무시하게 된다. 주간 실행에서 걸리면 그건 진짜 멈춘 것이다.
+      - name: The tap is not behind the latest engine release
+        if: github.event_name != 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          latest="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          # brew list --versions 는 "fitllm 2.18.0" 을 내지만, 출력 형태가 바뀌어도
+          # 조용히 빈 문자열을 비교하지 않도록 버전꼴만 뽑아낸다(없으면 아래 비교에서 실패).
+          installed="$(brew list --versions fitllm | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -1)"
+          echo "tap serves $installed, latest release is $latest"
+          test "v$installed" = "$latest"
 
   install-script:
     name: curl pipe sh on ${{ matrix.os }}
