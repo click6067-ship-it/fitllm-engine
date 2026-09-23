@@ -54,7 +54,8 @@ jobs:
       # 안의 fitllm.rb 는 2.17.0). 그래서 커밋본이 아니라 방금 생성한 이 파일들이 정본이고,
       # 아래에서 릴리스 자산으로 올려 homebrew-fitllm tap 이 그걸 당겨간다.
       # 커밋본은 test/distribution.test.mjs 의 픽스처이자 scoop 이 master raw 로 직접 읽는
-      # 경로라 여전히 사람이 갱신해야 한다 — 그 뒤처진 정도를 로그에 남긴다(실패시키지 않음).
+      # 경로다 — 아래 refresh-packaging 잡이 이 자산을 master 에 되돌려 커밋하므로, 여기서는
+      # 얼마나 뒤처져 있었는지만 빌드 로그에 남긴다(실패시키지 않음).
       - name: Report packaging drift
         run: git --no-pager diff --stat -- packaging || true
 
@@ -76,3 +77,50 @@ jobs:
           name: fitllm-binaries-${{ github.run_id }}
           path: dist-bin
           retention-days: 14
+
+  # brew 쪽 tap 은 릴리스 자산을 당겨가지만, scoop 은 README 의 설치 줄이 master 의 raw URL 을
+  # 직접 가리킨다. 그래서 자산만 올리고 끝내면 scoop 사용자만 릴리스마다 한 버전 뒤처진 manifest 를
+  # 받는다. 여기서 같은 자산을 master 에 되돌려 커밋해 그 경로를 닫는다.
+  #
+  # README 의 URL 을 릴리스 자산으로 바꾸지 않은 이유: 옛 URL 은 사라지지 않고 낡은 채로 남으므로,
+  # 이미 그 줄을 복사해 간 사람은 URL 을 바꿔도 구제되지 않는다. master 를 최신으로 유지하면
+  # 옛 URL 과 새 URL 사용자가 모두 같은 최신 manifest 를 받는다.
+  refresh-packaging:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # master 의 packaging/ 을 갱신하는 데에만 쓴다
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: master
+
+      # 워크트리에서 다시 생성하지 않고 **방금 발행된 릴리스 자산**을 되가져온다.
+      # 사용자가 실제로 받는 바이트와 master 의 바이트가 같아야 의미가 있다.
+      - name: Take the packaging files from the release that was just published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -eu
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern fitllm.rb --pattern fitllm.json \
+            --dir packaging --clobber
+
+      - name: Commit only when master is actually behind
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -eu
+          if git diff --quiet -- packaging; then
+            echo "master packaging already matches $TAG"
+            exit 0
+          fi
+          git --no-pager diff --stat -- packaging
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packaging/fitllm.rb packaging/fitllm.json
+          git commit -m "build(packaging): refresh for ${TAG#v}"
+          # 빌드가 수 분 걸리는 동안 master 가 움직였을 수 있다. 충돌하면 조용히 넘기지 않고 죽는다.
+          git pull --rebase origin master
+          git push origin HEAD:master
