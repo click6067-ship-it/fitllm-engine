@@ -49,8 +49,12 @@ jobs:
       - name: Generate Homebrew formula and Scoop manifest
         run: node scripts/gen-packaging.mjs --manifest dist-bin/manifest.json --out packaging
 
-      # 생성된 패키징 파일이 워크트리의 커밋본과 다르면, 릴리스마다 사람이 갱신해야 한다는 뜻이다.
-      # 그 사실을 로그에 남긴다(실패시키지는 않는다 — 태그 시점엔 이미 커밋돼 있어야 정상).
+      # 체크섬은 바이너리를 빌드해야 나오고 빌드는 태그를 밀어야 시작되므로, 태그가 가리키는
+      # 커밋의 packaging/ 은 **구조적으로 한 릴리스 뒤처진다**(2026-09-22 실측: v2.18.0 태그
+      # 안의 fitllm.rb 는 2.17.0). 그래서 커밋본이 아니라 방금 생성한 이 파일들이 정본이고,
+      # 아래에서 릴리스 자산으로 올려 homebrew-fitllm tap 이 그걸 당겨간다.
+      # 커밋본은 test/distribution.test.mjs 의 픽스처이자 scoop 이 master raw 로 직접 읽는
+      # 경로라 여전히 사람이 갱신해야 한다 — 그 뒤처진 정도를 로그에 남긴다(실패시키지 않음).
       - name: Report packaging drift
         run: git --no-pager diff --stat -- packaging || true
 
@@ -63,6 +67,8 @@ jobs:
           gh release upload "$TAG" \
             dist-bin/fitllm-* \
             dist-bin/manifest.json \
+            packaging/fitllm.rb \
+            packaging/fitllm.json \
             --repo "$GITHUB_REPOSITORY" --clobber
 
       - uses: actions/upload-artifact@v4
