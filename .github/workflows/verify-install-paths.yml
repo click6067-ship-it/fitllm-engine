@@ -125,6 +125,56 @@ jobs:
           fi
           echo "tampered download refused, nothing written"
 
+  # README 가 광고하는 네 경로 중 scoop 만 아무도 실행해보지 않았다. 윈도우 개발 머신이
+  # 없어서 생긴 구멍이고, 그 사이 manifest 가 낡거나 URL 이 깨져도 알 방법이 없었다.
+  scoop:
+    name: scoop install on windows
+    runs-on: windows-latest
+    permissions:
+      contents: read # 최신 릴리스 태그를 읽는 데에만 쓴다
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      # GitHub 러너는 관리자 계정으로 돌아서 Scoop 이 기본적으로 설치를 거부한다 — -RunAsAdmin 이 필요하다.
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile "$env:RUNNER_TEMP\install-scoop.ps1"
+          & "$env:RUNNER_TEMP\install-scoop.ps1" -RunAsAdmin
+          "$env:USERPROFILE\scoop\shims" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # README 에 적힌 줄 그대로다. 사용자가 치는 것과 다른 줄을 검증하면 검증이 아니다.
+      - name: Install from the manifest URL the README advertises
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          scoop install https://raw.githubusercontent.com/click6067-ship-it/fitllm-engine/master/packaging/fitllm.json
+          if ($LASTEXITCODE -ne 0) { throw "scoop install exited $LASTEXITCODE" }
+
+      - name: The binary runs and the verdict is the expected one
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = fitllm 'Gemma 4 31b' --gpu 'RTX 5090' | Out-String
+          $out
+          if ($out -notmatch 'FITS') { throw "expected a FITS verdict, got: $out" }
+          if ($out -notmatch 'Gemma 4 31b') { throw "verdict did not name the model" }
+
+      # master 의 manifest 가 최신 릴리스와 같은 버전인지 — 즉 binaries 의 refresh-packaging 이
+      # 계속 돌고 있는지 본다. workflow_run 에서는 건너뛴다: raw.githubusercontent.com 은 몇 분간
+      # 캐시된 옛 내용을 주므로 릴리스 직후엔 거짓 빨간불이 난다. 주간 실행에서 걸리면 진짜다.
+      - name: master's scoop manifest is not behind the latest release
+        if: github.event_name != 'workflow_run'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/click6067-ship-it/fitllm-engine/master/packaging/fitllm.json'
+          $latest = gh release view --repo $env:GITHUB_REPOSITORY --json tagName --jq .tagName
+          "master manifest $($manifest.version), latest release $latest"
+          if ("v$($manifest.version)" -ne $latest) { throw "scoop manifest on master is behind $latest" }
+
   ollama-scan:
     name: fitllm scan against a real Ollama
     runs-on: ubuntu-latest
