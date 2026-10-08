@@ -140,3 +140,11 @@ test('--top attaches premises to affected rows only', () => {
   assert.equal(mla.structuralAssumptions[0].id, 'mla-compressed-latent-cache');
   assert.equal('structuralAssumptions' in plain, false);
 });
+
+test('붙여 쓴 카탈로그 이름은 네트워크 없이 해석되고 띄어 쓴 이름과 같은 판정을 낸다', () => {
+  const glued = run(['Qwen3.8-27B', '--gpu', 'RTX 4090', '--json']);
+  const spaced = run(['Qwen 3.8 27B', '--gpu', 'RTX 4090', '--json']);
+  assert.notEqual(glued.code, 2, glued.out);
+  assert.equal(glued.code, spaced.code);
+  assert.deepEqual(JSON.parse(glued.out), JSON.parse(spaced.out));
+});
