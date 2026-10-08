@@ -1960,7 +1960,7 @@ const nameKey = (value) => normalizeNameTokens(value).join(' ');
 // -> { status: 'resolved',  match, canonicalName, matchedBy: 'exact'|'tokens' }
 //  | { status: 'ambiguous', candidates: [{ name }], total }
 //  | { status: 'unknown',   candidates: [{ name }], total }
-export function resolveByName(list, query, { limit = 5 } = {}) {
+function resolveByTokens(list, query, { limit = 5 } = {}) {
   const tokens = normalizeNameTokens(query);
   if (!tokens.length) return { status: 'unknown', candidates: [], total: 0 };
 
@@ -1997,6 +1997,37 @@ export function resolveByName(list, query, { limit = 5 } = {}) {
   return { status: 'unknown', candidates: partial.slice(0, limit).map((m) => ({ name: m.name })), total: partial.length };
 }
 
+// 2차 패스: 붙여 쓴 카탈로그 이름(2026-10-08 감사 — 'Qwen3.8-27B'가 unknown이었다). 1차가 unknown이고
+// `org/model`이 아닐 때만, 아래 키가 **정확히 한 항목과 같을 때만** 해석한다. 토큰 포함(부분) 일치는 쓰지 않는다 —
+// 그러면 'Qwen3-35B-A3B'가 Qwen 3.6으로, 'MiniCPM5.5-1B'가 MiniCPM5-1B로 둔갑한다(Codex 리뷰 실측).
+// 키: 소수점 버전은 한 토큰('3.8')으로 남겨 'Qwen3-8.27B'와 'Qwen3.8-27B'를 가르고, 영문 2자 이상 접두에
+// 붙은 숫자만 가른다('qwen3.8' → 'qwen','3.8'). e2b·a3b·a100 같은 단일문자 접두는 그대로 둔다.
+// 점으로 시작·끝나거나 점이 겹친 토큰('.27b' = 0.27B)은 뜻을 단정할 수 없어 키를 만들지 않는다(Codex 2차 리뷰).
+function gluedNameKey(value) {
+  const tokens = String(value ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .split(/[^a-z0-9.]+/)
+    .filter(Boolean);
+  if (tokens.some((t) => /^\.|\.$|\.\./.test(t))) return null;
+  return tokens
+    .flatMap((t) => {
+      const m = /^([a-z]{2,})(\d.*)$/.exec(t);
+      return m ? [m[1], m[2]] : [t];
+    })
+    .join(' ');
+}
+
+export function resolveByName(list, query, opts) {
+  const first = resolveByTokens(list, query, opts);
+  if (first.status !== 'unknown' || String(query ?? '').includes('/')) return first;
+  const key = gluedNameKey(query);
+  if (key === null) return first;
+  const hits = list.filter((item) => gluedNameKey(item.name) === key);
+  if (hits.length !== 1) return first;
+  return { status: 'resolved', match: hits[0], canonicalName: hits[0].name, matchedBy: 'exact' };
+}
+
 export const resolveLocalModel = (query, opts) => resolveByName(LOCAL_MODELS, query, opts);
 export const resolveGpuByName = (query, opts) => resolveByName(GPUS, query, opts);
 
@@ -2004,4 +2035,4 @@ export const DATA_UPDATED = '2026-09';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.18.0';
+export const ENGINE_VERSION = '2.18.1';
