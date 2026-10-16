@@ -3,7 +3,7 @@
 // 거부 케이스는 "그럴듯한 오답"이 나오던 실제 아키텍처에서 뽑았다(라이브 config로 재현 확인).
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { MODELS, LOCAL_MODELS, calcKVCache, calcLinearState, parseHfConfig, simulate, gpuDevice, GPUS } from '../engine.js';
+import { MODELS, LOCAL_MODELS, calcKVCache, calcLinearState, parseHfConfig, simulate, simulateStack, gpuDevice, GPUS } from '../engine.js';
 
 const byName = (n) => MODELS.find((m) => m.name === n);
 
@@ -168,4 +168,36 @@ test('표시 순서: 배열은 append-only여도 신규 그룹이 카탈로그 �
   // 카탈로그의 모든 그룹이 순서 목록에 등재돼 있는지(신규 추가 시 알림)
   const missing = [...new Set(LOCAL_MODELS.map((m) => m.group))].filter((g) => !MODEL_GROUP_ORDER.includes(g));
   assert.deepEqual(missing, [], `MODEL_GROUP_ORDER에 없는 그룹: ${missing.join(', ')}`);
+});
+
+// ── 스택(두 모델 동시 상주)도 선형 상태를 센다 ─────────────────────────────────
+// 2.20.0 이전 simulateStack은 모델별 합에서 linearState를 빼먹었다(Nex-N2.5-Pro 0.18 GiB 과소).
+// 같은 결함이 다른 항목으로 재발하지 않게, 한 모델 스택 == simulate 를 카탈로그 전체에서 고정한다.
+test('simulateStack: 모델별 합에 선형 상태가 들어간다 — Nex-N2.5-Pro 45L × 4,292,608 B = 193,167,360 B', () => {
+  const nex = byName('Nex-N2.5-Pro');
+  const rtx = gpuDevice(GPUS.find((g) => g.name === 'RTX 5090'));
+  const st = simulateStack([
+    { model: nex, ctx: 8192, weightBpw: 4.8, kvBits: 16 },
+    { model: byName('Nex-N2.5-mini'), ctx: 8192, weightBpw: 4.8, kvBits: 16 },
+  ], rtx);
+  assert.equal(st.parts[0].linearState * 1024 ** 3, 45 * ((16 * 128 * 2 + 64 * 128) * 4 * 2 + 64 * 128 * 128 * 4));
+  assert.ok(st.linearState > st.parts[0].linearState);
+  const sum = st.parts.reduce((s, p) => s + p.param + p.kv + p.linearState + p.rtDyn, 0);
+  assert.ok(Math.abs(sum + st.reserve - st.used) < 1e-9);
+});
+
+test('한 모델 스택의 used·판정은 simulate와 같다 (카탈로그 전체 × Mac · GPU · GB10 클러스터)', () => {
+  const devices = [128, gpuDevice(GPUS.find((g) => g.name === 'RTX 5090')), gpuDevice(GPUS.find((g) => g.name === '4× DGX Spark 128GB'))];
+  for (const device of devices) {
+    for (const m of LOCAL_MODELS) {
+      // 잘못된 ctx·비트도 simulate와 같은 가드를 탄다(NaN 합계가 'yes'로 새지 않게)
+      for (const [ctx, weightBpw] of [[8192, 4.8], [-5, 4.8], [NaN, 4.8], [8192, NaN]]) {
+        const q = { weightBpw, kvBits: 16 };
+        const s = simulate(m, device, ctx, q);
+        const st = simulateStack([{ model: m, ctx, ...q }], device);
+        assert.ok(Object.is(st.used, s.used) || Math.abs(st.used - s.used) < 1e-9, `${m.name} ctx ${ctx} bpw ${weightBpw}: stack ${st.used} != simulate ${s.used}`);
+        assert.equal(st.verdict, s.verdict, `${m.name} ctx ${ctx} bpw ${weightBpw}`);
+      }
+    }
+  }
 });
