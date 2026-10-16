@@ -47,11 +47,14 @@ function attentionBasis(model) {
 // 통합 메모리(GB10) reserve의 구성 — 판정이 쓰는 값과 그 근거를 그대로 보여 준다.
 function unifiedBasis(device) {
   const u = device.gpu.unifiedMemory;
+  const units = device.clusterUnits || 1; // GB10 클러스터: 대당 값 × 대수(각 대가 자기 DGX OS·런타임을 돌린다)
+  const perUnitGiB = device.gpu.perCardVramGB ?? device.memoryGB;
   return {
+    units,
     osVisibleGiB: u.osVisibleGB,
-    notVisibleGiB: device.memoryGB - u.osVisibleGB,
-    osIdleGiB: u.osIdleGB,
-    runtimeFixedGiB: u.runtimeFixedGB,
+    notVisibleGiB: (perUnitGiB - u.osVisibleGB) * units,
+    osIdleGiB: u.osIdleGB * units,
+    runtimeFixedGiB: u.runtimeFixedGB * units,
     reserveGiB: device.reserveGB,
     sources: { osVisible: [...u.sources.osVisibleGB], osIdle: [...u.sources.osIdleGB] },
     estimates: { ...u.estimates },

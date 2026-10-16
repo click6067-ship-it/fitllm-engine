@@ -84,9 +84,9 @@ test('통합 메모리 전제가 판정과 함께 나온다', () => {
   assert.deepEqual(onCard, []);
 });
 
-test('다른 카드와 풀링·여러 대 연결은 fail closed', () => {
+test('다른 카드와 풀링·2·4대가 아닌 연결은 fail closed (같은 GB10 2·4대는 클러스터 — test/gb10-cluster.test.mjs)', () => {
   const rtx = GPUS.find((g) => g.name === 'RTX 4090');
-  for (const list of [[spark, spark], [spark, rtx], [rtx, spark]]) {
+  for (const list of [[spark, rtx], [rtx, spark], [spark, spark, spark]]) {
     assert.throws(() => combineGpus(list), /unified-memory system/);
   }
 });
@@ -149,8 +149,8 @@ test('CLI: --list에 DGX Spark와 별칭이 보이고, --gpu 별칭으로 같은
   assert.deepEqual(ja.structuralAssumptions.map((x) => x.id), ['gb10-unified-memory-reserve']);
 });
 
-test('CLI: 풀링·--count 2는 exit 2로 거절된다', () => {
-  for (const args of [['--gpu', 'DGX Spark 128GB', '--count', '2'], ['--gpu', 'DGX Spark + RTX 4090']]) {
+test('CLI: 다른 카드와 풀링·--count 3은 exit 2로 거절된다', () => {
+  for (const args of [['--gpu', 'DGX Spark 128GB', '--count', '3'], ['--gpu', 'DGX Spark + RTX 4090']]) {
     const r = run('gpt-oss-20b', ...args);
     assert.equal(r.status, 2, args.join(' '));
     assert.match(r.stderr, /unified-memory system/);
@@ -189,5 +189,5 @@ test('census: GB10 행은 PLE를 차감하지 않고, README 공개 문구도 �
   assert.ok(Math.abs(row.predicted_param_gb - (e2b.totalParams * 1e9 * (4.8944 / 8)) / 1024 ** 3) < 0.01);
   const line = readme.split('\n').find((l) => l.includes('`ple-llamacpp-non-gpu-residency`'));
   assert.ok(line.includes('every discrete-GPU row for'));
-  assert.ok(line.includes('the GB10 unified-memory rows (DGX Spark 128GB) and the Mac rows (Apple unified memory) count the full weights'));
+  assert.ok(line.includes('the GB10 unified-memory rows (DGX Spark 128GB, 2× DGX Spark 128GB, 4× DGX Spark 128GB) and the Mac rows (Apple unified memory) count the full weights'));
 });

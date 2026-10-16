@@ -1,5 +1,5 @@
 {
-  "version": "1.7.0",
+  "version": "1.8.0",
   "generated": "2026-10-16",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
@@ -381,6 +381,34 @@
       "kvBits": 16,
       "expect": "no",
       "note": "89.83 + KV(12 global x 2*8*128*2B*262144 + 36 sliding x 512) 12.07 + overhead 20.45 + reserve 13.31 = 135.66 > 128. Discrete-card reserve would give 122.95 (tight) - the unified reserve flips it"
+    },
+    {
+      "id": "v-gptoss120b-2xdgxspark128-q8-8k",
+      "kind": "verdict",
+      "model": "gpt-oss-120b",
+      "device": {
+        "type": "gpu",
+        "gpu": "2× DGX Spark 128GB"
+      },
+      "ctx": 8192,
+      "weightBpw": 8.5008,
+      "kvBits": 16,
+      "expect": "yes",
+      "note": "GB10 cluster, 2 units, tensor parallel 2: weights 116.8e9*8.5008/8 = 115.64 GiB + KV 0.29 (8 KV heads >= 2 units, no replication) + overhead 0.12*w + 0.15*KV + 8192*0.00003*2 units + reserve 2*13.31 = 156.90 of 256 -> free 99.10 >= 51.2 headroom. One unit alone is 'no' (143.5 of 128)"
+    },
+    {
+      "id": "v-nexpro-4xdgxspark128-q8-128k",
+      "kind": "verdict",
+      "model": "Nex-N2.5-Pro",
+      "device": {
+        "type": "gpu",
+        "gpu": "4× DGX Spark 128GB"
+      },
+      "ctx": 131072,
+      "weightBpw": 8.5008,
+      "kvBits": 16,
+      "expect": "no",
+      "note": "4 units, 2 KV heads < 4 -> KV replicated x2: weights 392.68 + KV 3.75*2 = 7.50 + linear state 0.18 + overhead (0.12*w + 0.15*KV + 131072*0.00003*4) 63.98 + reserve 4*13.31 = 517.58 > 512. Without the replication and per-unit activation buffers a port would say 'tight' (501.47)"
     }
   ]
 }

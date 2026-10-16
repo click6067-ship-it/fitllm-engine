@@ -29,6 +29,8 @@ const ADDED_2026_10 = {
   'RTX PRO 4000 Blackwell': [24, 672],
   'RTX PRO 2000 Blackwell': [16, 288],
   'DGX Spark 128GB': [128, 273],
+  '2× DGX Spark 128GB': [256, 273], // 2026-10-16 클러스터 행(대당 값 × 대수)
+  '4× DGX Spark 128GB': [512, 273],
 };
 
 test('2026-10 추가 하드웨어: VRAM·대역폭 앵커', () => {
@@ -39,7 +41,7 @@ test('2026-10 추가 하드웨어: VRAM·대역폭 앵커', () => {
     assert.equal(g.bandwidthGBs, bw, `${name} bandwidth`);
     assert.equal(g.verifiedAt, '2026-10-16', name);
   }
-  assert.equal(GPUS.length, 45);
+  assert.equal(GPUS.length, 47);
 });
 
 test('출시 전·루머 제품은 카탈로그에 없다 (RTX 50 SUPER · PRO 5500 · DGX Spark 64GB)', () => {

@@ -1,6 +1,6 @@
 // `fitllm measure --from-ollama` — 런타임이 **이미 알고 있는** 실측값을 회수한다.
 //
-// 왜 이게 필요한가: census 는 11,880 판정을 담고 있는데 실측 대조는 9건이다. 예측이
+// 왜 이게 필요한가: census 는 12,180 판정을 담고 있는데 실측 대조는 9건이다. 예측이
 // 맞는지 공개적으로 확인할 방법이 사실상 없다는 뜻이고, "정확도가 제품"인 프로젝트에서
 // 그게 가장 약한 고리다. 종전 경로는 사용자가 메모리를 직접 재서 --measured 로 넣어야
 // 했고, 그걸 할 줄 아는 사람은 거의 없다.
@@ -44,6 +44,10 @@ export function deviceFromFlags({ gpu, mac, count } = {}) {
     }
     const n = Number(count);
     const card = resolved.gpu || resolved.match || resolved.value;
+    // Ollama는 한 대에서만 돈다 — GB10 클러스터 예측(대수만큼의 reserve·KV 복제)과 한 대 실측을 비교하면 원장이 틀린다.
+    if (card.unifiedMemory && ((Number.isInteger(n) && n > 1) || card.count > 1)) {
+      throw new Error(`${card.name}: Ollama runs on one unit, so a GB10 cluster measurement cannot be recorded — measure a single unit`);
+    }
     return Number.isInteger(n) && n > 1 ? combineGpus(Array(n).fill(card)) : gpuDevice(card);
   }
   return null;
