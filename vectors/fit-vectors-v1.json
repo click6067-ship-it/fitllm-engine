@@ -1,6 +1,6 @@
 {
-  "version": "1.6.0",
-  "generated": "2026-09-05",
+  "version": "1.7.0",
+  "generated": "2026-10-16",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
     {
@@ -339,6 +339,48 @@
       "kvBits": 16,
       "expect": 4026531840,
       "note": "same hybrid rule at a larger scale: 15 of 60 layers are full_attention. 2 (K+V) x 2 kv-heads x head_dim 256 x 2 B = 2,048 B/layer/token -> 15 L x 2,048 = 30,720 B/token -> x 131,072 ctx = 4,026,531,840 B (3.75 GiB). Charging all 60 layers gives 4x = 16,106,127,360 B (15 GiB). Note the KV is tiny next to the weights (396.8B logical params), which is the point: for this family the weight residency, not the cache, decides the verdict. Source: nex-agi/Nex-N2.5-Pro config.json at revision 0f389abfca976dcbab5c7638268d01cfe8ace4fe — layer_types {linear_attention 45, full_attention 15}, num_key_value_heads 2, head_dim 256."
+    },
+    {
+      "id": "v-gptoss120b-dgxspark128-q4-8k",
+      "kind": "verdict",
+      "model": "gpt-oss-120b",
+      "device": {
+        "type": "gpu",
+        "gpu": "DGX Spark 128GB"
+      },
+      "ctx": 8192,
+      "weightBpw": 4.8944,
+      "kvBits": 16,
+      "expect": "yes",
+      "note": "GB10 unified memory: weights 116.8e9*4.8944/8 = 66.55 GiB + KV 0.29 + overhead 8.27 + reserve 13.31 (128-121.69 OS-visible + 5.0 idle DGX OS + 2.0 runtime) = 88.42 of 128; headroom 20% = 25.6"
+    },
+    {
+      "id": "v-gptoss120b-dgxspark128-q6k-32k",
+      "kind": "verdict",
+      "model": "gpt-oss-120b",
+      "device": {
+        "type": "gpu",
+        "gpu": "DGX Spark 128GB"
+      },
+      "ctx": 32768,
+      "weightBpw": 6.5633,
+      "kvBits": 16,
+      "expect": "tight",
+      "note": "89.24 + KV 1.13 + overhead 11.86 + reserve 13.31 = 115.54 -> free 12.46 < 25.6 headroom. A port that treats GB10 as a discrete card (0.6 reserve, 5% headroom) wrongly says yes"
+    },
+    {
+      "id": "v-lagunas-dgxspark128-q6k-256k",
+      "kind": "verdict",
+      "model": "Laguna S 2.1",
+      "device": {
+        "type": "gpu",
+        "gpu": "DGX Spark 128GB"
+      },
+      "ctx": 262144,
+      "weightBpw": 6.5633,
+      "kvBits": 16,
+      "expect": "no",
+      "note": "89.83 + KV(12 global x 2*8*128*2B*262144 + 36 sliding x 512) 12.07 + overhead 20.45 + reserve 13.31 = 135.66 > 128. Discrete-card reserve would give 122.95 (tight) - the unified reserve flips it"
     }
   ]
 }

@@ -27,6 +27,11 @@ export function parseNvidiaSmi(output, catalog) {
     if (splitAt < 1) throw new Error(`invalid nvidia-smi row: ${line}`);
     const name = line.slice(0, splitAt).trim();
     const memoryMiB = Number(line.slice(splitAt + 1).trim());
+    // GB10(DGX Spark 계열)은 전용 VRAM이 없어 nvidia-smi가 memory.total을 [N/A]로 낸다(NVIDIA known issues:
+    // https://docs.nvidia.com/dgx/dgx-spark/known-issues.html). 용량을 모르니 고르지 않고 명시 선택을 안내한다.
+    if (/\bGB10\b/i.test(name) && !(memoryMiB > 0)) {
+      throw new Error(`${name} detected — nvidia-smi does not report unified memory size on GB10; pass --gpu with the matching GB10 system from npx fitllm --list (e.g. --gpu "DGX Spark 128GB")`);
+    }
     if (!name || !Number.isFinite(memoryMiB) || memoryMiB <= 0) throw new Error(`invalid nvidia-smi row: ${line}`);
     const vramGB = Math.round(memoryMiB / 1024);
     if (vramGB <= 0) throw new Error(`invalid nvidia-smi memory: ${line}`);

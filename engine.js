@@ -680,7 +680,18 @@ const _GPUS = [
   { name: 'RTX 2080 Ti', series: '20', vramGB: 11, bandwidthGBs: 616, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/rtx-2080-ti/', 'https://www.techpowerup.com/gpu-specs/geforce-rtx-2080-ti.c3305'], bandwidthGBs: ['https://www.techpowerup.com/gpu-specs/geforce-rtx-2080-ti.c3305', 'https://videocardz.net/nvidia-geforce-rtx-2080ti'] } },
   // NVIDIA workstation
   { name: 'RTX 6000 Ada', series: 'workstation', vramGB: 48, bandwidthGBs: 960, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/products/workstations/rtx-6000/', 'https://www.leadtek.com/eng/products/workstation_graphics(2)/NVIDIA_RTX_6000_Ada_Generation(40949)/detail'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/rtx-6000/proviz-print-rtx6000-datasheet-web-2504660.pdf', 'https://www.techpowerup.com/gpu-specs/rtx-6000-ada-generation.c3933'] } },
-  { name: 'RTX PRO 6000 Blackwell', series: 'workstation', vramGB: 96, bandwidthGBs: 1792, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-6000/', 'https://www.storagereview.com/review/nvidia-rtx-pro-6000-workstation-gpu-review-blackwell-architecture-and-96-gb-for-pro-workflows'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/data-center/rtx-pro-6000-blackwell-workstation-edition/workstation-blackwell-rtx-pro-6000-workstation-edition-nvidia-us-3519208-web.pdf', 'https://www.techpowerup.com/gpu-specs/rtx-pro-6000-blackwell.c4272'] } }, // Workstation Edition
+  // 별칭(2026-10-16): Max-Q Workstation Edition과 Server Edition도 96GB GDDR7 — fit에 쓰는 VRAM이 같다.
+  //   Max-Q 96GB·1792GB/s(300W) https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/workstation-datasheet-blackwell-rtx-pro-6000-max-q-nvidia-3519233.pdf · https://lenovopress.lenovo.com/lp2364-thinksystem-nvidia-rtx-pro-6000-blackwell-max-q-workstation-edition-gpu
+  //   Server 96GB·1597GB/s     https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/ · https://lenovopress.lenovo.com/lp2263-thinksystem-nvidia-rtx-pro-6000-blackwell-server-edition-pcie-gen5-gpu
+  //   ⚠ Server Edition 대역폭(1597)은 이 행(1792, WE)과 다르다 — 대역폭은 fit에 안 쓰는 dormant 값이고 표시는 정본 이름으로만 나간다.
+  //   실측 nvidia-smi memory.total 97887 MiB — 세 에디션·ECC 켜짐/꺼짐 모두 같다(GDDR7 ECC는 용량을 깎지 않음):
+  //   https://github.com/gpustack/gpustack-operator/pull/755 (Server, ECC ENABLED) · https://github.com/ollama/ollama/issues/14287 · https://github.com/MeiGen-AI/InfiniteTalk/issues/159 (WE, ECC Off)
+  { name: 'RTX PRO 6000 Blackwell', series: 'workstation', vramGB: 96, bandwidthGBs: 1792, status: 'VERIFIED', verifiedAt: '2026-07-09',
+    aliases: [
+      'RTX PRO 6000 Blackwell Workstation Edition', 'RTX PRO 6000 Workstation Edition',
+      'RTX PRO 6000 Blackwell Max-Q Workstation Edition', 'RTX PRO 6000 Blackwell Max-Q', 'RTX PRO 6000 Max-Q',
+      'RTX PRO 6000 Blackwell Server Edition', 'RTX PRO 6000 Server Edition',
+    ], sources: { vramGB: ['https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-6000/', 'https://www.storagereview.com/review/nvidia-rtx-pro-6000-workstation-gpu-review-blackwell-architecture-and-96-gb-for-pro-workflows'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/data-center/rtx-pro-6000-blackwell-workstation-edition/workstation-blackwell-rtx-pro-6000-workstation-edition-nvidia-us-3519208-web.pdf', 'https://www.techpowerup.com/gpu-specs/rtx-pro-6000-blackwell.c4272'] } }, // Workstation Edition
   // AMD Radeon (GDDR 대역폭 — Infinity Cache effective 제외)
   { name: 'RX 7900 XTX', series: 'amd', vramGB: 24, bandwidthGBs: 960, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xtx.html', 'https://www.techpowerup.com/gpu-specs/radeon-rx-7900-xtx.c3941'], bandwidthGBs: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xtx.html', 'https://www.notebookcheck.net/AMD-Radeon-RX-7900-XTX-GPU-Benchmarks-and-Specs.674159.0.html'] } },
   { name: 'RX 7900 XT', series: 'amd', vramGB: 20, bandwidthGBs: 800, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xt.html', 'https://www.techpowerup.com/gpu-specs/radeon-rx-7900-xt.c3912'], bandwidthGBs: ['https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xt.html', 'https://www.notebookcheck.net/AMD-Radeon-RX-7900-XT-GPU-Benchmarks-and-Specs.674155.0.html'] } },
@@ -698,6 +709,104 @@ const _GPUS = [
   { name: 'H100 80GB', series: 'datacenter', vramGB: 80, bandwidthGBs: 3350, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/h100/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'], bandwidthGBs: ['https://www.nvidia.com/en-us/data-center/h100/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'] } }, // SXM5 HBM3 3.35TB/s
   { name: 'H200 141GB', series: 'datacenter', vramGB: 141, bandwidthGBs: 4800, status: 'VERIFIED', verifiedAt: '2026-07-09', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/h200/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'], bandwidthGBs: ['https://www.nvidia.com/en-us/data-center/h200/', 'https://en.wikipedia.org/wiki/Hopper_(microarchitecture)'] } }, // HBM3e 4.8TB/s
   { name: 'B200', series: 'datacenter', vramGB: 180, bandwidthGBs: 7700, status: 'VERIFIED', verifiedAt: '2026-07-11', sources: { vramGB: ['https://www.nvidia.com/en-us/data-center/dgx-b200/', 'https://lenovopress.lenovo.com/lp2226-thinksystem-nvidia-b200-180gb-1000w-gpu'], bandwidthGBs: ['https://lenovopress.lenovo.com/lp2226-thinksystem-nvidia-b200-180gb-1000w-gpu', 'https://www.nvidia.com/en-us/data-center/dgx-b200/'] } }, // Blackwell HBM3e — 출하 구성 180GB/7.7TB/s(DGX 1440GB÷8·Lenovo) 또는 186GB/8TB/s. 192GB는 GTC 발표치로 출하 스펙 아님(2026-07-11 이중검증 정정, 구 192/8000은 거짓-fits 방향 오류)
+
+  // ===== 확장 (2026-10-16, Track A[claude hw-crawler] ∥ Track B[codex] 블라인드 리콘실 — fit 값 CONFLICT 0) =====
+  // 기준: 2026-10-16까지 실제 판매된 제품만. RTX 50 SUPER는 미발표·미출시(NVIDIA 50 시리즈 페이지에 없음,
+  //   https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/ · https://www.pcgamer.com/hardware/graphics-cards/schrodingers-gpu-set-for-an-early-2027-release-as-the-dead-alive-24-gb-rtx-5080-super-box-is-shaken-once-more/)
+  //   → 넣지 않는다. 중국 전용 5090 D / D v2도 제외.
+  // NVIDIA GeForce RTX 50 하위 SKU (출시: 5060 Ti 8GB 2025-04-16 · 5060 2025-05-19 · 5050 2025-07)
+  { name: 'RTX 5060 Ti 8GB', series: '50', vramGB: 8, bandwidthGBs: 448, status: 'VERIFIED', verifiedAt: '2026-10-16', matchRequires: ['5060', 'ti'], sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5060-family/', 'https://www.pcgamer.com/hardware/graphics-cards/nvidia-rtx-5060-ti-8-gb-review-palit-dual/'], bandwidthGBs: ['https://www.nvidia.com/en-us/geforce/graphics-cards/compare/', 'https://www.pcgamer.com/hardware/graphics-cards/nvidia-rtx-5060-ti-8-gb-review-palit-dual/'] } }, // 128-bit GDDR7 28Gbps — 16GB판과 대역폭 동일
+  // 'RTX 5060 8GB'(판매점 표기)는 이 카드다 — 'ti' 없이 '5060 8gb'가 5060 Ti 8GB로 끌려가지 않게 Ti 행은 matchRequires ['ti'].
+  { name: 'RTX 5060', series: '50', vramGB: 8, bandwidthGBs: 448, status: 'VERIFIED', verifiedAt: '2026-10-16', aliases: ['RTX 5060 8GB'], sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/compare/', 'https://www.asus.com/motherboards-components/graphics-cards/prime/prime-rtx5060-o8g/techspec/'], bandwidthGBs: ['https://www.nvidia.com/en-us/geforce/graphics-cards/compare/', 'https://www.guru3d.com/review/geforce-rtx-5060-8gb-review/page-2/'] } }, // 데스크톱 128-bit GDDR7 28Gbps
+  { name: 'RTX 5050', series: '50', vramGB: 8, bandwidthGBs: 320, status: 'VERIFIED', verifiedAt: '2026-10-16', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5050/', 'https://www.asus.com/motherboards-components/graphics-cards/prime/prime-rtx5050-o8g/techspec/'], bandwidthGBs: ['https://www.nvidia.com/en-us/geforce/graphics-cards/compare/', 'https://www.techspot.com/review/3011-nvidia-geforce-rtx-5050/'] } }, // 데스크톱은 GDDR6 20Gbps 128-bit(노트북 5050은 GDDR7 — 섞지 말 것)
+  // NVIDIA RTX PRO Blackwell 워크스테이션 (출시 확인: 5000 72GB GA 2025-12-18 https://blogs.nvidia.com/blog/rtx-pro-5000-72gb-blackwell-gpu/ ·
+  //   5000 48GB/4500/4000/4000 SFF/2000 판매 https://premioinc.com/blogs/press-kits/premio-validates-nvidia-rtx-pro-blackwell-gpu-support-for-accelerated-ai-across-its-edge-computing-solutions ·
+  //   실물 리뷰 https://www.pugetsystems.com/labs/articles/2025-professional-gpu-content-creation-roundup/). RTX PRO 5500(84GB)은 NVIDIA "Coming Soon" → 제외.
+  // GDDR7 "with ECC"는 사이드밴드/온다이라 용량을 깎지 않는다(https://www.leadtek.com/eng/products/workstation_graphics(2)/nvidia_rtx_pro_6000_blackwell_max-q_workstation_edition(51029)/detail
+  //   "without any performance penalties or capacity overhead") → 명목 용량 그대로. (GDDR6 세대 RTX 6000 Ada는 ECC를 켜면 1/16 줄어든다 — 별건)
+  // 5000은 48GB/72GB 두 행: 이름에 용량을 넣어 'pro 5000' 질의가 A100처럼 모호로 남게 한다(잘못 고르면 판정이 뒤집힘).
+  // 신규 PRO 행은 matchRequires ['pro', 번호]: 'RTX 4500'·'RTX 4000'·'RTX 2000'·'RTX 5000'은 Ada(24/20/16/32GB)·Quadro 카드 이름이고,
+  // 'pro 48gb'처럼 번호 없는 질의는 같은 용량의 다른 PRO 구성(예: PRO 4000 두 장)과 구분되지 않는다.
+  { name: 'RTX PRO 5000 Blackwell 48GB', series: 'workstation', matchRequires: ['pro', '5000'], vramGB: 48, bandwidthGBs: 1344, status: 'VERIFIED', verifiedAt: '2026-10-16', sources: { vramGB: ['https://www.nvidia.com/content/dam/en-zz/Solutions/products/workstations/professional-desktop-gpus/rtx-pro-5000-blackwell/workstation-datasheet-blackwell-rtx-pro-5000-5488550-nvidia.pdf', 'https://www.leadtek.com/eng/products/workstation_graphics(2)/NVIDIA_RTX_PRO_5000_Blackwell(51030)/detail'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/products/workstations/professional-desktop-gpus/rtx-pro-5000-blackwell/workstation-datasheet-blackwell-rtx-pro-5000-5488550-nvidia.pdf', 'https://www.leadtek.com/eng/products/workstation_graphics(2)/NVIDIA_RTX_PRO_5000_Blackwell(51030)/detail'] } }, // 384-bit GDDR7 ECC 28Gbps. 초기 보도자료의 "45GB"는 확정 전 오기(실측 48935 MiB)
+  { name: 'RTX PRO 5000 Blackwell 72GB', series: 'workstation', matchRequires: ['pro', '5000'], vramGB: 72, bandwidthGBs: 1344, status: 'VERIFIED', verifiedAt: '2026-10-16', sources: { vramGB: ['https://www.nvidia.com/content/dam/en-zz/Solutions/products/workstations/professional-desktop-gpus/rtx-pro-5000-blackwell/workstation-datasheet-blackwell-rtx-pro-5000-5488550-nvidia.pdf', 'https://www.pny.com/nvidia-rtx-pro-5000-72gb-blackwell'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/products/workstations/professional-desktop-gpus/rtx-pro-5000-blackwell/workstation-datasheet-blackwell-rtx-pro-5000-5488550-nvidia.pdf', 'https://www.pny.com/nvidia-rtx-pro-5000-72gb-blackwell'] } }, // 48GB와 같은 1344GB/s
+  // 4500: Server Edition도 32GB → 별칭(대역폭은 800GB/s로 다름 — https://www.nvidia.com/en-us/data-center/rtx-pro-4500-blackwell-server-edition/ · https://lenovopress.lenovo.com/lp2391-thinksystem-nvidia-rtx-pro-4500-blackwell-server-edition-pcie-gen5-gpu).
+  //   ⚠ WE 대역폭 충돌 해소: Lenovo lp2443의 "Up to 800"은 Server 값 오기 — NVIDIA·Leadtek·PNY 모두 896(256-bit × 28Gbps ÷ 8).
+  { name: 'RTX PRO 4500 Blackwell', series: 'workstation', matchRequires: ['pro', '4500'], vramGB: 32, bandwidthGBs: 896, status: 'VERIFIED', verifiedAt: '2026-10-16', aliases: ['RTX PRO 4500 Blackwell Server Edition', 'RTX PRO 4500 Server Edition'], sources: { vramGB: ['https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-4500/', 'https://www.leadtek.com/eng/products/workstation_graphics(2)/NVIDIA_RTX_PRO_4500_Blackwell(51031)/detail'], bandwidthGBs: ['https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-4500/', 'https://www.leadtek.com/eng/products/workstation_graphics(2)/NVIDIA_RTX_PRO_4500_Blackwell(51031)/detail'] } },
+  // 4000: SFF Edition도 24GB → 별칭(대역폭 432GB/s·70W — https://images.nvidia.com/aem-dam/Solutions/design-visualization/quadro-product-literature/workstation-datasheet-blackwell-rtx-pro-4000-sff-nvidia-us-4016700.pdf · https://www.pny.com/nvidia-rtx-pro-4000-sff-blackwell).
+  //   실측 memory.total 24467 MiB(두 에디션) — https://github.com/ggml-org/llama.cpp/issues/30224 · https://computingforgeeks.com/rtx-pro-4000-vs-rtx-pro-5000-blackwell-local-ai-benchmarks/
+  { name: 'RTX PRO 4000 Blackwell', series: 'workstation', matchRequires: ['pro', '4000'], vramGB: 24, bandwidthGBs: 672, status: 'VERIFIED', verifiedAt: '2026-10-16', aliases: ['RTX PRO 4000 Blackwell SFF Edition', 'RTX PRO 4000 Blackwell SFF', 'RTX PRO 4000 SFF'], sources: { vramGB: ['https://www.nvidia.com/content/dam/en-zz/Solutions/products/workstations/professional-desktop-gpus/rtx-pro-4000/workstation-datasheet-rtx-pro-4000-nvidia-us-web.pdf', 'https://www.leadtek.com/eng/products/workstation_graphics(2)/nvidia_rtx_pro_4000_blackwell(51032)/detail'], bandwidthGBs: ['https://www.nvidia.com/content/dam/en-zz/Solutions/products/workstations/professional-desktop-gpus/rtx-pro-4000/workstation-datasheet-rtx-pro-4000-nvidia-us-web.pdf', 'https://www.leadtek.com/eng/products/workstation_graphics(2)/nvidia_rtx_pro_4000_blackwell(51032)/detail'] } }, // 192-bit GDDR7 ECC 28Gbps
+  { name: 'RTX PRO 2000 Blackwell', series: 'workstation', matchRequires: ['pro', '2000'], vramGB: 16, bandwidthGBs: 288, status: 'VERIFIED', verifiedAt: '2026-10-16', sources: { vramGB: ['https://images.nvidia.com/aem-dam/Solutions/design-visualization/quadro-product-literature/workstation-datasheet-blackwell-rtx-pro-2000-nvidia-us-4016661.pdf', 'https://www.pny.com/nvidia-rtx-pro-2000-blackwell'], bandwidthGBs: ['https://images.nvidia.com/aem-dam/Solutions/design-visualization/quadro-product-literature/workstation-datasheet-blackwell-rtx-pro-2000-nvidia-us-4016661.pdf', 'https://www.leadtek.com/eng/products/workstation_graphics(2)/nvidia_rtx_pro_2000_blackwell(51042)/detail'] } }, // 128-bit GDDR7 ECC 18Gbps · 70W
+  // NVIDIA GB10 통합 메모리 시스템 — 디스크리트 카드가 아니다(unifiedMemory → gpuDevice가 env 프리셋 대신 이 profile로 reserve를 만든다).
+  // 128GB LPDDR5x 256-bit 8533MT/s 273GB/s · 출시 2025-10-15 (https://nvidianews.nvidia.com/news/nvidia-dgx-spark-arrives-for-worlds-ai-developers)
+  // ⚠ 이름에 용량을 붙인다: 64GB 구성이 2026-10-02 발표, 2026-10-23 OEM 판매 예정(https://blogs.nvidia.com/blog/local-ai-dgx-spark-64gb-sync/ ·
+  //   https://www.tomshardware.com/pc-components/gpus/nvidia-introduces-64gb-dgx-spark-to-throw-local-ai-fans-a-lifeline-amid-the-rampocalypse-new-gb10-config-starts-at-usd4999-for-those-who-can-work-with-less)
+  //   — 아직 판매 전이고 64GB 기기 실측이 없어 넣지 않는다. 64GB 행이 들어오면 'dgx spark'·'gx10' 질의는 A100처럼 모호가 된다(의도).
+  // 별칭 = 같은 GB10·같은 128GB LPDDR5x·같은 273GB/s로 출시된 파트너 완제품(두 트랙 모두 제조사 사양 + 독립 리뷰로 확인):
+  //   ASUS Ascent GX10   https://www.asus.com/networking-iot-servers/desktop-ai-supercomputer/ultra-small-ai-supercomputers/asus-ascent-gx10/techspec/ · https://press.asus.com/news/press-releases/asus-ascent-gx10-ai-supercomputer/
+  //   Dell Pro Max GB10  https://www.dell.com/en-us/shop/desktop-computers/dell-pro-max-with-gb10/spd/dell-pro-max-fcm1253-micro/xcto_fcm1253_usx · https://www.storagereview.com/review/dell-pro-max-with-gb10-review
+  //   HP ZGX Nano G1n    https://www.hp.com/us-en/workstations/ai-stations.html · https://www.storagereview.com/review/hp-zgx-nano-g1n-ai-station-review-a-secure-sustainable-desk-side-ai-node
+  //   Lenovo PGX         https://lenovopress.lenovo.com/lp2321-thinkstation-pgx · https://www.servethehome.com/lenovo-thinkstation-pgx-review-the-nvidia-gb10-128gb-ai-workstation-goes-corporate/
+  //   MSI EdgeXpert      https://download-2.msi.com/archive/mnu_exe/ipc/EdgeXpert_DM_dm.pdf · https://linuxgizmos.com/msi-edgexpert-compact-ai-supercomputer-based-on-nvidia-dgx-spark/
+  //   Acer Veriton GN100 https://news.acer.com/acer-unveils-the-veriton-gn100-ai-mini-workstation-built-on-the-nvidia-gb10-superchip · https://www.storagereview.com/review/acer-veriton-gn100-review-a-standout-in-the-nvidia-spark-ecosystem
+  //   GIGABYTE AI TOP ATOM https://www.gigabyte.com/FileUpload/Global/KeyFeature/4102/innergigabyte/GIGABYTE_AI_TOP_ATOM_Data_sheet.pdf · https://www.storagereview.com/review/gigabyte-ai-top-atom-review
+  //   (PNY 'NVIDIA DGX Spark'는 Founders Edition 유통 — 같은 기기)
+  {
+    name: 'DGX Spark 128GB', series: 'unified', vramGB: 128, bandwidthGBs: 273, status: 'VERIFIED', verifiedAt: '2026-10-16',
+    matchRequires: ['spark'], // 'dgx'만으로는 확정하지 않는다(DGX Station·DGX B200 등 다른 DGX가 있다)
+    // 별칭은 전부 용량(128GB)을 품는다 — 이름 전체 일치로만 해석되므로, 64GB 기기가 'ASUS Ascent GX10'처럼 용량 없이 적혀도
+    // 128GB로 끌려오지 않는다(64GB 구성 판매 2026-10-23). 용량 없는 'DGX Spark'·'spark'는 정본 이름 토큰 규칙으로 해석되고,
+    // 64GB 행이 들어오는 순간 A100처럼 자동으로 모호가 된다.
+    aliases: [
+      'NVIDIA DGX Spark 128GB', 'GB10 128GB', 'NVIDIA GB10 128GB',
+      'ASUS Ascent GX10 128GB', 'Ascent GX10 128GB',
+      'Dell Pro Max with GB10 128GB', 'Dell Pro Max GB10 128GB',
+      'HP ZGX Nano G1n 128GB', 'HP ZGX Nano 128GB',
+      'Lenovo ThinkStation PGX 128GB', 'ThinkStation PGX 128GB',
+      'MSI EdgeXpert 128GB', 'MSI EdgeXpert MS-C931 128GB',
+      'Acer Veriton GN100 128GB',
+      'GIGABYTE AI TOP ATOM 128GB',
+    ],
+    sources: {
+      vramGB: ['https://www.nvidia.com/en-us/products/workstations/dgx-spark/', 'https://www.storagereview.com/review/nvidia-dgx-spark-review-the-ai-appliance-bringing-datacenter-capabilities-to-desktops'],
+      bandwidthGBs: ['https://docs.nvidia.com/dgx/dgx-spark/hardware.html', 'https://www.storagereview.com/review/nvidia-dgx-spark-review-the-ai-appliance-bringing-datacenter-capabilities-to-desktops'],
+    },
+    // 통합 메모리 reserve — 맥 경로(OS 몫 + 런타임 고정 2GB)와 같은 구조를 GB10 실측으로 채운다.
+    //   reserve = (128 − OS가 보는 총량) + DGX OS 유휴 사용량 + 런타임 고정분
+    // NVIDIA는 GPU 전용 고정 할당이 없다고 명시한다("share the same physical memory space without a fixed carve-out",
+    //   https://docs.nvidia.com/dgx/dgx-spark-porting-guide/overview.html) — 맥의 GPU wired limit 같은 상한은 없고, OS가 보는 총량이 곧 CUDA 총량이다.
+    unifiedMemory: {
+      environment: 'dgx-os-unified',
+      // OS·CUDA가 보는 총량(GiB). /proc/meminfo MemTotal = cuDeviceTotalMem = torch mem_get_info total, DGX OS 7.6 / 커널 6.17 실측:
+      //   127,599,376 kB·127,535,276 kB(기기 2대, MemTotal×1024 = cuDeviceTotalMem) — https://github.com/midagedev/bloomery/issues/13 (2026-10-10)
+      //   127,600,524 kB — https://raw.githubusercontent.com/vllm-project/vllm-omni/main/recipes/MiniMaxAI/MiniMax-H3-Spark-GB10.md
+      //   torch.cuda.mem_get_info total 121.69 GiB — https://forums.developer.nvidia.com/t/driver-issue-with-580-178-04/383859 (2026-09-21)
+      //   "121.7 GiB visible to the OS and to CUDA"(GIGABYTE ATOM, DGX OS 7.6.0) — https://www.back2gaming.com/review/gigabyte-ai-top-atom-128gb-dgx-spark/
+      // ⚠ 더 낮은 관측: 초기 DGX OS·4K 페이지 커널·일부 OEM 초기 펌웨어는 119.5–119.7 GiB(약 2 GiB 적음 —
+      //   https://simonwillison.net/2025/Oct/14/nvidia-dgx-spark/ · https://github.com/emjotde/spark-ram-reclaim). 전제 문구로 고지한다.
+      osVisibleGB: 121.69,
+      // DGX OS 유휴 시 새 프로세스가 못 쓰는 양(MemTotal − MemAvailable, GiB): 헤드리스 2대 4.8–5.1(bloomery #13) ·
+      //   free -h 121Gi total / 117Gi available ≈ 4(https://aaif.io/blog/running-goose-fully-offline-on-a-dgx-spark) ·
+      //   GNOME 데스크톱 ~116 available vs 서버 ~118(https://technotim.com/posts/ubuntu-gb10/). 대표값 5.0 — 데스크톱(기본)과 헤드리스 사이.
+      osIdleGB: 5.0,
+      // 추론 프로세스 고정분(CUDA 컨텍스트 + 프로세스 host 메모리 + 고정 버퍼). 통합 메모리에서는 host 몫도 같은 풀이라
+      // 맥 경로의 고정 런타임 2GB(calcRuntimeOverhead fixed)를 그대로 쓴다 — GB10 전용 실측이 아닌 엔진 추정치다.
+      //   방향 확인: torch CUDA 컨텍스트가 떠 있는 유휴 상태에서 available 115.52 / 121.69 GiB(차 6.17 GiB, 위 forum 383859) — OS 유휴 ~4–5 GiB보다 1–2 GiB 큼.
+      runtimeFixedGB: 2.0,
+      sources: {
+        osVisibleGB: [
+          'https://github.com/midagedev/bloomery/issues/13',
+          'https://forums.developer.nvidia.com/t/driver-issue-with-580-178-04/383859',
+          'https://www.back2gaming.com/review/gigabyte-ai-top-atom-128gb-dgx-spark/',
+        ],
+        osIdleGB: [
+          'https://github.com/midagedev/bloomery/issues/13',
+          'https://aaif.io/blog/running-goose-fully-offline-on-a-dgx-spark',
+          'https://technotim.com/posts/ubuntu-gb10/',
+        ],
+      },
+      estimates: { runtimeFixedGB: 'engine runtime constant shared with the Apple unified-memory path; not a GB10 measurement' },
+    },
+  },
 ];
 // 검증 메타(이중트랙·검증일)를 전 행에 주입 — 데이터 무결성 테스트가 강제.
 export const GPUS = _GPUS.map((g) => ({ verifiedAt: GPU_VERIFIED_AT, tracks: GPU_TRACKS, ...g }));
@@ -731,10 +840,27 @@ export function appleDevice(ram) {
   return { type: 'apple', memoryGB: ram, reserveGB: getOsOverhead(ram) + 2.0, headroomRatio: HEADROOM_RATIO, _os: getOsOverhead(ram) };
 }
 export function gpuDevice(gpu, envKey = DEFAULT_ENV) {
+  if (gpu && gpu.unifiedMemory) return unifiedGpuDevice(gpu); // GB10: env 프리셋(디스크리트 카드용)은 적용하지 않는다
   const env = ENV_PRESETS[envKey] || ENV_PRESETS[DEFAULT_ENV];
   const count = gpu.count || 1; // 멀티GPU: reserve는 카드당 발생(OS/CUDA 컨텍스트 ×count). vramGB는 이미 합산값.
   return { type: 'gpu', gpu, env: env.key, memoryGB: gpu.vramGB, bandwidthGBs: gpu.bandwidthGBs, reserveGB: env.reserveGB * count, headroomRatio: GPU_HEADROOM_RATIO, _os: 0, gpuCount: count };
 }
+
+// 통합 메모리 시스템(GB10) 디바이스 — 타입은 'gpu'(CUDA·GGUF 티어 경로 그대로)지만 reserve·headroom은 공유 풀 기준.
+//   reserve  = (총 메모리 − OS가 보는 총량) + OS 유휴 사용량 + 런타임 고정분  — 각 항목 근거는 GPUS 행의 unifiedMemory
+//   headroom = 맥과 같은 HEADROOM_RATIO(20%) — 같은 풀을 앱·페이지 캐시·스파이크가 나눠 쓰므로 전용 VRAM의 5%가 아니다.
+// 고정 런타임 2GB는 reserve에 들어 있으므로 calcRuntimeOverhead는 GPU 규칙대로 fixed=0(이중 차감 없음).
+export function unifiedReserveGB(gpu) {
+  const u = gpu.unifiedMemory;
+  return (gpu.vramGB - u.osVisibleGB) + u.osIdleGB + u.runtimeFixedGB;
+}
+function unifiedGpuDevice(gpu) {
+  return {
+    type: 'gpu', gpu, env: gpu.unifiedMemory.environment, memoryGB: gpu.vramGB, bandwidthGBs: gpu.bandwidthGBs,
+    reserveGB: unifiedReserveGB(gpu), headroomRatio: HEADROOM_RATIO, _os: 0, gpuCount: 1, unifiedMemory: true,
+  };
+}
+const UNIFIED_COMBINE_ERROR = (name) => `${name} is a complete unified-memory system — pooling it with other GPUs or linking several units is not modeled`;
 
 // 임의 멀티GPU 조합 — 이종 포함 (예: RTX 5090 + RTX 3090 = 56GB 풀). llama.cpp 레이어 분할 기준의 풀링 근사:
 // VRAM=합산 · reserve=카드당 env reserve 합(드라이버/CUDA 컨텍스트는 카드마다 발생) · 대역폭=최소 카드(디코드는 느린 구간 바운드 — dormant).
@@ -742,6 +868,10 @@ export function gpuDevice(gpu, envKey = DEFAULT_ENV) {
 export function combineGpus(gpus, envKey = DEFAULT_ENV) {
   if (!Array.isArray(gpus) || gpus.length === 0) return null;
   if (gpus.length === 1) return gpuDevice(gpus[0], envKey);
+  // 통합 메모리 시스템은 카드가 아니라 완제품 컴퓨터다 — 다른 카드와의 풀링이나 여러 대 연결(네트워크 분산 추론)은
+  // 레이어 분할 근사로 모델링하지 않는다. 숫자를 지어내지 않고 실패한다(fail closed).
+  const unified = gpus.find((g) => g && g.unifiedMemory);
+  if (unified) throw new Error(UNIFIED_COMBINE_ERROR(unified.name));
   const env = ENV_PRESETS[envKey] || ENV_PRESETS[DEFAULT_ENV];
   const combo = {
     name: gpus.map((g) => g.name).join(' + '),
@@ -927,6 +1057,10 @@ const STRUCTURAL_ASSUMPTIONS = Object.freeze({
     id: 'mtp-ordinary-generation',
     statement: 'KV memory assumes ordinary non-speculative generation; an MTP draft context is not included.',
   }),
+  unified: Object.freeze({
+    id: 'gb10-unified-memory-reserve',
+    statement: 'GB10 systems share one 128 GB LPDDR5x pool between DGX OS, CPU processes and the GPU. The reserve subtracts the 6.3 GiB the OS cannot see on current DGX OS (121.7 GiB visible; early firmware shows about 2 GiB less), about 5 GiB of idle DGX OS use and a 2 GiB runtime allowance. Other running apps and the file page cache are not budgeted, and weights are assumed resident once: a loader that keeps an mmap page-cache copy can need up to the weight size again while loading.',
+  }),
 });
 
 function guardedPleParamsB(model) {
@@ -935,17 +1069,24 @@ function guardedPleParamsB(model) {
     : 0;
 }
 
+// PLE 차감은 "CPU/host 버퍼는 accelerator 메모리가 아니다"가 성립하는 디스크리트 GPU에서만 쓴다.
+// 통합 메모리(GB10)에서는 host 버퍼도 같은 풀이라 차감하면 그만큼 거짓 fits가 된다.
+function pleDeductionApplies(device) {
+  return Boolean(device && device.type === 'gpu' && !device.unifiedMemory);
+}
+
 export function structuralAssumptions(model, device) {
   const result = [];
   if (model.mlaKvLoraRank) result.push(STRUCTURAL_ASSUMPTIONS.mla);
-  if (device?.type === 'gpu' && guardedPleParamsB(model)) result.push(STRUCTURAL_ASSUMPTIONS.ple);
+  if (pleDeductionApplies(device) && guardedPleParamsB(model)) result.push(STRUCTURAL_ASSUMPTIONS.ple);
   if (model.mtpLayerCount > 0) result.push(STRUCTURAL_ASSUMPTIONS.mtp);
+  if (device?.unifiedMemory) result.push(STRUCTURAL_ASSUMPTIONS.unified);
   return result.map((item) => ({ ...item }));
 }
 
 function residentParamsB(model, device) {
   const ple = guardedPleParamsB(model);
-  return device && device.type === 'gpu' && ple ? model.totalParams - ple : model.totalParams;
+  return pleDeductionApplies(device) && ple ? model.totalParams - ple : model.totalParams;
 }
 
 export function calcParamMemory(model, bits, device) {
@@ -1041,7 +1182,7 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   // pinned llama.cpp/GGUF 경로가 입력층 텐서(per_layer_token_embd)를 accelerator가 아닌 CPU/host 버퍼에 배치하므로
   // GPU에 상주하지 않는 PLE 근사 크기. host 메모리는 예산에 넣지 않으며, PLE를 accelerator에 적재하는 런타임에서는
   // 이 추정과 GPU weight 차감이 모두 무효다.
-  const pleOffloadGB = device.type === 'gpu' ? (guardedPleParamsB(model) * 1e9 * (weightBpw / 8)) / 1024 ** 3 : 0;
+  const pleOffloadGB = pleDeductionApplies(device) ? (guardedPleParamsB(model) * 1e9 * (weightBpw / 8)) / 1024 ** 3 : 0;
 
   // 단일 reserve 방정식(Codex council): used = param + kv + rtDyn + reserve. reserve는 1회만.
   // 오버헤드 공식의 단일 진실원 = calcRuntimeOverhead (KvDeepDive와 같은 소스 — 인라인 중복 금지, 드리프트 방지)
@@ -1181,7 +1322,7 @@ export function suggestFixGpu(model, device, ctx, quant, L) {
     return { kind: 'ctx', ctx: maxCtx, text: t(`컨텍스트를 ${formatTokens(maxCtx, L)}까지 줄이면 들어가요.`, `Shorten context to ${formatTokens(maxCtx, L)} and it fits.`) };
   }
   // 4) 더 큰 VRAM 단일 카드 (멀티GPU 프리셋 제외 — "카드를 늘려라"는 별개 결정)
-  const bigger = GPUS.filter((g) => !g.count && g.vramGB > device.memoryGB)
+  const bigger = GPUS.filter((g) => !g.count && !g.unifiedMemory && g.vramGB > device.memoryGB) // 통합 메모리 완제품은 '카드 교체'가 아니다
     .sort((a, b) => a.vramGB - b.vramGB)
     .find((g) => simulate(model, gpuDevice(g, device.env), ctx, quant).verdict !== 'no');
   if (bigger) {
@@ -1956,6 +2097,12 @@ export function normalizeNameTokens(value) {
 }
 
 const nameKey = (value) => normalizeNameTokens(value).join(' ');
+// 별칭(aliases): 같은 칩·같은 메모리라 판정이 같은 다른 제품명(예: GB10 파트너 시스템, RTX PRO 6000 에디션).
+// 별칭으로 찾아도 답은 정본 행(item.name) 하나다 — 별칭마다 행을 따로 두면 같은 기계가 표면마다 여러 줄로 늘어난다.
+// ⚠ 별칭은 **이름 전체가 같을 때만** 해석한다(정확 일치·붙여 쓰기 정확 일치). 토큰 포함 일치에 별칭을 쓰면
+//   'NVIDIA'·'ASUS'·'Dell' 같은 제조사 토큰 하나가 그 별칭을 가진 유일한 행으로 확정돼 거짓 FITS가 난다
+//   (2026-10-16 Codex 리뷰 재현: --gpu NVIDIA → DGX Spark 128GB, exit 0). 부분 일치 후보 제시에는 써도 된다(해석은 안 함).
+const namesOf = (item) => [item.name, ...(Array.isArray(item.aliases) ? item.aliases : [])];
 
 // -> { status: 'resolved',  match, canonicalName, matchedBy: 'exact'|'tokens' }
 //  | { status: 'ambiguous', candidates: [{ name }], total }
@@ -1965,15 +2112,24 @@ function resolveByTokens(list, query, { limit = 5 } = {}) {
   if (!tokens.length) return { status: 'unknown', candidates: [], total: 0 };
 
   const key = tokens.join(' ');
-  const exact = list.find((item) => nameKey(item.name) === key);
+  const exact = list.find((item) => namesOf(item).some((n) => nameKey(n) === key));
   if (exact) return { status: 'resolved', match: exact, canonicalName: exact.name, matchedBy: 'exact' };
 
-  // 질의 토큰 전체를 품는 항목만 후보. 유일할 때만 해석하고, 복수면 고르지 않는다.
-  const full = list.filter((item) => {
+  // 질의 토큰 전체를 품는 항목만 후보(정본 이름 기준 — 별칭은 위 정확 일치에서만). 유일할 때만 해석하고, 복수면 고르지 않는다.
+  // 용량 토큰('48gb'·'128gb')만으로는 기기를 확정하지 않는다 — 이름에 용량이 적힌 행만 후보가 되어 같은 용량의 다른 기기를
+  // 못 본다(2026-10-16 Codex 2차 리뷰: --gpu 48gb → RTX PRO 5000 48GB TIGHT, 같은 48GB인 2× RTX 4090은 NO).
+  // matchRequires: 그 행을 토큰 일치로 **확정**하려면 질의에 반드시 있어야 하는 토큰(예: 'pro'+'4500' — NVIDIA는 같은 번호를
+  // 'PRO' 없이 Ada·Turing 카드에 썼다. 'RTX 4500'은 24GB RTX 4500 Ada이지 32GB RTX PRO 4500 Blackwell이 아니다).
+  // ⚠ 후보에서 빼는 게 아니라 확정 자격만 막는다 — 빼면 남은 한 행이 모호성 없이 확정된다
+  //   (Codex 3차 리뷰: 'blackwell' → RTX PRO 6000 96GB로 확정, 'pro 48gb' → PRO 5000 48GB).
+  const identifying = tokens.filter((t) => !/^\d+(?:gb|tb)$/.test(t));
+  const full = identifying.length === 0 ? [] : list.filter((item) => {
     const own = new Set(normalizeNameTokens(item.name));
     return tokens.every((t) => own.has(t));
   });
+  const eligible = (item) => (Array.isArray(item.matchRequires) ? item.matchRequires : []).every((t) => tokens.includes(t));
   if (full.length === 1) {
+    if (!eligible(full[0])) return { status: 'unknown', candidates: [{ name: full[0].name }], total: 1 };
     return { status: 'resolved', match: full[0], canonicalName: full[0].name, matchedBy: 'tokens' };
   }
   if (full.length > 1) {
@@ -1983,17 +2139,17 @@ function resolveByTokens(list, query, { limit = 5 } = {}) {
     // 'Gemma 4 12b'와 'Gemma 4 31b'도 아니라서 그대로 ambiguous — 임의 선택이 아니다.
     const sets = full.map((m) => new Set(normalizeNameTokens(m.name)));
     const minimal = full.filter((_, i) => sets.every((other, j) => j === i || [...sets[i]].every((t) => other.has(t))));
-    if (minimal.length === 1) {
+    if (minimal.length === 1 && eligible(minimal[0])) {
       return { status: 'resolved', match: minimal[0], canonicalName: minimal[0].name, matchedBy: 'base-name' };
     }
     return { status: 'ambiguous', candidates: full.slice(0, limit).map((m) => ({ name: m.name })), total: full.length };
   }
 
   // 전체 일치가 없으면 부분 일치를 *후보로만* 제시한다 — 첫 항목을 답으로 승격하지 않는다.
-  const partial = list.filter((item) => {
-    const own = new Set(normalizeNameTokens(item.name));
+  const partial = list.filter((item) => namesOf(item).some((n) => {
+    const own = new Set(normalizeNameTokens(n));
     return tokens.some((t) => own.has(t));
-  });
+  }));
   return { status: 'unknown', candidates: partial.slice(0, limit).map((m) => ({ name: m.name })), total: partial.length };
 }
 
@@ -2023,7 +2179,7 @@ export function resolveByName(list, query, opts) {
   if (first.status !== 'unknown' || String(query ?? '').includes('/')) return first;
   const key = gluedNameKey(query);
   if (key === null) return first;
-  const hits = list.filter((item) => gluedNameKey(item.name) === key);
+  const hits = list.filter((item) => namesOf(item).some((n) => gluedNameKey(n) === key));
   if (hits.length !== 1) return first;
   return { status: 'resolved', match: hits[0], canonicalName: hits[0].name, matchedBy: 'exact' };
 }
@@ -2031,8 +2187,8 @@ export function resolveByName(list, query, opts) {
 export const resolveLocalModel = (query, opts) => resolveByName(LOCAL_MODELS, query, opts);
 export const resolveGpuByName = (query, opts) => resolveByName(GPUS, query, opts);
 
-export const DATA_UPDATED = '2026-09';
+export const DATA_UPDATED = '2026-10';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.18.1';
+export const ENGINE_VERSION = '2.19.0';
