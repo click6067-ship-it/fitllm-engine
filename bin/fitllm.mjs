@@ -357,7 +357,7 @@ if (has('--json')) {
     console.log(`  attention: ${basis.attention.kind} · KV ${basis.attention.kvLayers}/${basis.attention.totalLayers} layers · ${basis.attention.kvHeads} heads × ${basis.attention.kvHeadDim} dim`);
     console.log(`  hardware evidence: ${basis.hardware.evidence.status} · ${basis.hardware.memoryGB} GiB · ${basis.hardware.environment}`);
     const um = basis.hardware.unifiedMemory;
-    if (um) console.log(`  unified-memory reserve: ${fmtGB(um.notVisibleGiB)} not visible to the OS + ${fmtGB(um.osIdleGiB)} idle OS + ${fmtGB(um.runtimeFixedGiB)} runtime = ${fmtGB(um.reserveGiB)} GiB (sources: ${[...um.sources.osVisible, ...um.sources.osIdle].length} URLs in engine.js)`);
+    if (um) console.log(`  unified-memory reserve${um.units > 1 ? ` (${um.units} units)` : ''}: ${fmtGB(um.notVisibleGiB)} not visible to the OS + ${fmtGB(um.osIdleGiB)} idle OS + ${fmtGB(um.runtimeFixedGiB)} runtime = ${fmtGB(um.reserveGiB)} GiB (sources: ${[...um.sources.osVisible, ...um.sources.osIdle].length} URLs in engine.js)`);
     console.log(`  limitation: ${basis.limitations.join(' ')}`);
   }
   console.log('  architecture inputs pinned to official configs; runtime/OS reserves are estimates — audit: github.com/click6067-ship-it/fitllm-engine');

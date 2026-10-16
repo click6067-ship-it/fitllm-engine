@@ -654,6 +654,43 @@ const WIKI30 = 'https://en.wikipedia.org/wiki/GeForce_30_series';
 // 모든 행 2026-06-04 이중트랙(Claude hw-crawler ∥ Codex 독립) 리콘실 검증, CONFLICT 0.
 const GPU_VERIFIED_AT = '2026-06-04';
 const GPU_TRACKS = ['claude-hw-crawler', 'codex-independent']; // 독립 검증 트랙 2종
+  // 통합 메모리 reserve — 맥 경로(OS 몫 + 런타임 고정 2GB)와 같은 구조를 GB10 실측으로 채운다.
+  //   reserve = (128 − OS가 보는 총량) + DGX OS 유휴 사용량 + 런타임 고정분
+  // NVIDIA는 GPU 전용 고정 할당이 없다고 명시한다("share the same physical memory space without a fixed carve-out",
+  //   https://docs.nvidia.com/dgx/dgx-spark-porting-guide/overview.html) — 맥의 GPU wired limit 같은 상한은 없고, OS가 보는 총량이 곧 CUDA 총량이다.
+const GB10_128GB_UNIFIED = Object.freeze({
+    environment: 'dgx-os-unified',
+    // OS·CUDA가 보는 총량(GiB). /proc/meminfo MemTotal = cuDeviceTotalMem = torch mem_get_info total, DGX OS 7.6 / 커널 6.17 실측:
+    //   127,599,376 kB·127,535,276 kB(기기 2대, MemTotal×1024 = cuDeviceTotalMem) — https://github.com/midagedev/bloomery/issues/13 (2026-10-10)
+    //   127,600,524 kB — https://raw.githubusercontent.com/vllm-project/vllm-omni/main/recipes/MiniMaxAI/MiniMax-H3-Spark-GB10.md
+    //   torch.cuda.mem_get_info total 121.69 GiB — https://forums.developer.nvidia.com/t/driver-issue-with-580-178-04/383859 (2026-09-21)
+    //   "121.7 GiB visible to the OS and to CUDA"(GIGABYTE ATOM, DGX OS 7.6.0) — https://www.back2gaming.com/review/gigabyte-ai-top-atom-128gb-dgx-spark/
+    // ⚠ 더 낮은 관측: 초기 DGX OS·4K 페이지 커널·일부 OEM 초기 펌웨어는 119.5–119.7 GiB(약 2 GiB 적음 —
+    //   https://simonwillison.net/2025/Oct/14/nvidia-dgx-spark/ · https://github.com/emjotde/spark-ram-reclaim). 전제 문구로 고지한다.
+    osVisibleGB: 121.69,
+    // DGX OS 유휴 시 새 프로세스가 못 쓰는 양(MemTotal − MemAvailable, GiB): 헤드리스 2대 4.8–5.1(bloomery #13) ·
+    //   free -h 121Gi total / 117Gi available ≈ 4(https://aaif.io/blog/running-goose-fully-offline-on-a-dgx-spark) ·
+    //   GNOME 데스크톱 ~116 available vs 서버 ~118(https://technotim.com/posts/ubuntu-gb10/). 대표값 5.0 — 데스크톱(기본)과 헤드리스 사이.
+    osIdleGB: 5.0,
+    // 추론 프로세스 고정분(CUDA 컨텍스트 + 프로세스 host 메모리 + 고정 버퍼). 통합 메모리에서는 host 몫도 같은 풀이라
+    // 맥 경로의 고정 런타임 2GB(calcRuntimeOverhead fixed)를 그대로 쓴다 — GB10 전용 실측이 아닌 엔진 추정치다.
+    //   방향 확인: torch CUDA 컨텍스트가 떠 있는 유휴 상태에서 available 115.52 / 121.69 GiB(차 6.17 GiB, 위 forum 383859) — OS 유휴 ~4–5 GiB보다 1–2 GiB 큼.
+    runtimeFixedGB: 2.0,
+    sources: {
+      osVisibleGB: [
+        'https://github.com/midagedev/bloomery/issues/13',
+        'https://forums.developer.nvidia.com/t/driver-issue-with-580-178-04/383859',
+        'https://www.back2gaming.com/review/gigabyte-ai-top-atom-128gb-dgx-spark/',
+      ],
+      osIdleGB: [
+        'https://github.com/midagedev/bloomery/issues/13',
+        'https://aaif.io/blog/running-goose-fully-offline-on-a-dgx-spark',
+        'https://technotim.com/posts/ubuntu-gb10/',
+      ],
+    },
+    estimates: { runtimeFixedGB: 'engine runtime constant shared with the Apple unified-memory path; not a GB10 measurement' },
+  });
+
 const _GPUS = [
   { name: 'RTX 5090', series: '50', vramGB: 32, bandwidthGBs: 1792, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/', NV_BLACKWELL], bandwidthGBs: ['https://www.notebookcheck.net/NVIDIA-GeForce-RTX-5090-Benchmarks-and-Specs.935680.0.html', NV_BLACKWELL] } },
   { name: 'RTX 5080', series: '50', vramGB: 16, bandwidthGBs: 960, status: 'VERIFIED', sources: { vramGB: ['https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5080/', 'https://www.techspot.com/specs/gpu/303555-nvidia-geforce-rtx-5080.html'], bandwidthGBs: ['https://www.tomshardware.com/pc-components/gpus/nvidia-rtx-5080-allegedly-adopts-faster-30-gbps-gddr7-modules-delivering-960-gb-s-of-bandwidth-the-remaining-blackwell-lineup-is-expected-to-stick-with-slower-28-gbps-memory', 'https://www.techspot.com/specs/gpu/303555-nvidia-geforce-rtx-5080.html'] } },
@@ -770,42 +807,40 @@ const _GPUS = [
       vramGB: ['https://www.nvidia.com/en-us/products/workstations/dgx-spark/', 'https://www.storagereview.com/review/nvidia-dgx-spark-review-the-ai-appliance-bringing-datacenter-capabilities-to-desktops'],
       bandwidthGBs: ['https://docs.nvidia.com/dgx/dgx-spark/hardware.html', 'https://www.storagereview.com/review/nvidia-dgx-spark-review-the-ai-appliance-bringing-datacenter-capabilities-to-desktops'],
     },
-    // 통합 메모리 reserve — 맥 경로(OS 몫 + 런타임 고정 2GB)와 같은 구조를 GB10 실측으로 채운다.
-    //   reserve = (128 − OS가 보는 총량) + DGX OS 유휴 사용량 + 런타임 고정분
-    // NVIDIA는 GPU 전용 고정 할당이 없다고 명시한다("share the same physical memory space without a fixed carve-out",
-    //   https://docs.nvidia.com/dgx/dgx-spark-porting-guide/overview.html) — 맥의 GPU wired limit 같은 상한은 없고, OS가 보는 총량이 곧 CUDA 총량이다.
-    unifiedMemory: {
-      environment: 'dgx-os-unified',
-      // OS·CUDA가 보는 총량(GiB). /proc/meminfo MemTotal = cuDeviceTotalMem = torch mem_get_info total, DGX OS 7.6 / 커널 6.17 실측:
-      //   127,599,376 kB·127,535,276 kB(기기 2대, MemTotal×1024 = cuDeviceTotalMem) — https://github.com/midagedev/bloomery/issues/13 (2026-10-10)
-      //   127,600,524 kB — https://raw.githubusercontent.com/vllm-project/vllm-omni/main/recipes/MiniMaxAI/MiniMax-H3-Spark-GB10.md
-      //   torch.cuda.mem_get_info total 121.69 GiB — https://forums.developer.nvidia.com/t/driver-issue-with-580-178-04/383859 (2026-09-21)
-      //   "121.7 GiB visible to the OS and to CUDA"(GIGABYTE ATOM, DGX OS 7.6.0) — https://www.back2gaming.com/review/gigabyte-ai-top-atom-128gb-dgx-spark/
-      // ⚠ 더 낮은 관측: 초기 DGX OS·4K 페이지 커널·일부 OEM 초기 펌웨어는 119.5–119.7 GiB(약 2 GiB 적음 —
-      //   https://simonwillison.net/2025/Oct/14/nvidia-dgx-spark/ · https://github.com/emjotde/spark-ram-reclaim). 전제 문구로 고지한다.
-      osVisibleGB: 121.69,
-      // DGX OS 유휴 시 새 프로세스가 못 쓰는 양(MemTotal − MemAvailable, GiB): 헤드리스 2대 4.8–5.1(bloomery #13) ·
-      //   free -h 121Gi total / 117Gi available ≈ 4(https://aaif.io/blog/running-goose-fully-offline-on-a-dgx-spark) ·
-      //   GNOME 데스크톱 ~116 available vs 서버 ~118(https://technotim.com/posts/ubuntu-gb10/). 대표값 5.0 — 데스크톱(기본)과 헤드리스 사이.
-      osIdleGB: 5.0,
-      // 추론 프로세스 고정분(CUDA 컨텍스트 + 프로세스 host 메모리 + 고정 버퍼). 통합 메모리에서는 host 몫도 같은 풀이라
-      // 맥 경로의 고정 런타임 2GB(calcRuntimeOverhead fixed)를 그대로 쓴다 — GB10 전용 실측이 아닌 엔진 추정치다.
-      //   방향 확인: torch CUDA 컨텍스트가 떠 있는 유휴 상태에서 available 115.52 / 121.69 GiB(차 6.17 GiB, 위 forum 383859) — OS 유휴 ~4–5 GiB보다 1–2 GiB 큼.
-      runtimeFixedGB: 2.0,
-      sources: {
-        osVisibleGB: [
-          'https://github.com/midagedev/bloomery/issues/13',
-          'https://forums.developer.nvidia.com/t/driver-issue-with-580-178-04/383859',
-          'https://www.back2gaming.com/review/gigabyte-ai-top-atom-128gb-dgx-spark/',
-        ],
-        osIdleGB: [
-          'https://github.com/midagedev/bloomery/issues/13',
-          'https://aaif.io/blog/running-goose-fully-offline-on-a-dgx-spark',
-          'https://technotim.com/posts/ubuntu-gb10/',
-        ],
-      },
-      estimates: { runtimeFixedGB: 'engine runtime constant shared with the Apple unified-memory path; not a GB10 measurement' },
+    unifiedMemory: GB10_128GB_UNIFIED, // reserve 구성·출처는 위 상수(2×·4× 클러스터 행과 공유)
+  },
+  // GB10 클러스터(2026-10-16 사용자 승인) — 한 모델이 여러 대의 메모리를 같이 쓰는 경우만. 숫자는 DGX Spark 128GB 행 × 대수이고,
+  // 합산이 성립하는 조건은 전제 'gb10-cluster-tensor-parallel'(아래 STRUCTURAL_ASSUMPTIONS)로 판정과 함께 나간다.
+  // 연결(NVIDIA 공식): ConnectX-7 QSFP 2포트, 포트당 200Gb/s. 2대 = QSFP 케이블 직결, 3대 = 링, 4대 = 스위치 필수,
+  //   4대 지원은 2026-03-16부터(DGX OS 2026년 4월 이후). 4대 초과는 NVIDIA 미검증 → 행 없음(조합도 거부).
+  //   https://docs.nvidia.com/dgx/dgx-spark/spark-clustering.html ("up to three DGX Spark systems connected directly through cables, and up to four systems when using a switch")
+  //   https://developer.nvidia.com/blog/scaling-autonomous-ai-agents-and-workloads-with-nvidia-dgx-spark/ (2026-03-16, "increased to up to four DGX Spark nodes")
+  //   https://github.com/NVIDIA/dgx-spark-playbooks/blob/main/nvidia/playbook-connect-multiple-sparks/README.md · https://www.servethehome.com/big-cluster-little-power-the-8x-nvidia-gb10-cluster-marvell-cisco-ubiquiti-qnap-arm/
+  // 3대(링)는 행을 두지 않는다: 텐서 병렬 3은 대부분 모델의 헤드 수로 나눠지지 않아 파이프라인(층) 분할이 되고, 층 분할의 대당 몫은
+  //   모델마다 고르지 않다 — 그 계산은 아직 없다(fail closed).
+  // NVIDIA 판매 문구 "2대 최대 405B(현재 제품 페이지 400B)·4대 700B"는 가중치만의 파라미터 수다 — 2026-03 데이터시트 각주 "Using FP4 precision models."
+  //   (https://webobjects2.cdw.com/is/content/CDW/cdw/on-domain-cdw/brands/nvidia/workstation-datasheet-dgx-spark-update-partner-us-4699700.pdf). NVIDIA 자신의 405B 예시는
+  //   INT4 + 컨텍스트 64토큰이고 "insufficient memory headroom for production use"라고 적는다
+  //   (https://github.com/NVIDIA/dgx-spark-playbooks/blob/main/nvidia/vllm/README.md) — 이 행들은 그 문구를 재현하지 않고 실제 컨텍스트로 계산한다.
+  {
+    name: '2× DGX Spark 128GB', series: 'unified', vramGB: 256, bandwidthGBs: 273, count: 2, perCardVramGB: 128, clusterOf: 'DGX Spark 128GB',
+    status: 'VERIFIED', verifiedAt: '2026-10-16', matchRequires: ['spark'], aliases: ['2x DGX Spark 128GB', 'DGX Spark 128GB x2'],
+    sources: {
+      vramGB: ['https://www.nvidia.com/en-us/products/workstations/dgx-spark/', 'https://www.storagereview.com/review/nvidia-dgx-spark-cluster-review-distributed-inference-on-dell-gigabyte-and-hp'],
+      bandwidthGBs: ['https://docs.nvidia.com/dgx/dgx-spark/hardware.html', 'https://www.storagereview.com/review/nvidia-dgx-spark-review-the-ai-appliance-bringing-datacenter-capabilities-to-desktops'],
+      interconnect: ['https://docs.nvidia.com/dgx/dgx-spark/spark-clustering.html', 'https://build.nvidia.com/spark/connect-two-sparks', 'https://www.lmsys.org/blog/2025-10-13-nvidia-dgx-spark/'],
     },
+    unifiedMemory: GB10_128GB_UNIFIED, // 대당 reserve는 같고 대수만큼 생긴다(각 대가 자기 DGX OS·런타임을 돌린다)
+  },
+  {
+    name: '4× DGX Spark 128GB', series: 'unified', vramGB: 512, bandwidthGBs: 273, count: 4, perCardVramGB: 128, clusterOf: 'DGX Spark 128GB',
+    status: 'VERIFIED', verifiedAt: '2026-10-16', matchRequires: ['spark'], aliases: ['4x DGX Spark 128GB', 'DGX Spark 128GB x4'],
+    sources: {
+      vramGB: ['https://www.nvidia.com/en-us/products/workstations/dgx-spark/', 'https://www.servethehome.com/big-cluster-little-power-the-8x-nvidia-gb10-cluster-marvell-cisco-ubiquiti-qnap-arm/'],
+      bandwidthGBs: ['https://docs.nvidia.com/dgx/dgx-spark/hardware.html', 'https://www.storagereview.com/review/nvidia-dgx-spark-review-the-ai-appliance-bringing-datacenter-capabilities-to-desktops'],
+      interconnect: ['https://docs.nvidia.com/dgx/dgx-spark/spark-clustering.html', 'https://developer.nvidia.com/blog/scaling-autonomous-ai-agents-and-workloads-with-nvidia-dgx-spark/', 'https://www.servethehome.com/big-cluster-little-power-the-8x-nvidia-gb10-cluster-marvell-cisco-ubiquiti-qnap-arm/'],
+    },
+    unifiedMemory: GB10_128GB_UNIFIED,
   },
 ];
 // 검증 메타(이중트랙·검증일)를 전 행에 주입 — 데이터 무결성 테스트가 강제.
@@ -850,17 +885,67 @@ export function gpuDevice(gpu, envKey = DEFAULT_ENV) {
 //   reserve  = (총 메모리 − OS가 보는 총량) + OS 유휴 사용량 + 런타임 고정분  — 각 항목 근거는 GPUS 행의 unifiedMemory
 //   headroom = 맥과 같은 HEADROOM_RATIO(20%) — 같은 풀을 앱·페이지 캐시·스파이크가 나눠 쓰므로 전용 VRAM의 5%가 아니다.
 // 고정 런타임 2GB는 reserve에 들어 있으므로 calcRuntimeOverhead는 GPU 규칙대로 fixed=0(이중 차감 없음).
+// 클러스터 행(count>1)은 대당 reserve × 대수 — 각 대가 자기 DGX OS·런타임을 돌린다.
 export function unifiedReserveGB(gpu) {
   const u = gpu.unifiedMemory;
-  return (gpu.vramGB - u.osVisibleGB) + u.osIdleGB + u.runtimeFixedGB;
+  const units = gpu.count || 1;
+  return ((gpu.perCardVramGB ?? gpu.vramGB) - u.osVisibleGB + u.osIdleGB + u.runtimeFixedGB) * units;
 }
 function unifiedGpuDevice(gpu) {
+  const units = gpu.count || 1;
   return {
     type: 'gpu', gpu, env: gpu.unifiedMemory.environment, memoryGB: gpu.vramGB, bandwidthGBs: gpu.bandwidthGBs,
-    reserveGB: unifiedReserveGB(gpu), headroomRatio: HEADROOM_RATIO, _os: 0, gpuCount: 1, unifiedMemory: true,
+    reserveGB: unifiedReserveGB(gpu), headroomRatio: HEADROOM_RATIO, _os: 0, gpuCount: units, unifiedMemory: true,
+    ...(units > 1 ? { clusterUnits: units } : {}),
   };
 }
-const UNIFIED_COMBINE_ERROR = (name) => `${name} is a complete unified-memory system — pooling it with other GPUs or linking several units is not modeled`;
+const UNIFIED_COMBINE_ERROR = (name) => `${name} is a complete unified-memory system — pooling it with other GPUs, or linking a number of units other than 2 or 4 identical ones, is not modeled`;
+// 같은 GB10 행 N대(2·4) → 클러스터 행. 그 밖(다른 카드와 섞기·3대·5대 이상·클러스터 행끼리 묶기)은 null.
+function unifiedCluster(gpus) {
+  const base = gpus[0];
+  if (!base || !base.unifiedMemory || base.count) return null;
+  if (!gpus.every((g) => g && g.name === base.name && !g.count)) return null;
+  return GPUS.find((g) => g.clusterOf === base.name && g.count === gpus.length) || null;
+}
+
+// 클러스터에서 KV가 몇 배로 상주하나 — NVIDIA 플레이북 경로(vLLM+Ray·TensorRT-LLM, tensor parallel = 대수) 기준.
+// vLLM: "Number of KV heads is less than TP size, so we replicate the KV heads"(llama.py) · MLA 잠재 KV는 TP 순위마다 통째로 복제
+// ("replicated in full on every TP rank", https://vllm.ai/blog/2026-08-07-decode-context-parallelism ·
+//  https://nvidia.github.io/TensorRT-LLM/features/parallel-strategy.html). 층(파이프라인) 분할이면 복제가 없으니 보수 쪽 근사다.
+// 순위당 KV 헤드 = max(1, 헤드 ÷ 대수) → 전체 = max(헤드, 대수). 층 종류별(슬라이딩 로컬·전역)로 따로 적용한다
+// (Codex 리뷰: Gemma 4 12b 로컬 8헤드는 나뉘고 전역 1헤드만 복제된다 — 한 배율로 묶으면 4대에서 KV 1.75 vs 실제 0.81 GiB).
+// 반환값은 KV 계산(calcKVCache·calcMaxContext)에만 쓰는 모델 사본이다 — 가중치·이름은 그대로.
+export function clusterKvModel(model, device) {
+  const units = device?.clusterUnits || 1;
+  if (units <= 1) return model;
+  if (model.mlaKvLoraRank) {
+    return { ...model, mlaKvLoraRank: model.mlaKvLoraRank * units, mlaRopeDim: (model.mlaRopeDim || 0) * units };
+  }
+  return {
+    ...model,
+    kvHeads: Math.max(model.kvHeads, units),
+    ...(model.globalKvHeads ? { globalKvHeads: Math.max(model.globalKvHeads, units) } : {}),
+  };
+}
+// tensor parallel = 대수가 성립하나 — vLLM/TensorRT-LLM이 거부하는 구성(assert)을 숫자로 내지 않는다(Codex 리뷰: Qwen2.5-0.5B
+// 14헤드 × 4대가 'yes'로 나왔다). 어텐션 헤드는 대수로 나눠져야 하고, KV 헤드는 대수로 나눠지거나 대수를 나눠야 하며,
+// 선형 어텐션 헤드도 나눠져야 한다. 헤드 수를 모르면 성립한다고 하지 않는다(fail closed).
+// https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/models/llama.py (total_num_heads % tp_size, tp_size % total_num_kv_heads)
+export function clusterTensorParallelOk(model, device) {
+  const units = device?.clusterUnits || 1;
+  if (units <= 1) return true;
+  const divides = (n) => Number.isInteger(n) && n > 0 && n % units === 0;
+  const kvOk = (kv) => Number.isInteger(kv) && kv > 0 && (kv >= units ? kv % units === 0 : units % kv === 0);
+  if (!divides(model.attnHeads)) return false;
+  if (!model.mlaKvLoraRank) {
+    if (!kvOk(model.kvHeads)) return false;
+    if (model.globalKvHeads && !kvOk(model.globalKvHeads)) return false;
+  }
+  const la = model.linearAttn;
+  if (la && la.layers && !(divides(la.numKHeads) && divides(la.numVHeads))) return false;
+  return true;
+}
+const clusterUnitsOf = (device) => device?.clusterUnits || 1;
 
 // 임의 멀티GPU 조합 — 이종 포함 (예: RTX 5090 + RTX 3090 = 56GB 풀). llama.cpp 레이어 분할 기준의 풀링 근사:
 // VRAM=합산 · reserve=카드당 env reserve 합(드라이버/CUDA 컨텍스트는 카드마다 발생) · 대역폭=최소 카드(디코드는 느린 구간 바운드 — dormant).
@@ -871,7 +956,11 @@ export function combineGpus(gpus, envKey = DEFAULT_ENV) {
   // 통합 메모리 시스템은 카드가 아니라 완제품 컴퓨터다 — 다른 카드와의 풀링이나 여러 대 연결(네트워크 분산 추론)은
   // 레이어 분할 근사로 모델링하지 않는다. 숫자를 지어내지 않고 실패한다(fail closed).
   const unified = gpus.find((g) => g && g.unifiedMemory);
-  if (unified) throw new Error(UNIFIED_COMBINE_ERROR(unified.name));
+  if (unified) {
+    const cluster = unifiedCluster(gpus);
+    if (!cluster) throw new Error(UNIFIED_COMBINE_ERROR(unified.name));
+    return gpuDevice(cluster);
+  }
   const env = ENV_PRESETS[envKey] || ENV_PRESETS[DEFAULT_ENV];
   const combo = {
     name: gpus.map((g) => g.name).join(' + '),
@@ -1057,6 +1146,14 @@ const STRUCTURAL_ASSUMPTIONS = Object.freeze({
     id: 'mtp-ordinary-generation',
     statement: 'KV memory assumes ordinary non-speculative generation; an MTP draft context is not included.',
   }),
+  clusterSplit: Object.freeze({
+    id: 'gb10-cluster-tensor-parallel-incompatible',
+    statement: "This model's attention or KV head counts do not divide across the units, so vLLM and TensorRT-LLM refuse a tensor-parallel split of this size; no cluster fit is claimed (a layer split, not modeled here, might still run it).",
+  }),
+  cluster: Object.freeze({
+    id: 'gb10-cluster-tensor-parallel',
+    statement: 'Several GB10 units add up for one model only under a runtime that splits it across them over ConnectX-7 — vLLM with Ray or TensorRT-LLM, tensor parallel equal to the unit count (NVIDIA supports two units by a direct QSFP cable and four through a RoCE switch, on DGX OS from April 2026). Ollama and LM Studio use one unit. Each unit keeps its own DGX OS and runtime reserve and its own activation buffers, and the KV cache is counted as replicated when the model has fewer KV heads than units or uses an MLA latent cache; a layer (pipeline) split would need less. Network and NCCL buffers and uneven splits are not budgeted.',
+  }),
   unified: Object.freeze({
     id: 'gb10-unified-memory-reserve',
     statement: 'GB10 systems share one 128 GB LPDDR5x pool between DGX OS, CPU processes and the GPU. The reserve subtracts the 6.3 GiB the OS cannot see on current DGX OS (121.7 GiB visible; early firmware shows about 2 GiB less), about 5 GiB of idle DGX OS use and a 2 GiB runtime allowance. Other running apps and the file page cache are not budgeted, and weights are assumed resident once: a loader that keeps an mmap page-cache copy can need up to the weight size again while loading.',
@@ -1081,6 +1178,8 @@ export function structuralAssumptions(model, device) {
   if (pleDeductionApplies(device) && guardedPleParamsB(model)) result.push(STRUCTURAL_ASSUMPTIONS.ple);
   if (model.mtpLayerCount > 0) result.push(STRUCTURAL_ASSUMPTIONS.mtp);
   if (device?.unifiedMemory) result.push(STRUCTURAL_ASSUMPTIONS.unified);
+  if (device?.clusterUnits > 1) result.push(STRUCTURAL_ASSUMPTIONS.cluster);
+  if (device?.clusterUnits > 1 && !clusterTensorParallelOk(model, device)) result.push(STRUCTURAL_ASSUMPTIONS.clusterSplit);
   return result.map((item) => ({ ...item }));
 }
 
@@ -1111,10 +1210,10 @@ export function calcRuntimeOverhead(model, ctx, bitsOrQuant, device) {
   ctx = Math.max(0, Math.floor(Number(ctx)) || 0); // 음수/NaN 가드 (활성화 버퍼 ctx 비례)
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight↔KV 분리(GGUF: KV padding이 weight bpw 오염 금지)
   const paramMem = calcParamMemory(model, weightBpw, device).totalGB; // PLE: GPU면 상주분만(오버헤드도 상주 가중치 비례)
-  const kvMem = calcKVCache(model, ctx, kvBits).totalGB;
+  const kvMem = calcKVCache(clusterKvModel(model, device), ctx, kvBits).totalGB; // 클러스터: 복제된 KV까지
   const paramOverhead = paramMem * 0.12;
   const kvOverhead = kvMem * 0.15;
-  const activationOverhead = ctx * 0.00003;
+  const activationOverhead = ctx * 0.00003 * clusterUnitsOf(device); // 활성화 버퍼는 대마다 생긴다
   // GPU는 고정 reserve가 device.envReserveGB로 분리됨 → 런타임 fixed=0 (simulate의 rtDyn과 일치, 이중차감 금지)
   const fixedOverhead = device && device.type === 'gpu' ? 0 : 2.0;
   return {
@@ -1129,6 +1228,7 @@ export function calcRuntimeOverhead(model, ctx, bitsOrQuant, device) {
 export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
   if (!model.kvHeads || !model.kvHeadDim || !model.layerCount || !model.totalParams) return 0;
   const device = toDevice(deviceOrRam);        // number(ram)→appleDevice / device 객체→그대로
+  if (!clusterTensorParallelOk(model, device)) return 0; // 대수로 나눌 수 없는 모델 — 클러스터 수치를 내지 않는다
   const { weightBpw, kvBits } = toQuant(bitsOrQuant);
   const attnLayers = model.fullAttnLayers || model.layerCount; // 하이브리드: 풀어텐션 레이어만 KV
   const wbpe = weightBpw / 8; // 파라미터(weight) 바이트
@@ -1140,14 +1240,15 @@ export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
     device.memoryGB * 1024 ** 3 * (1 - device.headroomRatio) - paramBytes - paramBytes * 0.12 - device.reserveGB * 1024 ** 3 - linearStateBytes;
   if (budget <= 0) return 0;
   const overhead = 1.15; // KV 블록 할당 padding
-  const perLocal = 2 * model.kvHeads * model.kvHeadDim * kbpe * overhead;
-  const perGlobal = 2 * (model.globalKvHeads || model.kvHeads) * (model.globalHeadDim || model.kvHeadDim) * kbpe * overhead;
+  const km = clusterKvModel(model, device); // GB10 클러스터: TP 복제된 KV 헤드·MLA 잠재 차원(그 밖 원래 모델)
+  const perLocal = 2 * km.kvHeads * km.kvHeadDim * kbpe * overhead;
+  const perGlobal = 2 * (km.globalKvHeads || km.kvHeads) * (km.globalHeadDim || km.kvHeadDim) * kbpe * overhead;
   if (perLocal <= 0) return 0;
-  const actPerTok = 0.00003 * 1024 ** 3; // 활성화 버퍼(simulate와 동일) — ctx 비례라 토큰당 비용에 포함
+  const actPerTok = 0.00003 * 1024 ** 3 * clusterUnitsOf(device); // 활성화 버퍼(simulate와 동일) — ctx 비례라 토큰당 비용에 포함, 클러스터는 대마다
 
   // MLA: 압축 latent+rope, 전 레이어 균일 (calcKVCache MLA 분기와 동일 식)
   if (model.mlaKvLoraRank) {
-    const perTokMla = (model.mlaKvLoraRank + (model.mlaRopeDim || 0)) * kbpe * overhead * model.layerCount;
+    const perTokMla = (km.mlaKvLoraRank + (km.mlaRopeDim || 0)) * kbpe * overhead * model.layerCount;
     return Math.min(Math.floor(budget / (perTokMla + actPerTok)), model.maxContext);
   }
 
@@ -1178,7 +1279,7 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   ctx = Math.min(Math.max(1, Math.floor(Number(ctx)) || 1), model.maxContext || Infinity); // 음수/NaN ctx 가드 — 음수 KV가 판정을 fits로 뒤집는 것 방지 (2026-07-11 감사)
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight(파라미터) ↔ KV 비트 분리
   const param = calcParamMemory(model, weightBpw, device).totalGB; // PLE 모델은 GPU에서 상주분만 (residentParamsB)
-  const kv = calcKVCache(model, ctx, kvBits).totalGB;
+  const kv = calcKVCache(clusterKvModel(model, device), ctx, kvBits).totalGB; // GB10 클러스터: TP 복제분 포함(그 밖 원래 값)
   // pinned llama.cpp/GGUF 경로가 입력층 텐서(per_layer_token_embd)를 accelerator가 아닌 CPU/host 버퍼에 배치하므로
   // GPU에 상주하지 않는 PLE 근사 크기. host 메모리는 예산에 넣지 않으며, PLE를 accelerator에 적재하는 런타임에서는
   // 이 추정과 GPU weight 차감이 모두 무효다.
@@ -1198,6 +1299,7 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
   // 최종 방어선: NaN·Infinity는 `free < 0`도 `free < headroom`도 false라 그대로 'yes'로 떨어진다.
   // 상류 게이트가 다 뚫려도 "모르는데 된다"고 답하지는 않게 한다.
   if (!Number.isFinite(used) || !Number.isFinite(free)) verdict = 'no';
+  else if (!clusterTensorParallelOk(model, device)) verdict = 'no'; // TP로 나눌 수 없으면 이 클러스터에서는 돌지 않는다(전제로 이유 고지)
   else if (free < 0) verdict = 'no';
   else if (free < headroom) verdict = 'tight';
   else verdict = 'yes';
@@ -1245,7 +1347,7 @@ export function simulateStack(entries, deviceOrRam) {
     const c = Math.min(ctx, model.maxContext);
     const kb = kvBits ?? 16;
     const param = calcParamMemory(model, weightBpw, device).totalGB;
-    const kv = calcKVCache(model, c, kb).totalGB;
+    const kv = calcKVCache(clusterKvModel(model, device), c, kb).totalGB;
     const ov = calcRuntimeOverhead(model, c, { weightBpw, kvBits: kb }, device);
     const rtDyn = ov.paramOverheadGB + ov.kvOverheadGB + ov.activationOverheadGB;
     const assumptions = structuralAssumptions(model, device);
@@ -1259,7 +1361,8 @@ export function simulateStack(entries, deviceOrRam) {
   const used = parts.reduce((s, p) => s + p.subtotal, 0) + reserve;
   const free = device.memoryGB - used;
   const headroom = device.memoryGB * device.headroomRatio;
-  const verdict = free < 0 ? 'no' : free < headroom ? 'tight' : 'yes';
+  const tpOk = parts.every((p) => clusterTensorParallelOk(p.model, device));
+  const verdict = !tpOk || free < 0 ? 'no' : free < headroom ? 'tight' : 'yes';
   // 중복 제거한 뒤 다시 복제한다 — Map은 part가 들고 있는 *바로 그* 객체를 담으므로,
   // 복제하지 않으면 스택 레벨 item을 만진 소비자가 part의 값까지 바꾼다(순수 결과 규율).
   const assumptions = [...new Map(
@@ -2191,4 +2294,4 @@ export const DATA_UPDATED = '2026-10';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.19.0';
+export const ENGINE_VERSION = '2.20.0';
