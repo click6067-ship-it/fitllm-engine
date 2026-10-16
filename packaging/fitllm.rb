@@ -10,28 +10,28 @@
 class Fitllm < Formula
   desc "Will this LLM fit on your GPU or Mac? Architecture-accurate memory estimates"
   homepage "https://fitllm.run"
-  version "2.19.0"
+  version "2.20.0"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v2.19.0/fitllm-v2.19.0-darwin-arm64"
-      sha256 "5d36f09a35d4ab90b2ae65a5035b3d613dbd3dfc43eb6813184eaadac07edf3c"
+      url "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v2.20.0/fitllm-v2.20.0-darwin-arm64"
+      sha256 "6d35901545c16b3dafacc6e7bea5bc2aaa7ebc108c03ba3a3e4658b9c28fb543"
     end
     on_intel do
-      url "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v2.19.0/fitllm-v2.19.0-darwin-x64"
-      sha256 "04dffe24bbfe878243d3b68464e24c7d44ae7ef67a1b37fbb61c7d2b5a05c0bf"
+      url "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v2.20.0/fitllm-v2.20.0-darwin-x64"
+      sha256 "90486259391010491273d83cad839284db44dea15ae4afe3d37a85f631e8f633"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v2.19.0/fitllm-v2.19.0-linux-arm64"
-      sha256 "eeffa34bec990f6ff54e576f68ae4244e6f68f07ff23e00565eaf3e1fa032e9e"
+      url "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v2.20.0/fitllm-v2.20.0-linux-arm64"
+      sha256 "6ceaa3f99607faf5a1e0427fd5be2bd7abb19ed201dd97c7a22021aaec807816"
     end
     on_intel do
-      url "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v2.19.0/fitllm-v2.19.0-linux-x64"
-      sha256 "279c761793a846189050f783dab808861cd968ec90a0f26524264b265fc97b85"
+      url "https://github.com/click6067-ship-it/fitllm-engine/releases/download/v2.20.0/fitllm-v2.20.0-linux-x64"
+      sha256 "dfa898aca38712e4e7ac5add2847dbfce0657e4bbd263ffc9133cd97b88c561f"
     end
   end
 
