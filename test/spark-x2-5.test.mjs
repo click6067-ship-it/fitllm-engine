@@ -234,8 +234,8 @@ test('test_census_contains_spark_rows', () => {
   const census = readJson('../census/census-v1.json');
   const manifest = readJson('../census/manifest.json');
   const sparkRows = census.data.filter((r) => r.model === 'Spark-X2.5-4B');
-  assert.equal(sparkRows.length, 57 * 3 + 36 * 5); // Mac 57구성 × 3 tiers + GPU 36종 × 5 tiers = 351 rows/model
-  const total = LOCAL_MODELS.length * (57 * 3 + 36 * 5); // 30 × 351 = 10,530 (2.16.0: 로컬 3행 추가)
+  assert.equal(sparkRows.length, 57 * 3 + 45 * 5); // Mac 57구성 × 3 tiers + GPU 45종 × 5 tiers = 396 rows/model
+  const total = LOCAL_MODELS.length * (57 * 3 + 45 * 5); // 30 × 396 = 11,880 (2.19.0: GPU 9행 추가)
   assert.equal(census.verdicts, total);
   assert.equal(census.data.length, total);
   assert.equal(manifest.rows, total);
@@ -245,19 +245,19 @@ test('test_census_contains_spark_rows', () => {
 test('test_release_version_and_readme_counts', () => {
   const pkg = readJson('../package.json');
   const lock = readJson('../package-lock.json');
-  assert.equal(pkg.version, '2.18.1');
-  assert.equal(lock.version, '2.18.1');
-  assert.equal(lock.packages[''].version, '2.18.1');
-  assert.equal(ENGINE_VERSION, '2.18.1');
+  assert.equal(pkg.version, '2.19.0');
+  assert.equal(lock.version, '2.19.0');
+  assert.equal(lock.packages[''].version, '2.19.0');
+  assert.equal(ENGINE_VERSION, '2.19.0');
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
   const verdicts = `${readJson('../census/manifest.json').rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.18.1', 'conformance_vectors-33%2F33', '33 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.19.0', 'conformance_vectors-36%2F36', '36 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
-  for (const s of [verdicts, '33 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
+  for (const s of [verdicts, '36 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
   const vectors = readJson('../vectors/fit-vectors-v1.json');
-  assert.equal(vectors.vectors.length, 33); // 2026-09-05 Granite 벡터 1개 추가(#93) — Spark 벡터는 id로 고정
+  assert.equal(vectors.vectors.length, 36); // 2026-10-16 GB10 통합 메모리 판정 벡터 3개 추가 — Spark 벡터는 id로 고정
   const sparkVector = vectors.vectors.find((v) => v.id === 'spark-x25-4b-kv-1m-f16');
   assert.deepEqual(sparkVector, {
     id: 'spark-x25-4b-kv-1m-f16', kind: 'kv_total_bytes', model: 'Spark-X2.5-4B', ctx: 1048576, kvBits: 16, expect: 38711328768,

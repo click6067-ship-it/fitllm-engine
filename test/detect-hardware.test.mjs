@@ -11,6 +11,8 @@ test('test_multi_nvidia', () => {
   assert.equal(result.confidence, 'measured-vram');
   assert.throws(() => parseNvidiaSmi('NVIDIA GeForce RTX 4090, not-a-number\n', GPUS), /invalid nvidia-smi/i);
   assert.throws(() => parseNvidiaSmi(`${'NVIDIA GeForce RTX 4090, 24564\n'.repeat(9)}`, GPUS), /more than 8/i);
+  // GB10은 memory.total이 [N/A] — 용량(64/128GB)을 추측하지 않고 명시 선택을 안내한다
+  assert.throws(() => parseNvidiaSmi('NVIDIA GB10, [N/A]\n', GPUS), /GB10 detected.*--gpu "DGX Spark 128GB"/);
 
   const detected = detectHardware({
     execFile: () => 'NVIDIA GeForce RTX 5080, 16384\n',

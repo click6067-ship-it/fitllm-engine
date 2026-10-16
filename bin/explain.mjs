@@ -44,6 +44,20 @@ function attentionBasis(model) {
   return { kind: 'gqa', ...basis };
 }
 
+// 통합 메모리(GB10) reserve의 구성 — 판정이 쓰는 값과 그 근거를 그대로 보여 준다.
+function unifiedBasis(device) {
+  const u = device.gpu.unifiedMemory;
+  return {
+    osVisibleGiB: u.osVisibleGB,
+    notVisibleGiB: device.memoryGB - u.osVisibleGB,
+    osIdleGiB: u.osIdleGB,
+    runtimeFixedGiB: u.runtimeFixedGB,
+    reserveGiB: device.reserveGB,
+    sources: { osVisible: [...u.sources.osVisibleGB], osIdle: [...u.sources.osIdleGB] },
+    estimates: { ...u.estimates },
+  };
+}
+
 function hardwareBasis(device, detection) {
   if (device.type === 'gpu') {
     return {
@@ -58,6 +72,7 @@ function hardwareBasis(device, detection) {
         verifiedAt: device.gpu.verifiedAt ?? null,
         sources: device.gpu.sources?.vramGB ?? [],
       },
+      ...(device.unifiedMemory ? { unifiedMemory: unifiedBasis(device) } : {}),
     };
   }
 

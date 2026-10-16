@@ -44,7 +44,10 @@ if (has('--list')) {
   console.log('MODELS:');
   for (const m of LOCAL_MODELS) console.log(`  ${m.name}  (${m.totalParams}B${m.activeParams && m.activeParams < m.totalParams ? `, ${m.activeParams}B active` : ''})`);
   console.log('GPUS:');
-  for (const g of GPUS) console.log(`  ${g.name}  (${g.vramGB}GB)`);
+  for (const g of GPUS) {
+    console.log(`  ${g.name}  (${g.vramGB}GB${g.unifiedMemory ? ' unified memory' : ''})`);
+    if (g.aliases?.length) console.log(`      same machine: ${g.aliases.join(', ')}`); // 같은 칩·같은 메모리 — 같은 판정
+  }
   console.log('MACS:');
   for (const [chip, rams] of Object.entries(MACBOOK_RAM_GROUPS)) console.log(`  ${chip}: ${rams.join('/')}GB`);
   process.exit(0);
@@ -131,15 +134,25 @@ if (gpuName) {
       console.error(`ambiguous GPU: "${p}" — ${gr.total} matches: ${gr.candidates.map((c) => c.name).join(', ')}${gr.total > gr.candidates.length ? ', …' : ''}`);
       process.exit(2);
     }
-    if (gr.status !== 'resolved') { console.error(`unknown GPU: "${p}" — try: npx fitllm --list`); process.exit(2); }
+    if (gr.status !== 'resolved') {
+      // 후보는 제안일 뿐 해석이 아니다 — 'ASUS Ascent GX10'처럼 용량 없는 별칭은 고르지 않고 정확한 이름을 묻는다.
+      const hint = gr.candidates?.length ? ` — did you mean: ${gr.candidates.map((c) => c.name).join(', ')}?` : '';
+      console.error(`unknown GPU: "${p}"${hint} — try: npx fitllm --list`);
+      process.exit(2);
+    }
     found.push(gr.match);
   }
   const count = Math.min(Math.max(parseInt(flag('--count'), 10) || 1, 1), 8);
   const list = [];
   for (let i = 0; i < count; i++) list.push(...found);
-  device = combineGpus(list, 'windows-display'); isGpu = true;
+  try {
+    device = combineGpus(list, 'windows-display'); isGpu = true;
+  } catch (error) {
+    console.error(error.message); // 통합 메모리 시스템 풀링 등 모델링하지 않는 조합 — 숫자를 지어내지 않는다
+    process.exit(2);
+  }
   receiptCards = list.reduce((s, g) => s + (g.count || 1), 0);
-  hwLabel = `${device.gpu.name} (${device.memoryGB}GB${list.length > 1 ? ' pooled' : ''})`;
+  hwLabel = `${device.gpu.name} (${device.memoryGB}GB${device.unifiedMemory ? ' unified memory' : list.length > 1 ? ' pooled' : ''})`;
 } else if (macRam) {
   const ram = parseInt(macRam, 10);
   if (!Number.isFinite(ram) || ram < 8) { console.error('--mac needs RAM in GB (e.g. --mac 64)'); process.exit(2); }
@@ -343,6 +356,8 @@ if (has('--json')) {
     console.log(`  basis: model ${basis.model.name} (${basis.model.source.type}) · ${basis.model.totalParamsB}B params · ${basis.model.layers} layers`);
     console.log(`  attention: ${basis.attention.kind} · KV ${basis.attention.kvLayers}/${basis.attention.totalLayers} layers · ${basis.attention.kvHeads} heads × ${basis.attention.kvHeadDim} dim`);
     console.log(`  hardware evidence: ${basis.hardware.evidence.status} · ${basis.hardware.memoryGB} GiB · ${basis.hardware.environment}`);
+    const um = basis.hardware.unifiedMemory;
+    if (um) console.log(`  unified-memory reserve: ${fmtGB(um.notVisibleGiB)} not visible to the OS + ${fmtGB(um.osIdleGiB)} idle OS + ${fmtGB(um.runtimeFixedGiB)} runtime = ${fmtGB(um.reserveGiB)} GiB (sources: ${[...um.sources.osVisible, ...um.sources.osIdle].length} URLs in engine.js)`);
     console.log(`  limitation: ${basis.limitations.join(' ')}`);
   }
   console.log('  architecture inputs pinned to official configs; runtime/OS reserves are estimates — audit: github.com/click6067-ship-it/fitllm-engine');

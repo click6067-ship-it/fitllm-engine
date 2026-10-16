@@ -3,7 +3,7 @@
 FitLLM is an open-source, zero-dependency engine that checks whether a local LLM fits on a GPU or Apple Silicon Mac using architecture-aware memory math.
 
 [![npm](https://img.shields.io/npm/v/fitllm-engine?color=cb3837&label=npm)](https://www.npmjs.com/package/fitllm-engine)
-[![conformance](https://img.shields.io/badge/conformance_vectors-33%2F33-brightgreen)](vectors/fit-vectors-v1.json)
+[![conformance](https://img.shields.io/badge/conformance_vectors-36%2F36-brightgreen)](vectors/fit-vectors-v1.json)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![zero deps](https://img.shields.io/badge/dependencies-0-success)](package.json)
 
@@ -125,7 +125,7 @@ permissions:
 steps:
   - name: Check model memory before download
     id: preflight
-    uses: click6067-ship-it/fitllm-engine@v2.18.1
+    uses: click6067-ship-it/fitllm-engine@v2.19.0
     with:
       model: Gemma 4 12b
       gpu: RTX 4090
@@ -159,7 +159,7 @@ This is the open calculation core of FitLLM. **The math is open so you can audit
 
 Ask an LLM "does Qwen 3.6 fit my GPU?" and it pattern-matches to an architecture from its training cutoff — and usually says *no*. Catalog-based calculators lag new releases. The CLI, API, and MCP use a curated catalog pinned to official configs. The web calculator can additionally inspect a pasted Hugging Face ID's **official `config.json` live**, so supported architectures work on **day-one releases** — including the hybrid / sliding-window / MoE structures that naive formulas get wrong.
 
-Covers **Apple Silicon unified memory (M1–M6, Pro/Max/Ultra — up to the 512GB Mac Studio)**, **NVIDIA GPUs (RTX 20/30/40/50, workstation RTX 6000 Ada / RTX PRO 6000, datacenter A100/H100/H200/B200)**, **AMD Radeon (RX 7000/9000, PRO W7900)** and **multi-GPU presets (2×3090, 2×4090, 4×3090)** — with GGUF Q-tier weight quantization kept separate from KV-cache quantization. Hardware entries carry their source URLs per-value in `engine.js`; new entries require **≥2 independent sources** ([CONTRIBUTING](CONTRIBUTING.md)).
+Covers **Apple Silicon unified memory (M1–M6, Pro/Max/Ultra — up to the 512GB Mac Studio)**, **NVIDIA GPUs (RTX 20/30/40/50, workstation RTX 6000 Ada / RTX PRO Blackwell 2000–6000, datacenter A100/H100/H200/B200)**, **NVIDIA GB10 unified-memory systems (DGX Spark 128GB and the same-spec ASUS / Dell / HP / Lenovo / MSI / Acer / GIGABYTE boxes — a partner name resolves only as the full name with its capacity, e.g. `ASUS Ascent GX10 128GB`)**, **AMD Radeon (RX 7000/9000, PRO W7900)** and **multi-GPU presets (2×3090, 2×4090, 4×3090)** — with GGUF Q-tier weight quantization kept separate from KV-cache quantization. Hardware entries carry their source URLs per-value in `engine.js`; new entries require **≥2 independent sources** ([CONTRIBUTING](CONTRIBUTING.md)).
 
 ---
 
@@ -200,8 +200,10 @@ This engine models each layer type separately, verified against official Hugging
 Total = Parameters (quantization-adjusted)
       + KV cache (per layer kind: sliding / global / linear / dense)
       + Runtime overhead (quant metadata + KV block padding + activations + fixed)
-      + macOS base (Apple Silicon unified memory)
+      + OS reserve (macOS base on Apple Silicon · DGX OS share on GB10 · driver/display reserve on discrete GPUs)
 ```
+
+**Unified memory (GB10 / DGX Spark).** There is no dedicated VRAM: DGX OS, CPU processes and the GPU share one 128 GB LPDDR5x pool, so — like the Mac path — the OS and runtime share is subtracted from the same pool instead of using a discrete-card environment preset. The reserve is three sourced or labelled parts: the memory the OS cannot see (128 − 121.69 GiB `MemTotal`, which equals the CUDA total on DGX OS 7.6), about 5 GiB of idle DGX OS use (`MemTotal − MemAvailable`), and the same 2 GiB runtime allowance the Apple path uses (an engine estimate, not a GB10 measurement) — 13.31 GiB in total, with the Mac-style 20% headroom for the shared pool. Gemma 4 PLE is never deducted here (host buffers are the same pool), and a GB10 system cannot be pooled with other GPUs or linked to a second unit (fails closed). Per-value source URLs are in `engine.js`.
 
 Plus a `parseHfConfig()` that turns configs from verified, modeled Hugging Face architecture families into the model shape above; unsupported structures fail closed instead of returning a guess. (No token/s prediction — deliberately: speed depends on runtime/backend in ways a static model can't claim honestly. Fit is a verifiable claim; speed is not.)
 
@@ -212,8 +214,9 @@ Some verdicts are valid only under a structural premise about the artifact or th
 - `mla-compressed-latent-cache` — KV memory assumes a compressed-latent MLA artifact or mode; legacy non-MLA GGUF or an explicitly uncompressed mode invalidates this estimate. Sources: [DeepSeek-V3 inference `model.py`](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py) · [llama.cpp `convert_hf_to_gguf.py`](https://github.com/ggml-org/llama.cpp/blob/master/convert_hf_to_gguf.py) · [llama.cpp `llama-kv-cache.cpp`](https://github.com/ggml-org/llama.cpp/blob/master/src/llama-kv-cache.cpp).
 - `ple-llamacpp-non-gpu-residency` — GPU weight memory excludes the verified Gemma 4 PLE tensors only because the pinned llama.cpp/GGUF path assigns the per_layer_token_embd input-layer tensor to CPU/host buffers instead of accelerator memory; that host memory is not budgeted here, and a runtime that loads PLE onto the accelerator invalidates this estimate. Sources: [Gemma 4 E2B `config.json`](https://huggingface.co/google/gemma-4-E2B-it/blob/main/config.json) (text body `model_type` is exactly `gemma4_text`) · pinned llama.cpp `8b4b3558f1459c13e4aa38d5c94d306a00dc6acd`: [input-layer device assignment](https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model.cpp) · [`PER_LAYER_TOKEN_EMBD` as an input-layer tensor](https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-arch.cpp) · [Gemma 4 construction](https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/models/gemma4.cpp) · [loader header](https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.h) · [loader implementation](https://github.com/ggml-org/llama.cpp/blob/8b4b3558f1459c13e4aa38d5c94d306a00dc6acd/src/llama-model-loader.cpp). The deduction applies only to the catalog entries `Gemma 4 e2b` and `Gemma 4 e4b` (`pleOffloadVerified: true`) and to parsed configs whose text body is exactly `gemma4_text` *and* whose full profile (layer count, `hidden_size`, `intermediate_size` and both PLE dimensions) matches a pinned official E2B/E4B config with a checkpoint that reconciles against the config's own dense body. A look-alike field on any other family, an altered dimension or layer count, or an inconsistent checkpoint keeps the full weights resident on the GPU, so an unverified config cannot flip a verdict toward "fits".
 - `mtp-ordinary-generation` — KV memory assumes ordinary non-speculative generation; an MTP draft context is not included. Sources: [llama.cpp `llama-hparams.cpp`](https://github.com/ggml-org/llama.cpp/blob/master/src/llama-hparams.cpp) · [llama.cpp `llama-model.cpp`](https://github.com/ggml-org/llama.cpp/blob/master/src/llama-model.cpp) · [llama.cpp `convert_hf_to_gguf.py`](https://github.com/ggml-org/llama.cpp/blob/master/convert_hf_to_gguf.py) · [vLLM `qwen3_next_mtp.py`](https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/models/qwen3_next_mtp.py).
+- `gb10-unified-memory-reserve` — attached to every GB10 (DGX Spark-class) verdict: the reserve subtracts the memory DGX OS cannot see, idle DGX OS use and a 2 GiB runtime allowance; other running apps and the file page cache are not budgeted, and weights are assumed resident once (a loader that keeps an mmap page-cache copy can need up to the weight size again while loading). Sources: [NVIDIA DGX Spark porting guide — no fixed GPU carve-out](https://docs.nvidia.com/dgx/dgx-spark-porting-guide/overview.html) · [NVIDIA DGX Spark known issues — `nvidia-smi` memory "Not Supported", page-cache flush](https://docs.nvidia.com/dgx/dgx-spark/known-issues.html) · `MemTotal`/CUDA total measurements: [bloomery #13](https://github.com/midagedev/bloomery/issues/13) · [NVIDIA developer forum](https://forums.developer.nvidia.com/t/driver-issue-with-580-178-04/383859) · [Back2Gaming](https://www.back2gaming.com/review/gigabyte-ai-top-atom-128gb-dgx-spark/) · idle use: [AAIF](https://aaif.io/blog/running-goose-fully-offline-on-a-dgx-spark) · [Techno Tim](https://technotim.com/posts/ubuntu-gb10/).
 
-**Resident scope.** SSD/NVMe streaming, expert paging, swap and general CPU/RAM offload stay outside ordinary FitLLM fit verdicts. The one disclosed structural exception is a placement fact, not storage paging: for the verified Gemma 4 e2b/e4b entries the discrete-GPU verdict excludes the per-layer-embedding (PLE) tensor because the pinned llama.cpp/GGUF path deterministically assigns that input-layer tensor to CPU/host buffers instead of accelerator memory (premise `ple-llamacpp-non-gpu-residency`, shown with the verdict). That host/system memory is not budgeted by the discrete-GPU verdict, a runtime that loads PLE onto the accelerator invalidates the PLE estimate, and on Apple unified memory the full weights stay counted.
+**Resident scope.** SSD/NVMe streaming, expert paging, swap and general CPU/RAM offload stay outside ordinary FitLLM fit verdicts. The one disclosed structural exception is a placement fact, not storage paging: for the verified Gemma 4 e2b/e4b entries the discrete-GPU verdict excludes the per-layer-embedding (PLE) tensor because the pinned llama.cpp/GGUF path deterministically assigns that input-layer tensor to CPU/host buffers instead of accelerator memory (premise `ple-llamacpp-non-gpu-residency`, shown with the verdict). That host/system memory is not budgeted by the discrete-GPU verdict, a runtime that loads PLE onto the accelerator invalidates the PLE estimate, and on Apple unified memory — and on GB10 (DGX Spark) unified memory — the full weights stay counted.
 
 ```bash
 npx fitllm "GLM-4.7-Flash" --gpu "RTX 4090"          # text adds:  premise [mla-compressed-latent-cache]: KV memory assumes …
@@ -268,13 +271,13 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 ## Conformance vectors
 
-[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **33 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
+[`vectors/fit-vectors-v1.json`](vectors/fit-vectors-v1.json) pins **36 language-neutral test vectors** (exact KV bytes, per-token costs, fit verdicts) derived by hand from official `config.json` values — e.g. *"Gemma 4 31B at 262,144 ctx, bf16 = exactly 22,313,697,280 bytes"*. **Any implementation in any language conforms if every vector passes** — run ours with `node vectors/run.mjs`.
 
 **Why this matters:** the formulas are easy to copy; a verified answer key is not. If you port this engine to Python, Rust or Go, you don't become an untrusted fork — pass the vectors and you're a **conformant implementation of the same standard**. Port the engine, keep the vectors.
 
 ## The Fit Census — every model × every device, one truth table
 
-[`census/`](census/README.md) holds **10,530 verdicts** (30 models incl. draft tier × 93 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
+[`census/`](census/README.md) holds **11,880 verdicts** (30 models incl. draft tier × 102 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
 
 ## Embed a fit badge
 
@@ -312,7 +315,7 @@ curl 'https://fitllm.run/api/check?model=gemma%204%2031b&gpu=4090'
 # multi-GPU rigs: gpu=5090%2B3090 · Mac: ram=64 · usage: curl https://fitllm.run/api/check
 ```
 
-Open data: the full **Fit Census** (10,530 verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
+Open data: the full **Fit Census** (11,880 verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
 
 ## Principles
 

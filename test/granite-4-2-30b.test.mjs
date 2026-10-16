@@ -248,8 +248,8 @@ test('test_census_contains_granite_rows', () => {
   const census = readJson('../census/census-v1.json');
   const manifest = readJson('../census/manifest.json');
   const rows = census.data.filter((r) => r.model === 'Granite-4.2-30B');
-  assert.equal(rows.length, 57 * 3 + 36 * 5); // Mac 57구성 × 3 tiers + GPU 36종 × 5 tiers = 351 rows/model
-  const total = LOCAL_MODELS.length * (57 * 3 + 36 * 5); // 27 × 351 = 9,477 (2.15.0: GLM-5.3 1행 추가)
+  assert.equal(rows.length, 57 * 3 + 45 * 5); // Mac 57구성 × 3 tiers + GPU 45종 × 5 tiers = 396 rows/model (2.19.0: GPU 9행 추가)
+  const total = LOCAL_MODELS.length * (57 * 3 + 45 * 5); // 30 × 396 = 11,880 (2.19.0: RTX 50 하위 3·RTX PRO 5·DGX Spark 1)
   assert.equal(census.verdicts, total);
   assert.equal(census.data.length, total);
   assert.equal(manifest.rows, total);
@@ -262,19 +262,19 @@ test('test_release_version_bumped_and_readme_counts', () => {
   // 2.15.0 = PLE parser fail-closed + residency-policy 정정 + text-only GLM-5.3 (minor bump, 카탈로그 27행).
   const pkg = readJson('../package.json');
   const lock = readJson('../package-lock.json');
-  assert.equal(pkg.version, '2.18.1');
-  assert.equal(lock.version, '2.18.1');
-  assert.equal(ENGINE_VERSION, '2.18.1');
+  assert.equal(pkg.version, '2.19.0');
+  assert.equal(lock.version, '2.19.0');
+  assert.equal(ENGINE_VERSION, '2.19.0');
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
   const verdicts = `${readJson('../census/manifest.json').rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.18.1', 'conformance_vectors-33%2F33', '33 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.19.0', 'conformance_vectors-36%2F36', '36 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
-  for (const s of [verdicts, '33 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
+  for (const s of [verdicts, '36 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
   assert.doesNotMatch(readme, /Granite[^\n]*tok(?:ens)?\/s/i); // 속도 주장 금지
   const vectors = readJson('../vectors/fit-vectors-v1.json');
-  assert.equal(vectors.vectors.length, 33);
+  assert.equal(vectors.vectors.length, 36);
   const v = vectors.vectors.find((x) => x.id === 'granite42-30b-kv-128k-f16');
   assert.deepEqual(v, {
     id: 'granite42-30b-kv-128k-f16', kind: 'kv_total_bytes', model: 'Granite-4.2-30B', ctx: 131072, kvBits: 16, expect: KV_128K_F16,
