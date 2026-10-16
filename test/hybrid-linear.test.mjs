@@ -190,12 +190,13 @@ test('한 모델 스택의 used·판정은 simulate와 같다 (카탈로그 전�
   const devices = [128, gpuDevice(GPUS.find((g) => g.name === 'RTX 5090')), gpuDevice(GPUS.find((g) => g.name === '4× DGX Spark 128GB'))];
   for (const device of devices) {
     for (const m of LOCAL_MODELS) {
-      for (const ctx of [8192, -5, NaN]) { // 잘못된 ctx도 simulate와 같은 가드를 탄다(NaN이 'yes'로 새지 않게)
-        const q = { weightBpw: 4.8, kvBits: 16 };
+      // 잘못된 ctx·비트도 simulate와 같은 가드를 탄다(NaN 합계가 'yes'로 새지 않게)
+      for (const [ctx, weightBpw] of [[8192, 4.8], [-5, 4.8], [NaN, 4.8], [8192, NaN]]) {
+        const q = { weightBpw, kvBits: 16 };
         const s = simulate(m, device, ctx, q);
         const st = simulateStack([{ model: m, ctx, ...q }], device);
-        assert.ok(Math.abs(st.used - s.used) < 1e-9, `${m.name} ctx ${ctx}: stack ${st.used} != simulate ${s.used}`);
-        assert.equal(st.verdict, s.verdict, `${m.name} ctx ${ctx}`);
+        assert.ok(Object.is(st.used, s.used) || Math.abs(st.used - s.used) < 1e-9, `${m.name} ctx ${ctx} bpw ${weightBpw}: stack ${st.used} != simulate ${s.used}`);
+        assert.equal(st.verdict, s.verdict, `${m.name} ctx ${ctx} bpw ${weightBpw}`);
       }
     }
   }
