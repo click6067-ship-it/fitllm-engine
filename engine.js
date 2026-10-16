@@ -1344,16 +1344,17 @@ export function simulate(model, deviceOrRam, ctx, bitsOrQuant) {
 export function simulateStack(entries, deviceOrRam) {
   const device = toDevice(deviceOrRam);
   const parts = entries.map(({ model, ctx, weightBpw, kvBits }) => {
-    const c = Math.min(ctx, model.maxContext);
+    const c = Math.min(Math.max(1, Math.floor(Number(ctx)) || 1), model.maxContext || Infinity); // simulate와 같은 ctx 가드
     const kb = kvBits ?? 16;
     const param = calcParamMemory(model, weightBpw, device).totalGB;
     const kv = calcKVCache(clusterKvModel(model, device), c, kb).totalGB;
     const ov = calcRuntimeOverhead(model, c, { weightBpw, kvBits: kb }, device);
     const rtDyn = ov.paramOverheadGB + ov.kvOverheadGB + ov.activationOverheadGB;
+    const linearState = calcLinearState(model).totalGB; // simulate와 같은 항목 — 하이브리드 선형 어텐션 고정 상태(없으면 0)
     const assumptions = structuralAssumptions(model, device);
     return {
-      model, ctx: c, weightBpw, kvBits: kb, param, kv, rtDyn,
-      subtotal: param + kv + rtDyn,
+      model, ctx: c, weightBpw, kvBits: kb, param, kv, linearState, rtDyn,
+      subtotal: param + kv + linearState + rtDyn,
       ...(assumptions.length ? { structuralAssumptions: assumptions } : {}),
     };
   });
@@ -1362,7 +1363,7 @@ export function simulateStack(entries, deviceOrRam) {
   const free = device.memoryGB - used;
   const headroom = device.memoryGB * device.headroomRatio;
   const tpOk = parts.every((p) => clusterTensorParallelOk(p.model, device));
-  const verdict = !tpOk || free < 0 ? 'no' : free < headroom ? 'tight' : 'yes';
+  const verdict = !Number.isFinite(used) || !Number.isFinite(free) || !tpOk || free < 0 ? 'no' : free < headroom ? 'tight' : 'yes';
   // 중복 제거한 뒤 다시 복제한다 — Map은 part가 들고 있는 *바로 그* 객체를 담으므로,
   // 복제하지 않으면 스택 레벨 item을 만진 소비자가 part의 값까지 바꾼다(순수 결과 규율).
   const assumptions = [...new Map(
@@ -1373,6 +1374,7 @@ export function simulateStack(entries, deviceOrRam) {
     pct: used / device.memoryGB,
     param: parts.reduce((s, p) => s + p.param, 0),
     kv: parts.reduce((s, p) => s + p.kv, 0),
+    linearState: parts.reduce((s, p) => s + p.linearState, 0),
     rt: parts.reduce((s, p) => s + p.rtDyn, 0),
     ...(assumptions.length ? { structuralAssumptions: assumptions } : {}),
   };
