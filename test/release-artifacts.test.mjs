@@ -15,7 +15,7 @@ const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).dige
 
 // 2.20.0 vectors 바이트 — GB10 클러스터 판정 벡터 2개만 append 하고 기존 36개는 손대지 않는다(2.19.0: GB10 3개, 2.16.0: 신규 3모델 kv 3개).
 // 러너(run.mjs) 바이트는 2.14.1 이후 불변이다(아래 SHA) — 벡터가 늘어도 검증 코드는 안 바뀐다는 게 요점.
-const VECTORS_JSON_SHA256 = '274dc0c2219e71f5dfcfc2d5946f986e13f02a6dae9e562d1bff6129085bf869';
+const VECTORS_JSON_SHA256 = 'fd86a32da9e5ef437fbfffc434a2e090e43814f41e563bf90eed237b3c4d96b1';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
 test('release version surfaces agree on 2.20.0 and the package contract is unchanged', () => {

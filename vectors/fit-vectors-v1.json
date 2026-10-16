@@ -394,7 +394,7 @@
       "weightBpw": 8.5008,
       "kvBits": 16,
       "expect": "yes",
-      "note": "GB10 cluster, 2 units, tensor parallel 2: weights 116.8e9*8.5008/8 = 115.64 GiB + KV 0.29 (8 KV heads >= 2 units, no replication) + overhead 0.12*w + 0.15*KV + 8192*0.00003*2 units + reserve 2*13.31 = 156.90 of 256 -> free 99.10 >= 51.2 headroom. One unit alone is 'no' (143.5 of 128)"
+      "note": "GB10 cluster, 2 units, tensor parallel 2: weights 116.8e9*8.5008/8 = 115.64 GiB + KV 0.29 (8 KV heads >= 2 units, no replication) + overhead 0.12*w + 0.15*KV + 8192*0.00003*2 units + reserve 2*13.31 = 156.90 of 256 -> free 99.10 >= 51.2 headroom. One unit alone is 'no' (143.34 of 128)"
     },
     {
       "id": "v-nexpro-4xdgxspark128-q8-128k",
