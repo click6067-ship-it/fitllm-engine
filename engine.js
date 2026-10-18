@@ -589,6 +589,9 @@ export const MODELS = [
     // https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/config.json
     // KV: 소스 4층(2·8·14 ratio 2, 20 ratio 1)만 캐시 — 512·128 차원 → 토큰당 1,600원소(FP4면 공식 890B/tok과 정확 일치).
     name: 'DeepSeek-V4.1-Flash-1017', group: 'DeepSeek', tags: ['moe', 'vlm'],
+    // 공식 HF ID는 이 고정 리비전 행으로 해석한다(2.21.1) — CLI·REST·MCP·배지가 같은 답을 네트워크 없이 낸다. V4.1-Flash(@314113f)는
+    // config.json이 바이트 동일하고 safetensors 논리 수(dtype별)도 같아 메모리 판정이 같다. 파생·미러 레포는 별칭이 아니라 HF 즉석 파싱으로 간다.
+    aliases: ['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4.1-Flash', 'DeepSeek-V4.1-Flash'],
     totalParams: 763.2, activeParams: 16, layerCount: 40, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 5120,
     numExperts: 384, expertsPerToken: 6, mtpLayerCount: 3, maxContext: 1048576, benchmarks: null,
     compressedKv: {
@@ -609,6 +612,7 @@ export const MODELS = [
     // https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/60d8d70770c6776ff598c94bb586a859a38244f1/config.json
     // KV: CSA(ratio 4) 21층 512 + 인덱서 128 · HCA(ratio 128) 20층 512 · 앞 2층은 창만 → 토큰당 3,440원소.
     name: 'DeepSeek-V4-Flash', group: 'DeepSeek', tags: ['moe'],
+    aliases: ['deepseek-ai/DeepSeek-V4-Flash'],
     totalParams: 290.9, activeParams: 13, layerCount: 43, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 4096,
     numExperts: 256, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
     compressedKv: {
@@ -625,6 +629,7 @@ export const MODELS = [
     // https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json
     // KV: CSA 30층 + HCA 31층(앞 2층 포함) → 토큰당 4,924원소.
     name: 'DeepSeek-V4-Pro', group: 'DeepSeek', tags: ['moe'],
+    aliases: ['deepseek-ai/DeepSeek-V4-Pro'],
     totalParams: 1598.8, activeParams: 49, layerCount: 61, kvHeads: 1, kvHeadDim: 512, attnHeads: 128, hiddenSize: 7168,
     numExperts: 384, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
     compressedKv: {
@@ -2550,6 +2555,12 @@ const nameKey = (value) => normalizeNameTokens(value).join(' ');
 //   'NVIDIA'·'ASUS'·'Dell' 같은 제조사 토큰 하나가 그 별칭을 가진 유일한 행으로 확정돼 거짓 FITS가 난다
 //   (2026-10-16 Codex 리뷰 재현: --gpu NVIDIA → DGX Spark 128GB, exit 0). 부분 일치 후보 제시에는 써도 된다(해석은 안 함).
 const namesOf = (item) => [item.name, ...(Array.isArray(item.aliases) ? item.aliases : [])];
+// `org/repo` 별칭(공식 Hugging Face ID)은 토큰이 아니라 **ID 전체**로만 맞춘다(대소문자 무시). 토큰 키는 '/'·'-'·'_'를 모두 버려
+// 'deepseek/ai-DeepSeek-V4-Flash'·'meta_models/Muse-…' 같은 **다른 레포**가 공식 별칭과 같은 키가 됐다(2.21.1 Codex 리뷰 재현:
+// 확인 없는 레포가 카탈로그 행으로 둔갑해 exit 0). 일반 이름 별칭은 그대로 표기 차이를 흡수한다.
+const isRepoId = (name) => String(name).includes('/');
+const sameRepoId = (a, b) => String(a).trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+const nameMatches = (name, query, key) => (isRepoId(name) ? sameRepoId(name, query) : nameKey(name) === key);
 
 // -> { status: 'resolved',  match, canonicalName, matchedBy: 'exact'|'tokens' }
 //  | { status: 'ambiguous', candidates: [{ name }], total }
@@ -2559,7 +2570,7 @@ function resolveByTokens(list, query, { limit = 5 } = {}) {
   if (!tokens.length) return { status: 'unknown', candidates: [], total: 0 };
 
   const key = tokens.join(' ');
-  const exact = list.find((item) => namesOf(item).some((n) => nameKey(n) === key));
+  const exact = list.find((item) => namesOf(item).some((n) => nameMatches(n, query, key)));
   if (exact) return { status: 'resolved', match: exact, canonicalName: exact.name, matchedBy: 'exact' };
 
   // 질의 토큰 전체를 품는 항목만 후보(정본 이름 기준 — 별칭은 위 정확 일치에서만). 유일할 때만 해석하고, 복수면 고르지 않는다.
@@ -2626,7 +2637,7 @@ export function resolveByName(list, query, opts) {
   if (first.status !== 'unknown' || String(query ?? '').includes('/')) return first;
   const key = gluedNameKey(query);
   if (key === null) return first;
-  const hits = list.filter((item) => namesOf(item).some((n) => gluedNameKey(n) === key));
+  const hits = list.filter((item) => namesOf(item).some((n) => !isRepoId(n) && gluedNameKey(n) === key));
   if (hits.length !== 1) return first;
   return { status: 'resolved', match: hits[0], canonicalName: hits[0].name, matchedBy: 'exact' };
 }
@@ -2638,4 +2649,4 @@ export const DATA_UPDATED = '2026-10';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.21.0';
+export const ENGINE_VERSION = '2.21.1';

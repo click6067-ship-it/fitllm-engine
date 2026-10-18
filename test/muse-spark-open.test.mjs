@@ -85,6 +85,10 @@ test('names: the gated HF ID and the repo name resolve to the catalog row; "spar
     assert.equal(r.canonicalName, 'Muse Spark Open', q);
   }
   assert.equal(resolveLocalModel('spark').status, 'ambiguous');
+  // gated 원본 ID 별칭은 ID 전체로만 — 같은 토큰의 다른 레포(meta/models-…, meta_models/…)를 가로채지 않는다
+  for (const repo of ['meta/models-Muse-Spark-Open-816B-A42B', 'meta_models/Muse-Spark-Open-816B-A42B', 'meta-models Muse-Spark-Open-816B-A42B']) {
+    assert.equal(resolveLocalModel(repo).status, 'unknown', repo);
+  }
   assert.equal(resolveLocalModel('unsloth/Muse-Spark-Open-816B-A42B').status, 'unknown'); // 미러는 HF 경로(같은 숫자 — 위 parity)
 });
 

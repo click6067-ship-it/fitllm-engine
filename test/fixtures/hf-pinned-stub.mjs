@@ -4,6 +4,9 @@
 import { readFileSync } from 'node:fs';
 
 const evidence = JSON.parse(readFileSync(new URL('./hf-api-evidence-2026-10-18.json', import.meta.url), 'utf8'));
+// FITLLM_TEST_HF_MIRROR='mirror-org/X=deepseek-ai/X' — 카탈로그 별칭이 아닌 미러 ID로 같은 고정 증거를 내준다(HF 경로 검증용).
+const MIRRORS = Object.fromEntries(String(process.env.FITLLM_TEST_HF_MIRROR || '').split(',').filter(Boolean).map((pair) => pair.split('=')));
+const source = (id) => MIRRORS[id] || id;
 const json = (value, status = 200) => new Response(JSON.stringify(value), {
   status, headers: { 'content-type': 'application/json' },
 });
@@ -14,7 +17,7 @@ globalThis.fetch = async (input) => {
   const path = decodeURIComponent(url.pathname);
   const api = path.match(/^\/api\/models\/([^/]+\/[^/]+)$/);
   if (api) {
-    const repo = evidence[api[1]];
+    const repo = evidence[source(api[1])];
     if (!repo?.shards) return json({ error: 'not found' }, 404);
     return json({
       sha: repo.sha,
@@ -23,10 +26,10 @@ globalThis.fetch = async (input) => {
     });
   }
   const file = path.match(/^\/([^/]+\/[^/]+)\/resolve\/([a-f0-9]{40})\/(.+)$/);
-  const repo = file && evidence[file[1]];
+  const repo = file && evidence[source(file[1])];
   if (!repo || repo.sha !== file[2]) throw new Error(`unexpected path in test: ${path}`);
   if (file[3] === 'config.json') {
-    return new Response(readFileSync(new URL(`./${file[1].replace('/', '__')}.config.json`, import.meta.url)), { status: 200 });
+    return new Response(readFileSync(new URL(`./${source(file[1]).replace('/', '__')}.config.json`, import.meta.url)), { status: 200 });
   }
   if (file[3] === 'model.safetensors.index.json') {
     return json({ weight_map: Object.fromEntries(repo.shards.map((s, i) => [`tensor.${i}`, s.rfilename])) });
