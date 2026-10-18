@@ -1148,10 +1148,17 @@ export function stripQuantSuffixes(basename) {
   return out;
 }
 
+// 카탈로그 행의 표시 이름만으로는 부족하다 — 'Muse Spark Open' 의 HF ID 는 aliases 에만 있다
+// (2026-10-18: 이걸 안 봐서 2.21.0 에 들어간 Muse 가 첫 정기 런의 이슈 칸을 먹었다).
+export function catalogModelNamesFrom(models) {
+  return models.flatMap((model) => [model.name, ...(Array.isArray(model.aliases) ? model.aliases : [])]);
+}
+
 export function isAlreadyInCatalog(candidateId, catalogModelNames) {
   if (!Array.isArray(catalogModelNames) || catalogModelNames.length === 0) return false;
   const basename = String(candidateId || '').split('/').pop();
-  const catalogKeys = new Set(catalogModelNames.map((name) => normalizeModelKey(name)));
+  // org/name 형태의 별칭은 후보와 같은 단위(레포 이름)로 비교한다.
+  const catalogKeys = new Set(catalogModelNames.map((name) => normalizeModelKey(String(name || '').split('/').pop())));
   for (const candidate of [basename, stripQuantSuffixes(basename)]) {
     const key = normalizeModelKey(candidate);
     if (key && catalogKeys.has(key)) return true;

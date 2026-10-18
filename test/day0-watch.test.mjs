@@ -26,6 +26,7 @@ import {
   renderRunSummary,
   demandTier,
   candidateSort,
+  catalogModelNamesFrom,
 } from '../.github/scripts/day0-core.mjs';
 
 const FIXTURES = new URL('./fixtures/day0/', import.meta.url);
@@ -1244,4 +1245,24 @@ test('variantStaysWhenBaseCannotBeFiled: base 가 blocked 면 변종은 빠지�
   assert.deepEqual(mutationOps(result.issuePlan), [['create', 'Qwen/New-Model-FP8']]);
   assert.ok(result.issuePlan.operations.some(({ action, modelId }) => action === 'blocked' && modelId === 'Qwen/New-Model'));
   assert.ok(!result.issuePlan.dropped.some(({ reason }) => reason === 'VARIANT_OF_DISCOVERED_BASE'));
+});
+
+// ── 2026-10-18 (2): 카탈로그 별칭을 안 봐서 이미 가진 모델이 칸을 먹었다 ───────────
+// 실측 계기: 첫 정기 apply 런(#153)이 meta-models/Muse-Spark-Open-816B-A42B 이슈를 만들었다.
+// 그 모델은 같은 날 2.21.0 에 'Muse Spark Open' 으로 들어갔고, HF ID 는 행의 aliases 에 있다.
+// 어댑터가 name 만 넘겨서 정확 일치가 실패했다 — 9/14(카탈로그 중복이 상한을 먹음)와 같은 류.
+test('catalogAliasesCountAsPresent: 카탈로그 행의 별칭(HF ID 포함)도 중복으로 본다', async () => {
+  const { LOCAL_MODELS } = await import('../engine.js');
+  const names = catalogModelNamesFrom(LOCAL_MODELS);
+  assert.equal(isAlreadyInCatalog('meta-models/Muse-Spark-Open-816B-A42B', names), true);
+  assert.equal(isAlreadyInCatalog('meta-models/Muse-Spark-Open-816B-A42B-NVFP4', names), true); // 양자화 미러도
+  // 계약: 행에 org/name 형태로 적힌 HF ID 는 전부 그 자체로 카탈로그 중복이다.
+  for (const model of LOCAL_MODELS) {
+    for (const alias of (model.aliases || []).filter((value) => value.includes('/'))) {
+      assert.equal(isAlreadyInCatalog(alias, names), true, `${model.name} 의 별칭 ${alias} 가 중복으로 안 잡힌다`);
+    }
+  }
+  // 정확 일치 원칙은 그대로다 — 별칭이 생겼다고 이웃 체크포인트를 삼키지 않는다.
+  assert.equal(isAlreadyInCatalog('meta-models/Muse-Spark-Open-2-816B-A42B', names), false);
+  assert.equal(isAlreadyInCatalog('meta-models/Muse-Glimmer-30B', names), false);
 });
