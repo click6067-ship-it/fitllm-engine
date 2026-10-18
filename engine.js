@@ -589,6 +589,9 @@ export const MODELS = [
     // https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/config.json
     // KV: 소스 4층(2·8·14 ratio 2, 20 ratio 1)만 캐시 — 512·128 차원 → 토큰당 1,600원소(FP4면 공식 890B/tok과 정확 일치).
     name: 'DeepSeek-V4.1-Flash-1017', group: 'DeepSeek', tags: ['moe', 'vlm'],
+    // 공식 HF ID는 이 고정 리비전 행으로 해석한다(2.21.1) — CLI·REST·MCP·배지가 같은 답을 네트워크 없이 낸다. V4.1-Flash(@314113f)는
+    // config.json이 바이트 동일하고 safetensors 논리 수(dtype별)도 같아 메모리 판정이 같다. 파생·미러 레포는 별칭이 아니라 HF 즉석 파싱으로 간다.
+    aliases: ['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4.1-Flash', 'DeepSeek-V4.1-Flash'],
     totalParams: 763.2, activeParams: 16, layerCount: 40, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 5120,
     numExperts: 384, expertsPerToken: 6, mtpLayerCount: 3, maxContext: 1048576, benchmarks: null,
     compressedKv: {
@@ -609,6 +612,7 @@ export const MODELS = [
     // https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/60d8d70770c6776ff598c94bb586a859a38244f1/config.json
     // KV: CSA(ratio 4) 21층 512 + 인덱서 128 · HCA(ratio 128) 20층 512 · 앞 2층은 창만 → 토큰당 3,440원소.
     name: 'DeepSeek-V4-Flash', group: 'DeepSeek', tags: ['moe'],
+    aliases: ['deepseek-ai/DeepSeek-V4-Flash'],
     totalParams: 290.9, activeParams: 13, layerCount: 43, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 4096,
     numExperts: 256, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
     compressedKv: {
@@ -625,6 +629,7 @@ export const MODELS = [
     // https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json
     // KV: CSA 30층 + HCA 31층(앞 2층 포함) → 토큰당 4,924원소.
     name: 'DeepSeek-V4-Pro', group: 'DeepSeek', tags: ['moe'],
+    aliases: ['deepseek-ai/DeepSeek-V4-Pro'],
     totalParams: 1598.8, activeParams: 49, layerCount: 61, kvHeads: 1, kvHeadDim: 512, attnHeads: 128, hiddenSize: 7168,
     numExperts: 384, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
     compressedKv: {
@@ -2638,4 +2643,4 @@ export const DATA_UPDATED = '2026-10';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.21.0';
+export const ENGINE_VERSION = '2.21.1';

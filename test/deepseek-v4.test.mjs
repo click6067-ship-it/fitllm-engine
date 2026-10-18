@@ -221,19 +221,36 @@ test('other deepseek_v4-typed repos keep failing closed (Vision-Exp extra keys, 
   assert.throws(() => parseHfConfig('x/glm', { ...v4, model_type: 'glm_moe_dsa' }, e.checkpointBytes, ev), /비표준 압축·희소·혼합 어텐션/);
 });
 
-test('names: spaced and glued spellings resolve; family-only queries stay ambiguous; HF IDs keep the live HF path', () => {
+test('names: spaced and glued spellings resolve; family-only queries stay ambiguous; official HF IDs resolve to the pinned rows (2.21.1)', () => {
   for (const [q, name] of [
     ['DeepSeek-V4.1-Flash-1017', 'DeepSeek-V4.1-Flash-1017'], ['deepseek v4.1 flash 1017', 'DeepSeek-V4.1-Flash-1017'],
     ['DeepSeek V4.1 Flash', 'DeepSeek-V4.1-Flash-1017'], // 같은 config·같은 safetensors(V4.1-Flash == 1017 형상)
     ['DeepSeek V4 Flash', 'DeepSeek-V4-Flash'], ['deepseek-v4-pro', 'DeepSeek-V4-Pro'],
   ]) assert.equal(resolveLocalModel(q).canonicalName, name, q);
   for (const q of ['deepseek', 'DeepSeek V4']) assert.equal(resolveLocalModel(q).status, 'ambiguous', q);
-  for (const repo of [...Object.keys(ROWS), 'deepseek-ai/DeepSeek-V4.1-Flash']) assert.equal(resolveLocalModel(repo).status, 'unknown', repo);
+  // 공식 ID → 고정 리비전 행(CLI·REST·MCP·배지가 네트워크 없이 같은 답). V4.1-Flash는 config 바이트·safetensors 논리 수가 1017과 같다.
+  for (const [repo, name] of [...Object.entries(ROWS), ['deepseek-ai/DeepSeek-V4.1-Flash', 'DeepSeek-V4.1-Flash-1017']]) {
+    const r = resolveLocalModel(repo);
+    assert.equal(r.status, 'resolved', repo);
+    assert.equal(r.canonicalName, name, repo);
+    assert.equal(r.matchedBy, 'exact', repo);
+  }
+  // 파생·미러·Base 레포는 별칭이 아니다 — HF 즉석 파싱으로 간다
+  for (const repo of ['unsloth/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4-Flash-Base', 'deepseek-ai/DeepSeek-V4-Flash-Vision-Exp', 'nex-agi/Nex-N2.5-Max']) {
+    assert.equal(resolveLocalModel(repo).status, 'unknown', repo);
+  }
 });
 
-test('CLI: the reported command now answers — HF ID × 4× DGX Spark via the pinned HF path, exit 1 with the same numbers as the catalog', () => {
-  const runStub = (...args) => spawnSync(process.execPath, ['--import', STUB, BIN, ...args], { encoding: 'utf8' });
-  const hf = runStub('deepseek-ai/DeepSeek-V4.1-Flash-1017', '--gpu', 'DGX Spark', '--count', '4', '--json', '--why');
+test('CLI: the reported command now answers — official ID via the pinned row, a mirror ID via the HF path, same numbers, exit 1', () => {
+  const runStub = (...args) => spawnSync(process.execPath, ['--import', STUB, BIN, ...args], {
+    encoding: 'utf8', env: { ...process.env, FITLLM_TEST_HF_MIRROR: 'mirror-org/DeepSeek-V4.1-Flash-1017=deepseek-ai/DeepSeek-V4.1-Flash-1017' },
+  });
+  // 사용자가 실행한 바로 그 명령 — 2.21.1부터 공식 ID는 카탈로그 행이라 네트워크 없이 답하고 영수증 URL이 붙는다
+  const official = spawnSync(process.execPath, [BIN, 'deepseek-ai/DeepSeek-V4.1-Flash-1017', '--gpu', 'DGX Spark', '--count', '4'], { encoding: 'utf8' });
+  assert.equal(official.status, 1, official.stderr);
+  assert.match(official.stdout, /WON'T FIT — DeepSeek-V4\.1-Flash-1017 on 4× DGX Spark 128GB/);
+  assert.match(official.stdout, /receipt: https:\/\/fitllm\.run\/r\/deepseek-v4-1-flash-1017-q4_k_m-on-4-dgx-spark-128gb/);
+  const hf = runStub('mirror-org/DeepSeek-V4.1-Flash-1017', '--gpu', 'DGX Spark', '--count', '4', '--json', '--why');
   assert.equal(hf.status, 1, hf.stderr);
   const j = JSON.parse(hf.stdout);
   assert.equal(j.verdict, 'no');
@@ -248,7 +265,7 @@ test('CLI: the reported command now answers — HF ID × 4× DGX Spark via the p
   const c = JSON.parse(cat.stdout);
   for (const k of ['verdict', 'usedGB', 'freeGB', 'maxContext', 'breakdown']) assert.deepEqual(c[k], j[k], k);
   // 텍스트 출력은 전제와 압축 KV 구성을 말한다
-  const text = runStub('deepseek-ai/DeepSeek-V4.1-Flash-1017', '--gpu', 'DGX Spark', '--count', '4', '--why');
+  const text = runStub('mirror-org/DeepSeek-V4.1-Flash-1017', '--gpu', 'DGX Spark', '--count', '4', '--why');
   assert.equal(text.status, 1);
   assert.match(text.stdout, /WON'T FIT — DeepSeek-V4\.1-Flash-1017 on 4× DGX Spark 128GB/);
   assert.match(text.stdout, /premise \[deepseek-compressed-sparse-kv\]/);
