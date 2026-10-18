@@ -2555,6 +2555,12 @@ const nameKey = (value) => normalizeNameTokens(value).join(' ');
 //   'NVIDIA'·'ASUS'·'Dell' 같은 제조사 토큰 하나가 그 별칭을 가진 유일한 행으로 확정돼 거짓 FITS가 난다
 //   (2026-10-16 Codex 리뷰 재현: --gpu NVIDIA → DGX Spark 128GB, exit 0). 부분 일치 후보 제시에는 써도 된다(해석은 안 함).
 const namesOf = (item) => [item.name, ...(Array.isArray(item.aliases) ? item.aliases : [])];
+// `org/repo` 별칭(공식 Hugging Face ID)은 토큰이 아니라 **ID 전체**로만 맞춘다(대소문자 무시). 토큰 키는 '/'·'-'·'_'를 모두 버려
+// 'deepseek/ai-DeepSeek-V4-Flash'·'meta_models/Muse-…' 같은 **다른 레포**가 공식 별칭과 같은 키가 됐다(2.21.1 Codex 리뷰 재현:
+// 확인 없는 레포가 카탈로그 행으로 둔갑해 exit 0). 일반 이름 별칭은 그대로 표기 차이를 흡수한다.
+const isRepoId = (name) => String(name).includes('/');
+const sameRepoId = (a, b) => String(a).trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+const nameMatches = (name, query, key) => (isRepoId(name) ? sameRepoId(name, query) : nameKey(name) === key);
 
 // -> { status: 'resolved',  match, canonicalName, matchedBy: 'exact'|'tokens' }
 //  | { status: 'ambiguous', candidates: [{ name }], total }
@@ -2564,7 +2570,7 @@ function resolveByTokens(list, query, { limit = 5 } = {}) {
   if (!tokens.length) return { status: 'unknown', candidates: [], total: 0 };
 
   const key = tokens.join(' ');
-  const exact = list.find((item) => namesOf(item).some((n) => nameKey(n) === key));
+  const exact = list.find((item) => namesOf(item).some((n) => nameMatches(n, query, key)));
   if (exact) return { status: 'resolved', match: exact, canonicalName: exact.name, matchedBy: 'exact' };
 
   // 질의 토큰 전체를 품는 항목만 후보(정본 이름 기준 — 별칭은 위 정확 일치에서만). 유일할 때만 해석하고, 복수면 고르지 않는다.
@@ -2631,7 +2637,7 @@ export function resolveByName(list, query, opts) {
   if (first.status !== 'unknown' || String(query ?? '').includes('/')) return first;
   const key = gluedNameKey(query);
   if (key === null) return first;
-  const hits = list.filter((item) => namesOf(item).some((n) => gluedNameKey(n) === key));
+  const hits = list.filter((item) => namesOf(item).some((n) => !isRepoId(n) && gluedNameKey(n) === key));
   if (hits.length !== 1) return first;
   return { status: 'resolved', match: hits[0], canonicalName: hits[0].name, matchedBy: 'exact' };
 }

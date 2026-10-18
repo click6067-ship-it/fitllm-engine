@@ -235,6 +235,11 @@ test('names: spaced and glued spellings resolve; family-only queries stay ambigu
     assert.equal(r.canonicalName, name, repo);
     assert.equal(r.matchedBy, 'exact', repo);
   }
+  assert.equal(resolveLocalModel('DEEPSEEK-AI/deepseek-v4-flash').canonicalName, 'DeepSeek-V4-Flash'); // HF ID는 대소문자 무시
+  // 레포 ID 별칭은 ID 전체로만 맞는다 — 토큰이 같아도 다른 레포는 가로채지 않는다(2.21.1 Codex 리뷰 재현: exit 0이 났다)
+  for (const repo of ['deepseek/ai-DeepSeek-V4-Flash', 'deepseek_ai/DeepSeek-V4-Flash', 'deepseek-ai DeepSeek-V4-Flash', 'deepseekai/DeepSeek-V4.1-Flash-1017']) {
+    assert.equal(resolveLocalModel(repo).status, 'unknown', repo);
+  }
   // 파생·미러·Base 레포는 별칭이 아니다 — HF 즉석 파싱으로 간다
   for (const repo of ['unsloth/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4-Flash-Base', 'deepseek-ai/DeepSeek-V4-Flash-Vision-Exp', 'nex-agi/Nex-N2.5-Max']) {
     assert.equal(resolveLocalModel(repo).status, 'unknown', repo);
