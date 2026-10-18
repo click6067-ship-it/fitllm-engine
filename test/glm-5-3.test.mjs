@@ -93,7 +93,7 @@ const GLM53_QUANTIZATION = Object.freeze({ quant_method: 'fp8', fmt: 'e4m3', act
 
 // 공개 2.14.1(619585f)의 GLM-5.2 행 — 이 변경이 GLM-5.2를 한 글자도 건드리지 않았음을 고정한다.
 const GLM52_BASELINE_ROW = Object.freeze({
-  name: 'GLM-5.2', group: 'GLM', tags: ['moe', 'mla'],
+  name: 'GLM-5.2', group: 'GLM', added: '2026-07-09', tags: ['moe', 'mla'], // added = 2.21.2 메타데이터(계산 무관)
   totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
   numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
   desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit)',
@@ -218,8 +218,8 @@ test('AC4_parity_with_glm52: simulate/calcKVCache/calcMaxContext are JSON-identi
   assert.ok(cases >= 5000, `only ${cases} cases`);
   assert.equal(seen.has('yes') && seen.has('no'), true); // 퇴화 매트릭스가 아니다(512GB Mac 4bit는 yes, 24GB GPU는 no)
   assert.deepEqual(mismatches, []);
-  const { name: _n1, desc: _d1, ...shape52 } = a;
-  const { name: _n2, desc: _d2, ...shape53 } = b;
+  const { name: _n1, desc: _d1, added: _a1, ...shape52 } = a; // added = 행 메타데이터(카탈로그 진입일)라 모양 비교에서 뺀다
+  const { name: _n2, desc: _d2, added: _a2, ...shape53 } = b;
   assert.deepEqual(shape53, shape52);
 });
 

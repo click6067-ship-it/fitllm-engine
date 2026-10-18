@@ -9,16 +9,19 @@ export const MODELS = [
   // 정렬: 최신·화제 순 (GLM → gpt-oss → Qwen 3.6 → Qwen3.5 → Gemma 4 → Llama → Cloud) — 2026-07-09 재정렬·구세대(Qwen3/2.5) 정리.
   // 확장분은 Track A(Claude) ∥ Track B(Codex) 블라인드 이중검증(CONFLICT=0). 구조=공식 HF config.json, 파라미터=safetensors index.
   // ⚠️ ?m= 공유링크는 이 배열 인덱스 기준 — 순서 변경 시 기존 링크가 다른 모델을 가리킴(2026-07-09 사용자 승인 하에 변경).
+  // added = 행이 카탈로그에 처음 들어온 날(KST). 계산에 쓰지 않는 메타데이터 — fitllm.run의 '새 모델' 띠가 최근 순으로 뽑는다(2.21.2).
+  //   값은 fitllm-v2 src/lib/engine.js · fitllm-engine engine.js git 기록에서 그 이름 행이 처음 생긴 커밋 날짜 중 이른 쪽이다.
+  //   2026-05-25 = v2 첫 커밋(v1에서 이식한 행). 새 행은 추가하는 날로 채운다 — 비면 test/catalog-added.test.mjs가 막는다.
 
   // --- GLM (zAI, MLA) — 압축 KV(kv_lora_rank 512 + qk_rope 64 = 576 elem/tok/layer, ×1) ---
-  { name: 'GLM-4.7-Flash', group: 'GLM', tags: ['moe', 'mla'],
+  { name: 'GLM-4.7-Flash', group: 'GLM', added: '2026-07-09', tags: ['moe', 'mla'],
     // Exact tensor count: HF API at pinned revision; 30B-A3B class corroboration: official model card.
     // https://huggingface.co/api/models/zai-org/GLM-4.7-Flash/revision/7dd20894a642a0aa287e9827cb1a1f7f91386b67
     // https://huggingface.co/zai-org/GLM-4.7-Flash
     totalParams: 31.2, activeParams: 3, layerCount: 47, kvHeads: 20, kvHeadDim: 256, attnHeads: 20, hiddenSize: 2048,
     numExperts: 64, expertsPerToken: 4, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 202752, benchmarks: null,
     desc: 'MoE · MLA · ~31B / ~3B active · 64 experts(top-4) · 압축 KV(576/tok/layer) · 최대 202K' }, // config.json: zai-org/GLM-4.7-Flash
-  { name: 'GLM-5.2', group: 'GLM', tags: ['moe', 'mla'],
+  { name: 'GLM-5.2', group: 'GLM', added: '2026-07-09', tags: ['moe', 'mla'],
     totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
     numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
     desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit)' }, // config.json+index(1.5TB÷2 bf16): zai-org/GLM-5.2
@@ -35,11 +38,11 @@ export const MODELS = [
   //     https://huggingface.co/api/models/openai/gpt-oss-120b/revision/b5c939de8f754692c1647ca79fbf85e8c1e70f8a
   //     https://huggingface.co/openai/gpt-oss-120b/resolve/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json
   // 활성 파라미터 3.6B/5.1B는 OpenAI 모델카드 표기를 유지한다(https://huggingface.co/openai/gpt-oss-20b · https://huggingface.co/openai/gpt-oss-120b).
-  { name: 'gpt-oss-20b', group: 'gpt-oss', tags: ['moe'],
+  { name: 'gpt-oss-20b', group: 'gpt-oss', added: '2026-07-09', tags: ['moe'],
     totalParams: 20.9, activeParams: 3.6, layerCount: 24, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
     numExperts: 32, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 12, benchmarks: null,
     desc: 'MoE · 20.9B / 3.6B active · 32 experts(top-4) · 슬라이딩128(full 12/24) · 최대 128K' }, // config.json: openai/gpt-oss-20b @ 6cee5e8
-  { name: 'gpt-oss-120b', group: 'gpt-oss', tags: ['moe'],
+  { name: 'gpt-oss-120b', group: 'gpt-oss', added: '2026-07-09', tags: ['moe'],
     totalParams: 116.8, activeParams: 5.1, layerCount: 36, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
     numExperts: 128, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 18, benchmarks: null,
     desc: 'MoE · 116.8B / 5.1B active · 128 experts(top-4) · 슬라이딩128(full 18/36) · 최대 128K' }, // config.json: openai/gpt-oss-120b @ b5c939d
@@ -48,6 +51,7 @@ export const MODELS = [
   {
     name: 'Qwen 3.6 27B',
     group: 'Qwen 3.6',
+    added: '2026-05-25',
     tags: ['dense'],
     totalParams: 27.2,
     activeParams: null,
@@ -67,6 +71,7 @@ export const MODELS = [
   {
     name: 'Qwen 3.6 35B-A3B',
     group: 'Qwen 3.6',
+    added: '2026-05-25',
     tags: ['moe'],
     totalParams: 35.0,
     activeParams: 3.0,
@@ -85,7 +90,7 @@ export const MODELS = [
     desc: 'MoE · ~35B total / ~3B active · 256 experts · 풀어텐션 10/40(linear 30) · 최대 256K',
   },
   // --- Qwen3.5 하이브리드 linear (AgentWorld) — 40레이어 중 full 10 + linear 30(DeltaNet), KV는 full 10만 ---
-  { name: 'Qwen-AgentWorld-35B-A3B', group: 'Qwen3.5', tags: ['moe'],
+  { name: 'Qwen-AgentWorld-35B-A3B', group: 'Qwen3.5', added: '2026-07-09', tags: ['moe'],
     totalParams: 34.7, activeParams: 3.0, layerCount: 40, fullAttnLayers: 10, kvHeads: 2, kvHeadDim: 256, attnHeads: 16, hiddenSize: 2048,
     linearAttn: { layers: 30, numKHeads: 16, numVHeads: 32, headKDim: 128, headVDim: 128, convKernel: 4 }, // config.json linear_* 필드
     numExperts: 256, expertsPerToken: 8, maxContext: 262144, benchmarks: null,
@@ -95,6 +100,7 @@ export const MODELS = [
   {
     name: 'Gemma 4 e2b',
     group: 'Gemma 4',
+    added: '2026-05-25',
     tags: ['dense', 'ple'],
     totalParams: 5.1,
     activeParams: 2.3,
@@ -119,6 +125,7 @@ export const MODELS = [
   {
     name: 'Gemma 4 e4b',
     group: 'Gemma 4',
+    added: '2026-05-25',
     tags: ['dense', 'ple'],
     totalParams: 8,
     activeParams: 4.5,
@@ -142,6 +149,7 @@ export const MODELS = [
   {
     name: 'Gemma 4 12b',
     group: 'Gemma 4',
+    added: '2026-06-05',
     tags: ['dense'],
     totalParams: 11.95, // 모델카드 "Total Parameters: 11.95B" (encoder-free Unified, 별도 비전/오디오 인코더 없음)
     activeParams: 11.95,
@@ -162,6 +170,7 @@ export const MODELS = [
   {
     name: 'Gemma 4 26b A4B',
     group: 'Gemma 4',
+    added: '2026-05-25',
     tags: ['moe'],
     totalParams: 25.5,
     activeParams: 4.0,
@@ -184,6 +193,7 @@ export const MODELS = [
   {
     name: 'Gemma 4 31b',
     group: 'Gemma 4',
+    added: '2026-05-25',
     tags: ['dense'],
     totalParams: 30.7,
     activeParams: 30.7,
@@ -201,17 +211,17 @@ export const MODELS = [
     desc: 'Dense · 30.7B · 60레이어 · 슬라이딩윈도우 1024(5:1, 글로벌 10레이어 head_dim 512) · 최대 256K',
   },
   // --- Llama (Meta) — 별개 생태계 기준점(유지). 공식 config gated(401), unsloth·NousResearch 미러 교차검증(동일) ---
-  { name: 'Llama-3.2-3B-Instruct', group: 'Llama', tags: ['dense'],
+  { name: 'Llama-3.2-3B-Instruct', group: 'Llama', added: '2026-07-09', tags: ['dense'],
     totalParams: 3.2, activeParams: 3.2, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 24, hiddenSize: 3072,
     maxContext: 131072, benchmarks: null,
     desc: 'Dense · 3.2B · 28레이어 · GQA(24/8) · 최대 128K' }, // meta-llama/Llama-3.2-3B-Instruct (gated) ↔ unsloth 미러
-  { name: 'Llama-3.1-8B-Instruct', group: 'Llama', tags: ['dense'],
+  { name: 'Llama-3.1-8B-Instruct', group: 'Llama', added: '2026-07-09', tags: ['dense'],
     totalParams: 8.0, activeParams: 8.0, layerCount: 32, kvHeads: 8, kvHeadDim: 128, attnHeads: 32, hiddenSize: 4096,
     maxContext: 131072, benchmarks: null,
     desc: 'Dense · 8.0B · 32레이어 · GQA(32/8) · 최대 128K' }, // meta-llama/Llama-3.1-8B-Instruct (gated) ↔ unsloth/Meta-Llama-3.1-8B-Instruct 미러
 
   // --- MiniCPM (openbmb) — on-device/edge 계열 ---
-  { name: 'MiniCPM5-1B', group: 'MiniCPM', tags: ['dense'],
+  { name: 'MiniCPM5-1B', group: 'MiniCPM', added: '2026-07-16', tags: ['dense'],
     totalParams: 1.081, activeParams: 1.081, layerCount: 24, kvHeads: 2, kvHeadDim: 128, attnHeads: 16, hiddenSize: 1536,
     maxContext: 131072, benchmarks: null,
     // openbmb/MiniCPM5-1B config.json(model_type=llama·tie_word_embeddings=false). 2독립출처 파라미터: safetensors.index total_size 2,161,265,664B ÷ 2(bf16) = 1,080,632,832 == config-dim 손계산(embed 130560×1536 + 미tied lm_head + 24층×(attn 7,077,888 + mlp 21,233,664)) = 1,080,632,832 정확 일치
@@ -220,19 +230,19 @@ export const MODELS = [
   // --- Draft 소형모델 — Stack 탭(speculative decoding draft+target · IDE 자동완성) 페어용. 플래그십 아님(카탈로그 최신순 정리와 별개 기능군) ---
   // ⚠️ Qwen3 2종 totalParams = GGUF/디스크 기준(임베딩 1회): safetensors 카운트(751.6M/2031.7M)는 tied lm_head 중복 저장 포함 — 사용 금지.
   //    검증(2026-07-09 verifier): Qwen3-0.6B-Q8_0.gguf 실측 639,446,688B = 596.0M×Q8_0+메타 ✓ / 1.7B GGUF 1,834,426,016B ✓ (2출처+GGUF 실측)
-  { name: 'Qwen3-0.6B', group: 'Draft', tags: ['dense', 'draft'],
+  { name: 'Qwen3-0.6B', group: 'Draft', added: '2026-07-09', tags: ['dense', 'draft'],
     totalParams: 0.596, activeParams: 0.596, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 16, hiddenSize: 1024,
     maxContext: 40960, benchmarks: null, // config max_position_embeddings 40960 (모델카드 공표 native 32K — config 기준 원칙)
     desc: 'Dense · 0.6B · vLLM 표준 draft — Qwen 계열 타깃 페어 (vocab 151936 호환)' }, // Qwen/Qwen3-0.6B config.json + HF API + GGUF 실측
-  { name: 'Qwen3-1.7B', group: 'Draft', tags: ['dense', 'draft'],
+  { name: 'Qwen3-1.7B', group: 'Draft', added: '2026-07-09', tags: ['dense', 'draft'],
     totalParams: 1.721, activeParams: 1.721, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 16, hiddenSize: 2048,
     maxContext: 40960, benchmarks: null,
     desc: 'Dense · 1.7B · 30B급 타깃엔 0.6B보다 스루풋 우위(vLLM 벤치) — Qwen 계열 draft' }, // Qwen/Qwen3-1.7B config.json + HF API + GGUF 실측
-  { name: 'Llama-3.2-1B-Instruct', group: 'Draft', tags: ['dense', 'draft'],
+  { name: 'Llama-3.2-1B-Instruct', group: 'Draft', added: '2026-07-09', tags: ['dense', 'draft'],
     totalParams: 1.236, activeParams: 1.236, layerCount: 16, kvHeads: 8, kvHeadDim: 64, attnHeads: 32, hiddenSize: 2048,
     maxContext: 131072, benchmarks: null, // params 1,235,814,400 = 분석 카운트 바이트단위 일치(tied·lm_head 미저장 — 그대로 디스크 기준)
     desc: 'Dense · 1.2B · Llama 3.x 타깃 표준 draft (vocab 128256 호환) · 최대 128K' }, // meta-llama(gated) ↔ unsloth·NousResearch 미러 2종 일치
-  { name: 'Gemma-3-1B-it', group: 'Draft', tags: ['dense', 'draft'],
+  { name: 'Gemma-3-1B-it', group: 'Draft', added: '2026-07-09', tags: ['dense', 'draft'],
     totalParams: 1.0, activeParams: 1.0, layerCount: 26, kvHeads: 1, kvHeadDim: 256, attnHeads: 4, hiddenSize: 1152,
     maxContext: 32768, slidingWindow: 512, globalAttnLayers: 4, // transformers gemma3 + google/gemma_pytorch 2출처: 26층 중 full-attention 4(레이어 6·12·18·24), 나머지 22층 window 512
     benchmarks: null,
@@ -248,6 +258,7 @@ export const MODELS = [
   {
     name: 'Claude Opus 4.7',
     group: 'Claude (Cloud)',
+    added: '2026-05-25',
     tags: ['cloud', 'dense'],
     totalParams: null,
     activeParams: null,
@@ -269,6 +280,7 @@ export const MODELS = [
   {
     name: 'Hy3',
     group: 'Hunyuan',
+    added: '2026-07-13',
     tags: ['moe'],
     // 298.8 = 디스크/로드 풋프린트(엔진 관례) — 모델카드 "295B 본체 + MTP 3.8B". ⚠️ 커뮤니티 GGUF가 MTP를 포함
     //    ("80 layers + 1 MTP", Q4_K_M 181GB = 298.8B×4.8944/8 ±1.5% — vcruz305/Hy3-GGUF 실측, verifier 2026-07-13)
@@ -296,6 +308,7 @@ export const MODELS = [
   {
     name: 'Qwen 3.8 27B',
     group: 'Qwen 3.8',
+    added: '2026-08-24',
     tags: ['dense', 'vlm'],
     // 27,781,427,952 = HF API safetensors BF16 == index total_size 55,562,855,904 ÷ 2 (바이트 정확 일치)
     // 비전 인코더(model.visual 333텐서, SigLIP depth 27) 포함한 실제 체크포인트 전체 — 사용자 확정 2026-08-24.
@@ -315,6 +328,7 @@ export const MODELS = [
   {
     name: 'Qwen 3.8 2.4T-A95B',
     group: 'Qwen 3.8',
+    added: '2026-08-24',
     tags: ['moe'],
     // 2,446,182,725,504 = HF API safetensors BF16 == index total_size 4,892,365,451,008 ÷ 2 (바이트 정확 일치)
     totalParams: 2446.183,
@@ -341,6 +355,7 @@ export const MODELS = [
   {
     name: 'Laguna XS 2.1',
     group: 'Laguna',
+    added: '2026-08-24',
     tags: ['moe'],
     // 33,442,617,088 = HF API safetensors BF16 == index total_size 66,885,234,176 ÷ 2
     totalParams: 33.443,
@@ -361,6 +376,7 @@ export const MODELS = [
   {
     name: 'Laguna S 2.1',
     group: 'Laguna',
+    added: '2026-08-24',
     tags: ['moe'],
     // 117,561,977,600 = HF API safetensors BF16 == index total_size 235,123,955,200 ÷ 2
     totalParams: 117.562,
@@ -396,6 +412,7 @@ export const MODELS = [
   {
     name: 'Spark-X2.5-4B',
     group: 'Spark',
+    added: '2026-09-05',
     tags: ['dense'],
     totalParams: 4.112, // 4,112,079,360
     activeParams: 4.112, // dense — 전 파라미터 활성
@@ -434,6 +451,7 @@ export const MODELS = [
   {
     name: 'Granite-4.2-30B',
     group: 'Granite',
+    added: '2026-09-05',
     tags: ['dense'],
     totalParams: 29.277, // 29,276,770,304
     activeParams: 29.277, // dense — 전 파라미터 활성
@@ -465,7 +483,7 @@ export const MODELS = [
   //  핀 리비전의 저장 정밀도는 FP8이지만 판정 입력은 사용자가 고르는 양자화라 행은 논리 파라미터 수만 갖는다(Hy3-FP8 관례).
   //  벤치마크 미기입(엔진 원칙). ?m= 인덱스 26 — append-only, 표시 순서는 MODEL_GROUP_ORDER('GLM').
   // ==========================================================================
-  { name: 'GLM-5.3', group: 'GLM', tags: ['moe', 'mla'],
+  { name: 'GLM-5.3', group: 'GLM', added: '2026-09-06', tags: ['moe', 'mla'],
     totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
     numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
     desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit) · GLM-5.2와 같은 base(post-training만 차이)' },
@@ -483,7 +501,7 @@ export const MODELS = [
   //  maxContext = config max_position_embeddings 131072(rope_scaling null — 확장 없음). 라이선스 Apache-2.0(HF cardData).
   //  벤치 미기입: 모델카드 표에 GPQA Diamond·MMLU-Pro·SWE-Bench Verified 귀속 표기가 없다(엔진 원칙).
   // ==========================================================================
-  { name: 'MiniCPM5-2B', group: 'MiniCPM', tags: ['dense'],
+  { name: 'MiniCPM5-2B', group: 'MiniCPM', added: '2026-09-14', tags: ['dense'],
     totalParams: 2.517, activeParams: 2.517, layerCount: 42, kvHeads: 2, kvHeadDim: 128, attnHeads: 16, hiddenSize: 2048,
     maxContext: 131072, benchmarks: null,
     desc: 'Dense · 2.5B · 42레이어 · GQA(16/2) · on-device/edge · 최대 128K · Apache 2.0' },
@@ -501,6 +519,7 @@ export const MODELS = [
   {
     name: 'Claude Opus 5',
     group: 'Claude (Cloud)',
+    added: '2026-09-14',
     tags: ['cloud', 'dense'],
     totalParams: null,
     activeParams: null,
@@ -532,6 +551,7 @@ export const MODELS = [
     // https://huggingface.co/nex-agi/Nex-N2.5-mini/blob/87420286149d9cce9bd46cd335ef9bda33c37c1b/config.json
     name: 'Nex-N2.5-mini',
     group: 'Nex',
+    added: '2026-09-14',
     tags: ['moe', 'vlm'],
     totalParams: 35.107,
     activeParams: null, // 모델카드 미공표
@@ -556,6 +576,7 @@ export const MODELS = [
     // https://huggingface.co/nex-agi/Nex-N2.5-Pro/blob/0f389abfca976dcbab5c7638268d01cfe8ace4fe/config.json
     name: 'Nex-N2.5-Pro',
     group: 'Nex',
+    added: '2026-09-14',
     tags: ['moe', 'vlm'],
     totalParams: 396.802,
     activeParams: null, // 모델카드 미공표
@@ -588,7 +609,7 @@ export const MODELS = [
     // https://huggingface.co/api/models/deepseek-ai/DeepSeek-V4.1-Flash-1017/revision/1bae0e1088993b9b82de08f59de5be5a34e42170
     // https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/config.json
     // KV: 소스 4층(2·8·14 ratio 2, 20 ratio 1)만 캐시 — 512·128 차원 → 토큰당 1,600원소(FP4면 공식 890B/tok과 정확 일치).
-    name: 'DeepSeek-V4.1-Flash-1017', group: 'DeepSeek', tags: ['moe', 'vlm'],
+    name: 'DeepSeek-V4.1-Flash-1017', group: 'DeepSeek', added: '2026-10-18', tags: ['moe', 'vlm'],
     // 공식 HF ID는 이 고정 리비전 행으로 해석한다(2.21.1) — CLI·REST·MCP·배지가 같은 답을 네트워크 없이 낸다. V4.1-Flash(@314113f)는
     // config.json이 바이트 동일하고 safetensors 논리 수(dtype별)도 같아 메모리 판정이 같다. 파생·미러 레포는 별칭이 아니라 HF 즉석 파싱으로 간다.
     aliases: ['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4.1-Flash', 'DeepSeek-V4.1-Flash'],
@@ -611,7 +632,7 @@ export const MODELS = [
     // https://huggingface.co/api/models/deepseek-ai/DeepSeek-V4-Flash/revision/60d8d70770c6776ff598c94bb586a859a38244f1
     // https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/60d8d70770c6776ff598c94bb586a859a38244f1/config.json
     // KV: CSA(ratio 4) 21층 512 + 인덱서 128 · HCA(ratio 128) 20층 512 · 앞 2층은 창만 → 토큰당 3,440원소.
-    name: 'DeepSeek-V4-Flash', group: 'DeepSeek', tags: ['moe'],
+    name: 'DeepSeek-V4-Flash', group: 'DeepSeek', added: '2026-10-18', tags: ['moe'],
     aliases: ['deepseek-ai/DeepSeek-V4-Flash'],
     totalParams: 290.9, activeParams: 13, layerCount: 43, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 4096,
     numExperts: 256, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
@@ -628,7 +649,7 @@ export const MODELS = [
     // https://huggingface.co/api/models/deepseek-ai/DeepSeek-V4-Pro/revision/b5968e9190ef611bbf34a7229255be88a0e937c1
     // https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json
     // KV: CSA 30층 + HCA 31층(앞 2층 포함) → 토큰당 4,924원소.
-    name: 'DeepSeek-V4-Pro', group: 'DeepSeek', tags: ['moe'],
+    name: 'DeepSeek-V4-Pro', group: 'DeepSeek', added: '2026-10-18', tags: ['moe'],
     aliases: ['deepseek-ai/DeepSeek-V4-Pro'],
     totalParams: 1598.8, activeParams: 49, layerCount: 61, kvHeads: 1, kvHeadDim: 512, attnHeads: 128, hiddenSize: 7168,
     numExperts: 384, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
@@ -655,7 +676,7 @@ export const MODELS = [
   //  activeParams 42 = 모델카드 "816B total / 42B active". 벤치 미기입: 원본 README가 gated라 미러 사본으로만 확인된다.
   // ==========================================================================
   {
-    name: 'Muse Spark Open', group: 'Muse', tags: ['moe', 'vlm'],
+    name: 'Muse Spark Open', group: 'Muse', added: '2026-10-18', tags: ['moe', 'vlm'],
     aliases: ['Muse-Spark-Open-816B-A42B', 'meta-models/Muse-Spark-Open-816B-A42B'],
     totalParams: 822.0, activeParams: 42, layerCount: 62, kvHeads: 16, kvHeadDim: 64, attnHeads: 128, hiddenSize: 8192,
     numExperts: 256, expertsPerToken: 8, maxContext: 1048576,
@@ -2649,4 +2670,4 @@ export const DATA_UPDATED = '2026-10';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.21.1';
+export const ENGINE_VERSION = '2.21.2';
