@@ -910,6 +910,8 @@ test('namespaceAllowlistCoversCatalogVendors: 카탈로그에 행이 있는 벤�
   const allowed = new Set(policy.officialNamespaces.map((entry) => entry.namespace));
   // 카탈로그 그룹 → 그 모델이 실제로 사는 HF 네임스페이스(전부 라이브 확인).
   const vendorByGroup = {
+    DeepSeek: 'deepseek-ai',
+    Muse: 'meta-models',
     Nex: 'nex-agi',
     Granite: 'ibm-granite',
     Spark: 'XHToken',

@@ -1,0 +1,264 @@
+{
+ "deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+  "sha": "1bae0e1088993b9b82de08f59de5be5a34e42170",
+  "safetensors": {
+   "parameters": {
+    "BF16": 1976441856,
+    "F32": 42307282,
+    "F8_E4M3": 204015223296,
+    "I8": 557171343360
+   },
+   "total": 763205315794
+  },
+  "checkpointBytes": 510296708312,
+  "configBlob": "09917a9139b22d5bf8be52132787f435147b1020",
+  "shards": [
+   {
+    "rfilename": "model-00001-of-00048.safetensors",
+    "size": 970533624
+   },
+   {
+    "rfilename": "model-00002-of-00048.safetensors",
+    "size": 1323858272
+   },
+   {
+    "rfilename": "model-00003-of-00048.safetensors",
+    "size": 7389759032
+   },
+   {
+    "rfilename": "model-00004-of-00048.safetensors",
+    "size": 7389759032
+   },
+   {
+    "rfilename": "model-00005-of-00048.safetensors",
+    "size": 7405953784
+   },
+   {
+    "rfilename": "model-00006-of-00048.safetensors",
+    "size": 7389759032
+   },
+   {
+    "rfilename": "model-00007-of-00048.safetensors",
+    "size": 7389759032
+   },
+   {
+    "rfilename": "model-00008-of-00048.safetensors",
+    "size": 7389759032
+   },
+   {
+    "rfilename": "model-00009-of-00048.safetensors",
+    "size": 7389759032
+   },
+   {
+    "rfilename": "model-00010-of-00048.safetensors",
+    "size": 7389759032
+   },
+   {
+    "rfilename": "model-00011-of-00048.safetensors",
+    "size": 7405953784
+   },
+   {
+    "rfilename": "model-00012-of-00048.safetensors",
+    "size": 7389759032
+   },
+   {
+    "rfilename": "model-00013-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00014-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00015-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00016-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00017-of-00048.safetensors",
+    "size": 7405956128
+   },
+   {
+    "rfilename": "model-00018-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00019-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00020-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00021-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00022-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00023-of-00048.safetensors",
+    "size": 7400713088
+   },
+   {
+    "rfilename": "model-00024-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00025-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00026-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00027-of-00048.safetensors",
+    "size": 7395337384
+   },
+   {
+    "rfilename": "model-00028-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00029-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00030-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00031-of-00048.safetensors",
+    "size": 7395337384
+   },
+   {
+    "rfilename": "model-00032-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00033-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00034-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00035-of-00048.safetensors",
+    "size": 7395337384
+   },
+   {
+    "rfilename": "model-00036-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00037-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00038-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00039-of-00048.safetensors",
+    "size": 7395337384
+   },
+   {
+    "rfilename": "model-00040-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00041-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00042-of-00048.safetensors",
+    "size": 7389761368
+   },
+   {
+    "rfilename": "model-00043-of-00048.safetensors",
+    "size": 1323837624
+   },
+   {
+    "rfilename": "model-00044-of-00048.safetensors",
+    "size": 2652728736
+   },
+   {
+    "rfilename": "model-00045-of-00048.safetensors",
+    "size": 2573998176
+   },
+   {
+    "rfilename": "model-00046-of-00048.safetensors",
+    "size": 2706402896
+   },
+   {
+    "rfilename": "model-00047-of-00048.safetensors",
+    "size": 101535150936
+   },
+   {
+    "rfilename": "model-00048-of-00048.safetensors",
+    "size": 101537926640
+   }
+  ]
+ },
+ "deepseek-ai/DeepSeek-V4-Flash": {
+  "sha": "60d8d70770c6776ff598c94bb586a859a38244f1",
+  "safetensors": {
+   "parameters": {
+    "BF16": 1415259264,
+    "I64": 2327040,
+    "F32": 36168018,
+    "F8_E4M3": 6023020544,
+    "I8": 283467841536
+   },
+   "total": 290944616402
+  },
+  "checkpointBytes": 159617149040,
+  "configBlob": "284fd93ee753efde32e00960cdb1bc15410d5ab4"
+ },
+ "deepseek-ai/DeepSeek-V4-Pro": {
+  "sha": "b5968e9190ef611bbf34a7229255be88a0e937c1",
+  "safetensors": {
+   "parameters": {
+    "BF16": 2816899328,
+    "I64": 2327040,
+    "F32": 87776414,
+    "F8_E4M3": 23169335296,
+    "I8": 1572763336704
+   },
+   "total": 1598839674782
+  },
+  "checkpointBytes": 864721029744,
+  "configBlob": "025a1ca59cb255296f274d4ef5e0ea632a0d6384"
+ },
+ "unsloth/Muse-Spark-Open-816B-A42B": {
+  "sha": "49cade7b0c6ed297f0434229ac67eea5f9ae1220",
+  "safetensors": {
+   "parameters": {
+    "BF16": 821906490368,
+    "F32": 130039296
+   },
+   "total": 822036529664
+  },
+  "checkpointBytes": 1644333393864,
+  "configBlob": "e6df3a846ebfcb0d55c350c1e79e7886c65b7399"
+ },
+ "meta-models/Muse-Spark-Open-816B-A42B": {
+  "sha": "0fb02478b02565b2ce7fc57e6051c91172774ac9",
+  "gated": "manual",
+  "safetensors": {
+   "parameters": {
+    "BF16": 821906490368,
+    "F32": 130039296
+   },
+   "total": 822036529664
+  },
+  "configBlob": "e6df3a846ebfcb0d55c350c1e79e7886c65b7399"
+ }
+}

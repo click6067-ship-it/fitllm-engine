@@ -572,13 +572,99 @@ export const MODELS = [
     benchmarks: null,
     desc: 'MoE · 396.8B(FP8 배포·논리 파라미터) · 512 experts(top-10) · 풀어텐션 15/60(DeltaNet 45) · 최대 256K · Apache 2.0',
   },
+
+  // ==========================================================================
+  //  DeepSeek-V4 계열 (deepseek-ai, MIT) — 2026-10-18 추가(2.21.0). 8월 #40·#101에서 fail-closed로 닫았던 압축·희소 어텐션을
+  //  compressedKv로 모델링한다(compressedKvBytes 주석 = 공식 추론 코드의 버퍼 목록). ⚠️ 배열 끝 append 고정(?m= 링크 보존).
+  //  형상은 pinned config를 parseHfConfig가 읽은 값과 같다 — test/deepseek-v4.test.mjs가 카탈로그 행 == 즉석 파싱을 고정한다.
+  //  totalParams = HF API safetensors.parameters(dtype별 논리 수) 합 — FP4 전문가(I8로 보고, 논리 수 = 손계산과 정확 일치)·FP8·BF16·F32.
+  //   모델카드의 284B·1.6T·552B는 MTP·DSpark·Engram·비전 타워를 뺀 표기라 이보다 작다. 행은 체크포인트 전체(Nex·Qwen 3.8 관례).
+  //  activeParams = 모델카드 표기(V4-Flash 13B · V4-Pro 49B · V4.1 decode 16B, prefill 8B) — 속도 근사용, 판정 비관여.
+  //  벤치 미기입: GPQA Diamond·MMLU-Pro·SWE-bench Verified가 추론 모드별로만 공표돼 체크포인트 하나에 귀속되지 않는다(1017은 미공표).
+  // ==========================================================================
+  {
+    // 763,205,315,794 = BF16 1,976,441,856 + F32 42,307,282 + F8_E4M3 204,015,223,296 + I8(FP4 전문가) 557,171,343,360.
+    //   I8 = (40층 × 384 + DSpark 3층 × 128) 전문가 × 3 × 5120 × 2304 — 정확 일치. F8에 Engram 표 196.6B(384,006,168 + 384,016,682 행 × 256) 포함.
+    // https://huggingface.co/api/models/deepseek-ai/DeepSeek-V4.1-Flash-1017/revision/1bae0e1088993b9b82de08f59de5be5a34e42170
+    // https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/config.json
+    // KV: 소스 4층(2·8·14 ratio 2, 20 ratio 1)만 캐시 — 512·128 차원 → 토큰당 1,600원소(FP4면 공식 890B/tok과 정확 일치).
+    name: 'DeepSeek-V4.1-Flash-1017', group: 'DeepSeek', tags: ['moe', 'vlm'],
+    totalParams: 763.2, activeParams: 16, layerCount: 40, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 5120,
+    numExperts: 384, expertsPerToken: 6, mtpLayerCount: 3, maxContext: 1048576, benchmarks: null,
+    compressedKv: {
+      family: 'deepseek_v41', windowSize: 128, windowLayers: 43, headDim: 512,
+      caches: [
+        { ratio: 1, dim: 512, layers: 1 }, { ratio: 1, dim: 128, layers: 1 },
+        { ratio: 2, dim: 512, layers: 3 }, { ratio: 2, dim: 128, layers: 3 },
+      ],
+      stateBytes: 24576, tokenStateBytes: 8, workspaceBytes: 536870912, kvLayers: 4, oGroups: 8, indexHeads: 32,
+      vocabSize: 129280, routedExperts: [384, 128], // 본체 384 · DSpark 초안 블록 128
+    },
+    engramParams: 196.6138496, // (384,006,168 + 384,016,682) 행 × 256 — FP8 저장, ENGRAM_MIN_BPW 하한으로 센다
+    desc: 'MoE · 763.2B(Engram 196.6B·비전·DSpark 포함) / 16B active · 384 experts(top-6) · CSA2 KV 공유(소스 4/40층) · 최대 1M · MIT',
+  },
+  {
+    // 290,944,616,402 = BF16 1,415,259,264 + I64 2,327,040 + F32 36,168,018 + F8_E4M3 6,023,020,544 + I8(FP4 전문가) 283,467,841,536.
+    // https://huggingface.co/api/models/deepseek-ai/DeepSeek-V4-Flash/revision/60d8d70770c6776ff598c94bb586a859a38244f1
+    // https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/60d8d70770c6776ff598c94bb586a859a38244f1/config.json
+    // KV: CSA(ratio 4) 21층 512 + 인덱서 128 · HCA(ratio 128) 20층 512 · 앞 2층은 창만 → 토큰당 3,440원소.
+    name: 'DeepSeek-V4-Flash', group: 'DeepSeek', tags: ['moe'],
+    totalParams: 290.9, activeParams: 13, layerCount: 43, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 4096,
+    numExperts: 256, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
+    compressedKv: {
+      family: 'deepseek_v4', windowSize: 128, windowLayers: 44, headDim: 512,
+      caches: [{ ratio: 4, dim: 512, layers: 21 }, { ratio: 4, dim: 128, layers: 21 }, { ratio: 128, dim: 512, layers: 20 }],
+      stateBytes: 12206080, tokenStateBytes: 0, workspaceBytes: 536870912, kvLayers: 41, oGroups: 8, indexHeads: 64,
+      vocabSize: 129280, routedExperts: [256],
+    },
+    desc: 'MoE · 290.9B(MTP 포함) / 13B active · 256 experts(top-6) · CSA 21 + HCA 20층(창 128) · 최대 1M · MIT',
+  },
+  {
+    // 1,598,839,674,782 = BF16 2,816,899,328 + I64 2,327,040 + F32 87,776,414 + F8_E4M3 23,169,335,296 + I8(FP4 전문가) 1,572,763,336,704.
+    // https://huggingface.co/api/models/deepseek-ai/DeepSeek-V4-Pro/revision/b5968e9190ef611bbf34a7229255be88a0e937c1
+    // https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json
+    // KV: CSA 30층 + HCA 31층(앞 2층 포함) → 토큰당 4,924원소.
+    name: 'DeepSeek-V4-Pro', group: 'DeepSeek', tags: ['moe'],
+    totalParams: 1598.8, activeParams: 49, layerCount: 61, kvHeads: 1, kvHeadDim: 512, attnHeads: 128, hiddenSize: 7168,
+    numExperts: 384, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
+    compressedKv: {
+      family: 'deepseek_v4', windowSize: 128, windowLayers: 62, headDim: 512,
+      caches: [{ ratio: 4, dim: 512, layers: 30 }, { ratio: 4, dim: 128, layers: 30 }, { ratio: 128, dim: 512, layers: 31 }],
+      stateBytes: 18710528, tokenStateBytes: 0, workspaceBytes: 536870912, kvLayers: 61, oGroups: 16, indexHeads: 64,
+      vocabSize: 129280, routedExperts: [384],
+    },
+    desc: 'MoE · 1.6T(MTP 포함) / 49B active · 384 experts(top-6) · CSA 30 + HCA 31층(창 128) · 최대 1M · MIT',
+  },
+
+  // ==========================================================================
+  //  Muse Spark Open (Meta Superintelligence Labs, Muse Model License) — 2026-10-15 공개, 2026-10-18 추가(2.21.0).
+  //  표준 GQA(128 Q / 16 KV × 64) + 슬라이딩 2048 46층 · 전체 16층(1:3 반복, 전체 층은 NoPE) — 기존 슬라이딩 경로 그대로(신규 수학 없음).
+  //   https://github.com/huggingface/transformers/blob/487dcfa6ab1c294ce2695005108fdf19a63363eb/src/transformers/models/muse_spark/modeling_muse_spark.py
+  //  원본 meta-models/Muse-Spark-Open-816B-A42B(@0fb02478b02565b2ce7fc57e6051c91172774ac9)는 gated라 config를 직접 못 받는다.
+  //  공개 미러 unsloth/Muse-Spark-Open-816B-A42B(@49cade7b0c6ed297f0434229ac67eea5f9ae1220)의 config.json은 HF API가 보고하는
+  //  원본의 git blob e6df3a846ebfcb0d55c350c1e79e7886c65b7399와 같은 blob이다(바이트 동일 — README 말고 78개 중 77개 파일 동일).
+  //   https://huggingface.co/api/models/meta-models/Muse-Spark-Open-816B-A42B?blobs=true
+  //   https://huggingface.co/unsloth/Muse-Spark-Open-816B-A42B/blob/49cade7b0c6ed297f0434229ac67eea5f9ae1220/config.json
+  //  원본 HF ID는 gated라 CLI의 HF 경로가 401로 끝난다 — 그래서 원본 ID를 별칭으로 둬 이 행으로 해석되게 한다.
+  //  totalParams 822.0 = safetensors BF16 821,906,490,368 + F32 130,039,296(비전 50층·오디오 타워 포함) — 카드 816B는 텍스트 본체.
+  //  activeParams 42 = 모델카드 "816B total / 42B active". 벤치 미기입: 원본 README가 gated라 미러 사본으로만 확인된다.
+  // ==========================================================================
+  {
+    name: 'Muse Spark Open', group: 'Muse', tags: ['moe', 'vlm'],
+    aliases: ['Muse-Spark-Open-816B-A42B', 'meta-models/Muse-Spark-Open-816B-A42B'],
+    totalParams: 822.0, activeParams: 42, layerCount: 62, kvHeads: 16, kvHeadDim: 64, attnHeads: 128, hiddenSize: 8192,
+    numExperts: 256, expertsPerToken: 8, maxContext: 1048576,
+    slidingWindow: 2048, slidingPattern: '23:8', globalAttnLayers: 16, // layer_types: sliding 46 : full 16
+    benchmarks: null,
+    desc: 'MoE · 822B(비전·오디오 포함) / 42B active · 256 experts(top-8) · GQA 128/16 · 슬라이딩 2048(full 16/62) · 최대 1M',
+  },
 ];
 
 // 카탈로그 표시 순서(최신·화제순). MODELS 배열은 ?m= 공유링크 때문에 append-only라
 // 배열 순서 == 표시 순서가 더 이상 성립하지 않는다. 이 목록이 표시 순서의 단일 출처다.
 // 여기 없는 그룹은 뒤에 배열 순서대로 붙는다(신규 그룹 추가를 잊어도 사라지지 않게).
 export const MODEL_GROUP_ORDER = [
-  'Nex', 'Granite', 'Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5',
+  'DeepSeek', 'Muse', 'Nex', 'Granite', 'Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5',
   'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft',
 ];
 
@@ -918,6 +1004,10 @@ function unifiedCluster(gpus) {
 export function clusterKvModel(model, device) {
   const units = device?.clusterUnits || 1;
   if (units <= 1) return model;
+  // DeepSeek-V4 계열: 단일 KV 헤드(MQA)의 창·압축 캐시·인덱서 K를 순위마다 통째로 둔다(참조 코드 wkv·Compressor·Indexer.wk가 비분할 Linear).
+  if (model.compressedKv) {
+    return { ...model, compressedKv: { ...model.compressedKv, replicas: (model.compressedKv.replicas || 1) * units } };
+  }
   if (model.mlaKvLoraRank) {
     return { ...model, mlaKvLoraRank: model.mlaKvLoraRank * units, mlaRopeDim: (model.mlaRopeDim || 0) * units };
   }
@@ -943,6 +1033,11 @@ export function clusterTensorParallelOk(model, device) {
   }
   const la = model.linearAttn;
   if (la && la.layers && !(divides(la.numKHeads) && divides(la.numVHeads))) return false;
+  // DeepSeek-V4 계열 참조 코드: 출력 그룹(n_groups // world_size)과 인덱서 헤드(index_n_heads // world_size)도 순위로 나눈다.
+  // 전문가 수(DSpark 초안 블록 포함)와 어휘 수도 assert로 나눈다(MoE: n_routed_experts % world_size, ParallelEmbedding: vocab_size % world_size).
+  const ck = model.compressedKv;
+  if (ck && !(divides(ck.oGroups) && divides(ck.indexHeads) && divides(ck.vocabSize) &&
+      Array.isArray(ck.routedExperts) && ck.routedExperts.length > 0 && ck.routedExperts.every(divides))) return false;
   return true;
 }
 const clusterUnitsOf = (device) => device?.clusterUnits || 1;
@@ -996,12 +1091,52 @@ export function slidingSplit(model) {
   return { globalLayers, localLayers: model.layerCount - globalLayers };
 }
 
+// DeepSeek-V4 계열 압축·희소 어텐션(V4: CSA+HCA, V4.1: CSA2) — 공식 추론 코드가 실제로 잡는 시퀀스 버퍼만 센다.
+// 1차 출처(pinned):
+//   V4   https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/60d8d70770c6776ff598c94bb586a859a38244f1/inference/model.py
+//        Attention.kv_cache = (window_size + max_seq_len // compress_ratio, head_dim) · Indexer.kv_cache(ratio 4만) =
+//        (max_seq_len // 4, index_head_dim) · Compressor kv_state/score_state = fp32 (coff·ratio, coff·head_dim), coff = 2 iff ratio 4
+//   V4.1 https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/inference/model.py
+//        모든 레이어 window_kv_cache (window_size, head_dim) · kv_source_layers만 compress_kv_cache (max_seq_len // ratio, head_dim)
+//        와 Indexer.k_cache (max_seq_len // ratio, index_head_dim) — 나머지 레이어는 앞 소스의 캐시를 그대로 읽는다(Reindex/Reuse).
+//        engram.py NgramHashState.cache = (max_seq_len,) int64 — 토큰 기록, KV 정밀도와 무관한 토큰당 8B.
+//   교차 확인: V4.1 기술 보고서·모델카드의 "global KV 890 bytes per token" = 소스 4층의 주 KV 1280원소 × FP4(E2M1 + 16채널당
+//   E4M3 스케일 = 0.5625B) 720 + 인덱서 K 320원소 × MXFP4(0.53125B) 170 — 아래 원소 수와 정확히 같다.
+// 참조 코드의 버퍼는 bf16이라 kvBits 16이 그 값 그대로다. 압축 캐시는 ctx/ratio로 센다(floor보다 레이어당 최대 1항목 많다).
+// replicas: GB10 클러스터에서 텐서 병렬 순위마다 통째로 복제되는 몫(참조 코드의 wkv·Compressor·Indexer.wk는 분할하지 않는 Linear).
+// workspaceBytes: 인덱서 프리필 점수 버퍼. 참조 generate.py는 프롬프트 전체를 한 번에 넣어 (프롬프트 × 인덱서 헤드 × ctx/ratio)
+//   텐서를 만든다(131K에서 순위당 128 GiB) — 그 경로는 모델링하지 않는다. vLLM은 질의를 잘라 이 버퍼를 512 MiB로 묶고
+//   메모리 프로파일에서 같은 크기를 미리 잡는다(순위마다):
+//   https://github.com/vllm-project/vllm/blob/2067297b2f15f0776be6d2a7e1b435bd20af60c1/vllm/envs.py (VLLM_SPARSE_INDEXER_MAX_LOGITS_MB = 512)
+//   https://github.com/vllm-project/vllm/blob/2067297b2f15f0776be6d2a7e1b435bd20af60c1/vllm/v1/attention/backends/mla/indexer.py (max_logits_bytes 분할)
+//   https://github.com/vllm-project/vllm/blob/2067297b2f15f0776be6d2a7e1b435bd20af60c1/vllm/model_executor/layers/sparse_attn_indexer.py (프로파일 더미 할당)
+function compressedKvBytes(ck, bpe) {
+  const reps = ck.replicas || 1;
+  const perTokenElems = ck.caches.reduce((s, x) => s + (x.layers * x.dim) / x.ratio, 0);
+  const perToken = (perTokenElems * bpe + (ck.tokenStateBytes || 0)) * reps;
+  const fixed = (ck.windowSize * ck.headDim * ck.windowLayers * bpe + (ck.stateBytes || 0) + (ck.workspaceBytes || 0)) * reps;
+  return { perToken, fixed };
+}
+
 export function calcKVCache(model, ctx, bits) {
   ctx = Math.max(0, Math.floor(Number(ctx)) || 0); // 음수/NaN 가드
   if (!model.kvHeads || !model.kvHeadDim || !model.layerCount) {
     return { totalGB: 0, perTokenKB: 0, kvPerToken: 0, totalBytes: 0, effectiveCtx: 0 };
   }
   const bpe = bits / 8;
+
+  // DeepSeek-V4 계열: 슬라이딩 창(고정) + 압축 캐시(ctx/ratio) + 인덱서 K. 균일 KV 공식이 성립하지 않아 MLA보다 먼저 탄다.
+  if (model.compressedKv) {
+    const { perToken, fixed } = compressedKvBytes(model.compressedKv, bpe);
+    const totalBytes = perToken * ctx + fixed;
+    return {
+      totalGB: totalBytes / 1024 ** 3,
+      perTokenKB: perToken / 1024,
+      kvPerToken: perToken,
+      totalBytes,
+      effectiveCtx: ctx,
+    };
+  }
 
   // MLA(Multi-head Latent Attention) — GLM-5.2/GLM-4.7-Flash 등: K/V를 저차원 latent로 압축.
   // 캐시 = 압축 latent(dim=kv_lora_rank) + decoupled RoPE key(dim=qk_rope_head_dim), 전 헤드 공유(×1, K/V 분리 없음).
@@ -1142,6 +1277,10 @@ const STRUCTURAL_ASSUMPTIONS = Object.freeze({
     id: 'ple-llamacpp-non-gpu-residency',
     statement: 'GPU weight memory excludes the verified Gemma 4 PLE tensors only because the pinned llama.cpp/GGUF path assigns the per_layer_token_embd input-layer tensor to CPU/host buffers instead of accelerator memory; that host memory is not budgeted here, and a runtime that loads PLE onto the accelerator invalidates this estimate.',
   }),
+  compressedKv: Object.freeze({
+    id: 'deepseek-compressed-sparse-kv',
+    statement: "KV memory follows the cache buffers of DeepSeek's reference inference code: every layer keeps a sliding-window cache, and only the layers that compress their own KV keep a compressed cache (one entry per compress_ratio tokens) plus indexer keys; layers that reuse an earlier layer's cache add nothing. Elements are counted at the chosen KV precision (16-bit matches the reference code's bf16 buffers; FP8/FP4 block scales are not counted separately), plus the compressors' fp32 state, V4.1's Engram token history and a 512 MiB indexer prefill workspace (vLLM's default bound, VLLM_SPARSE_INDEXER_MAX_LOGITS_MB); on linked GB10 units all of it is counted on every unit. Whole-prompt prefill as in DeepSeek's reference generate.py needs far more workspace and is not modeled, nor is a runtime that caches uncompressed KV. V4.1's Engram tables are counted at no less than their FP8 storage (8.25 bits with scales) whatever the weight quantization; the vision tower and MTP/DSpark draft weights count as resident weights.",
+  }),
   mtp: Object.freeze({
     id: 'mtp-ordinary-generation',
     statement: 'KV memory assumes ordinary non-speculative generation; an MTP draft context is not included.',
@@ -1175,6 +1314,7 @@ function pleDeductionApplies(device) {
 export function structuralAssumptions(model, device) {
   const result = [];
   if (model.mlaKvLoraRank) result.push(STRUCTURAL_ASSUMPTIONS.mla);
+  if (model.compressedKv) result.push(STRUCTURAL_ASSUMPTIONS.compressedKv);
   if (pleDeductionApplies(device) && guardedPleParamsB(model)) result.push(STRUCTURAL_ASSUMPTIONS.ple);
   if (model.mtpLayerCount > 0) result.push(STRUCTURAL_ASSUMPTIONS.mtp);
   if (device?.unifiedMemory) result.push(STRUCTURAL_ASSUMPTIONS.unified);
@@ -1188,10 +1328,19 @@ function residentParamsB(model, device) {
   return pleDeductionApplies(device) && ple ? model.totalParams - ple : model.totalParams;
 }
 
+// 저장 정밀도 아래로 내려가는 경로가 검증되지 않은 가중치 — 선택한 양자화가 더 낮아도 이 bpw 밑으로 세지 않는다(보수적 하한).
+// DeepSeek-V4.1 Engram n-gram 표: 공식 체크포인트·참조 코드 모두 FP8(E4M3) + 32원소당 E8M0 스케일 1B = 8.25 bit로 둔다
+// ("the table stays fp8 as stored: rows are dequantized with `scale` on lookup"). 4bit 변환을 검증한 런타임이 없다.
+//   https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/inference/model.py (ParallelEngramEmbedding)
+const ENGRAM_MIN_BPW = 8 + 8 / 32;
+function precisionFloorBytes(model, bits) {
+  return model.engramParams ? model.engramParams * 1e9 * Math.max(0, ENGRAM_MIN_BPW - bits) / 8 : 0;
+}
+
 export function calcParamMemory(model, bits, device) {
   if (!model.totalParams) return { totalGB: 0, activeGB: null };
   const bpe = bits / 8;
-  const baseTotalGB = (residentParamsB(model, device) * 1e9 * bpe) / 1024 ** 3;
+  const baseTotalGB = (residentParamsB(model, device) * 1e9 * bpe + precisionFloorBytes(model, bits)) / 1024 ** 3;
   const baseActiveGB = model.activeParams ? (model.activeParams * 1e9 * bpe) / 1024 ** 3 : null;
   // quantAdjust는 정수 bits(Apple NVFP4/MXFP8 4/8/16) 보정용. GGUF는 weightBpw가 소수(4.8944 등)라
   // 매치 안 돼 multiplier=1.0 — 이는 *의도*다: GGUF bpw는 블록 스케일 등 실측 오버헤드를 이미 포함하므로
@@ -1234,7 +1383,7 @@ export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
   const wbpe = weightBpw / 8; // 파라미터(weight) 바이트
   const kbpe = kvBits / 8;    // KV 원소 바이트(GPU 기본 F16=16)
   const quantMultiplier = (quantAdjust[model.name] && quantAdjust[model.name][weightBpw]) || 1.0;
-  const paramBytes = residentParamsB(model, device) * 1e9 * wbpe * quantMultiplier; // PLE: GPU면 상주분만
+  const paramBytes = (residentParamsB(model, device) * 1e9 * wbpe + precisionFloorBytes(model, weightBpw)) * quantMultiplier; // PLE: GPU면 상주분만 · Engram FP8 하한
   const linearStateBytes = calcLinearState(model).totalBytes; // ctx 무관 고정 → 예산에서 먼저 뺀다
   const budget =
     device.memoryGB * 1024 ** 3 * (1 - device.headroomRatio) - paramBytes - paramBytes * 0.12 - device.reserveGB * 1024 ** 3 - linearStateBytes;
@@ -1245,6 +1394,14 @@ export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
   const perGlobal = 2 * (km.globalKvHeads || km.kvHeads) * (km.globalHeadDim || km.kvHeadDim) * kbpe * overhead;
   if (perLocal <= 0) return 0;
   const actPerTok = 0.00003 * 1024 ** 3 * clusterUnitsOf(device); // 활성화 버퍼(simulate와 동일) — ctx 비례라 토큰당 비용에 포함, 클러스터는 대마다
+
+  // DeepSeek-V4 계열: 고정분(창·압축기 상태)을 먼저 빼고 토큰당 비용으로 나눈다 (calcKVCache 압축 분기와 동일 식)
+  if (model.compressedKv) {
+    const { perToken, fixed } = compressedKvBytes(km.compressedKv, kbpe);
+    const rest = budget - fixed * overhead;
+    if (rest <= 0) return 0;
+    return Math.min(Math.floor(rest / (perToken * overhead + actPerTok)), model.maxContext);
+  }
 
   // MLA: 압축 latent+rope, 전 레이어 균일 (calcKVCache MLA 분기와 동일 식)
   if (model.mlaKvLoraRank) {
@@ -1639,13 +1796,164 @@ const FAMILY_STRUCTURAL_KEYS = new Map([
     'gate_attn_act_mode',        // 게이트 활성함수(sigmoid|silu) — 활성화 경로만, 텐서 치수 무관
     'headwise_attn_output_gate', // g_proj 유무 — 가중치만 늘고 KV 불변
   ])],
+  // deepseek_v4 = DeepSeek-V4-Flash/-Pro(+Base). 압축 KV 치수는 deepseekCompressedKv가 읽고 검증한다(calcKVCache 압축 분기).
+  //   https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/60d8d70770c6776ff598c94bb586a859a38244f1/config.json
+  //   https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json
+  ['deepseek_v4', new Set([
+    'compress_ratios', 'index_head_dim', // 압축 캐시·인덱서 K 치수 — deepseekCompressedKv가 읽는다
+    'index_n_heads',       // 인덱서 쿼리 헤드 — 캐시 없음(K는 1개 공유), 텐서 병렬 분할 검사에만 쓴다
+    'index_topk',          // 어텐션이 고르는 압축 항목 수 — 캐시 크기와 무관
+    'compress_rope_theta', // 압축 캐시의 RoPE θ — 위치 인코딩, 텐서 치수 불변
+    'num_hash_layers',     // 앞 N층 MoE의 해시 라우팅(tid2eid 가중치) — KV 불변
+    'q_lora_rank', 'o_lora_rank', // 쿼리·출력 저랭크 사영 — 가중치만, 캐시는 head_dim 잠재 하나
+    'expert_dtype',        // 전문가 가중치 저장 형식(fp4) — 파라미터는 safetensors 논리 수에서 온다
+  ])],
+  // deepseek_v41 = DeepSeek-V4.1-Flash(-1017) 텍스트 본체. 레이어 간 KV·인덱스 공유(CSA2)는 deepseekCompressedKv가 검증한다.
+  //   https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/config.json
+  ['deepseek_v41', new Set([
+    'compress_ratios', 'index_head_dim', 'kv_source_layer_ids', 'index_source_layer_ids', // CSA2 캐시 배치 — 읽고 검증
+    'index_n_heads', 'index_topk', 'compress_rope_theta', 'q_lora_rank', 'o_lora_rank', // deepseek_v4와 같은 뜻
+    // 계층형 인덱서: 첫 Full 층이 매 forward에 만드는 후보 마스크 — 지속 캐시가 아니다(SharedAttentionRuntime.candidates)
+    'candidate_source_layer_id', 'candidate_topk_blocks', 'candidate_block_size',
+    // Engram n-gram 표: 가중치(safetensors에 포함). 토큰 기록 버퍼는 tokenStateBytes로 따로 센다
+    'engram_layer_ids', 'engram_n_heads', 'engram_head_dim', 'engram_compressed_vocab_size',
+    // DSpark 초안 블록: 가중치 + 창 캐시(windowLayers에 포함)뿐 — ratio 0만 허용
+    'dspark_block_size', 'dspark_target_layer_ids', 'dspark_n_routed_experts', 'dspark_num_experts_per_tok',
+  ])],
+  // muse_spark = Meta Muse Spark Open 텍스트 본체 — 표준 GQA + 슬라이딩/전체 layer_types(엔진 슬라이딩 경로 그대로).
+  //   https://github.com/huggingface/transformers/blob/487dcfa6ab1c294ce2695005108fdf19a63363eb/src/transformers/models/muse_spark/modeling_muse_spark.py
+  //   MuseSparkTextAttention: K/V = num_key_value_heads × head_dim를 DynamicCache에 그대로 둔다(sliding 층은 창만).
+  ['muse_spark', new Set([
+    'layer_rope_theta', // 층별 RoPE θ(0 = NoPE) — 위치 인코딩만, K/V 텐서 치수 불변
+    'mlp_layer_types',  // 층별 sparse(MoE)/dense MLP — FFN 구조라 KV 불변, 가중치는 safetensors 논리 수
+  ])],
 ]);
 
 // model_type을 계열 키로 정규화 — qwen3_5 / qwen3_5_moe / qwen3_5_moe_text 를 한 계열로 본다.
 function familyOf(modelType) {
   const t = String(modelType || '');
   if (HYBRID_LINEAR_TYPES.has(t)) return 'qwen3_5';
+  if (t === 'deepseek_v41' || t === 'deepseek_v41_text') return 'deepseek_v41';
+  if (t === 'muse_spark' || t === 'muse_spark_text') return 'muse_spark';
   return t;
+}
+
+// DeepSeek-V4 계열 config → compressedKv(calcKVCache 압축 분기의 입력). 공식 추론 코드의 버퍼 배치를 그대로 옮기고,
+// 그 코드가 전제하는 배치가 아니면 계산하지 않는다(fail closed). 출처·버퍼 목록은 compressedKvBytes 주석.
+//   V4  : 0 = 창만 · 4 = CSA(압축기 overlap + 인덱서) · 128 = HCA(압축기만). 압축 레이어는 전부 자기 캐시를 갖는다.
+//   V4.1: 0 = 창만 · 1·2 = CSA2. kv_source_layer_ids만 압축 KV·인덱서 K를 갖고, 나머지는 앞 소스를 읽는다.
+//         기술 보고서 §2.3.1: Full(소스 = KV + 인덱싱) · Reindex(앞 KV + 자기 인덱싱) · Reuse(앞 KV + 앞 Top-K).
+const DEEPSEEK_V4_RATIOS = Object.freeze({ deepseek_v4: new Set([0, 4, 128]), deepseek_v41: new Set([0, 1, 2]) });
+// 인덱서 프리필 점수 버퍼 — vLLM 기본 상한 VLLM_SPARSE_INDEXER_MAX_LOGITS_MB = 512 MiB (compressedKvBytes 주석의 출처).
+const DEEPSEEK_INDEXER_WORKSPACE_BYTES = 512 * 1024 * 1024;
+function deepseekCompressedKv(c, family, layerCount) {
+  const posInt = (v) => Number.isInteger(v) && v > 0;
+  const fail = (why) => { throw new Error(`DeepSeek-V4 계열 config의 ${why} — 계산하지 않습니다`); };
+  for (const k of ['head_dim', 'index_head_dim', 'index_n_heads', 'index_topk', 'sliding_window', 'o_groups', 'vocab_size', 'n_routed_experts']) {
+    if (!posInt(c[k])) fail(`${k} 값이 양의 정수가 아니에요`);
+  }
+  const routedExperts = [c.n_routed_experts];
+  // 참조 코드는 KV 헤드 하나(wkv: dim → head_dim)를 전 쿼리 헤드가 공유한다. 다른 값이면 같은 코드가 아니다.
+  if (c.num_key_value_heads !== 1) fail('num_key_value_heads가 1이 아니에요');
+  if (c.kv_lora_rank != null) fail('kv_lora_rank(MLA)가 함께 선언돼 있어요');
+  const nextn = c.num_nextn_predict_layers ?? 0;
+  const ratios = c.compress_ratios;
+  if (!Array.isArray(ratios) || ratios.length !== layerCount + nextn) {
+    fail('compress_ratios 길이가 num_hidden_layers + num_nextn_predict_layers와 달라요');
+  }
+  const allowed = DEEPSEEK_V4_RATIOS[family];
+  if (!ratios.every((r) => allowed.has(r))) fail(`compress_ratios에 검증된 값(${[...allowed].join('·')}) 밖의 값이 있어요`);
+  // MTP/DSpark 층은 창만 쓴다(V4.1 DSparkAttention: assert compress_ratio == 0).
+  if (ratios.slice(layerCount).some((r) => r !== 0)) fail('MTP/DSpark 층의 compress_ratios가 0이 아니에요');
+  const backbone = ratios.slice(0, layerCount);
+  const headDim = c.head_dim;
+  const indexDim = c.index_head_dim;
+  const byRatio = new Map(); // ratio → 자기 캐시를 가진 층 수
+  let stateBytes = 0;
+  let windowLayers = ratios.length;
+  let tokenStateBytes = 0;
+  let engramParams = 0;
+  if (family === 'deepseek_v4') {
+    if (c.num_hash_layers != null && !(Number.isInteger(c.num_hash_layers) && c.num_hash_layers >= 0 && c.num_hash_layers <= layerCount)) {
+      fail('num_hash_layers 값이 0..num_hidden_layers 정수가 아니에요');
+    }
+    for (const r of backbone) {
+      if (!r) continue;
+      byRatio.set(r, (byRatio.get(r) || 0) + 1);
+      const coff = r === 4 ? 2 : 1; // ratio 4만 overlap 압축(상태 폭 2배)
+      stateBytes += 2 * (coff * r) * (coff * headDim) * 4; // kv_state + score_state, fp32
+      if (r === 4) stateBytes += 2 * (2 * r) * (2 * indexDim) * 4; // 인덱서 자체 압축기(overlap, index_head_dim)
+    }
+  } else {
+    const ids = (k) => {
+      const v = c[k];
+      if (!Array.isArray(v) || !v.length || !v.every((i, n) => Number.isInteger(i) && i >= 0 && i < layerCount && (n === 0 || i > v[n - 1]))) {
+        fail(`${k}가 0..num_hidden_layers-1의 오름차순 정수 배열이 아니에요`);
+      }
+      return v;
+    };
+    const kvSources = ids('kv_source_layer_ids');
+    const indexSources = ids('index_source_layer_ids');
+    // Full 모드 = KV 소스이자 인덱스 소스. 소스가 인덱싱하지 않으면 뒤 층이 옛 KV 기준 Top-K를 재사용하게 된다.
+    if (!kvSources.every((s) => indexSources.includes(s) && backbone[s] > 0)) fail('KV 소스 층이 인덱스 소스가 아니거나 압축 층이 아니에요');
+    if (!indexSources.every((s) => backbone[s] > 0)) fail('인덱스 소스 층이 압축 층이 아니에요');
+    for (let i = 0; i < layerCount; i++) {
+      if (!backbone[i]) continue;
+      const kv = kvSources.filter((s) => s <= i).pop();
+      const ix = indexSources.filter((s) => s <= i).pop();
+      // 압축 층은 같은 비율의 앞 소스 캐시를 읽고, 그 캐시를 기준으로 고른 Top-K를 써야 한다.
+      if (kv === undefined || backbone[kv] !== backbone[i] || ix === undefined || ix < kv) {
+        fail(`${i}층이 읽을 같은 비율의 KV 소스·인덱스 소스가 없어요`);
+      }
+    }
+    const cand = c.candidate_source_layer_id ?? -1;
+    if (!(cand === -1 || (indexSources.includes(cand) && posInt(c.candidate_topk_blocks) && posInt(c.candidate_block_size)))) {
+      fail('candidate_source_layer_id가 -1이나 인덱스 소스 층이 아니에요');
+    }
+    // 후보 마스크는 소스 층의 압축 좌표(폭 ctx/ratio)로 만들어지고 그 뒤 모든 인덱서가 그대로 쓴다(uses_candidates) — 비율이 같아야 한다.
+    if (cand !== -1 && indexSources.some((s) => s > cand && backbone[s] !== backbone[cand])) {
+      fail('candidate_source_layer_id 뒤 인덱스 층의 압축 비율이 후보 마스크와 달라요');
+    }
+    for (const s of kvSources) {
+      const r = backbone[s];
+      byRatio.set(r, (byRatio.get(r) || 0) + 1);
+      if (r > 1) stateBytes += 2 * r * headDim * 4; // Compressor kv_state + score_state (ratio, head_dim) fp32 — ratio 1은 상태 없음
+    }
+    const engram = c.engram_layer_ids ?? [];
+    if (!Array.isArray(engram) || !engram.every((i) => Number.isInteger(i) && i >= 0 && i < layerCount)) {
+      fail('engram_layer_ids가 0..num_hidden_layers-1 정수 배열이 아니에요');
+    }
+    if (engram.length) {
+      tokenStateBytes = 8; // NgramHashState.cache (max_seq_len,) int64
+      const rows = c.engram_num_embeddings;
+      if (!Array.isArray(rows) || rows.length !== engram.length || !rows.every((r) => Number.isSafeInteger(r) && r > 0) || !posInt(c.engram_head_dim)) {
+        fail('engram_num_embeddings·engram_head_dim이 engram 층마다의 양의 정수가 아니에요');
+      }
+      engramParams = rows.reduce((a, r) => a + r * c.engram_head_dim, 0); // ParallelEngramEmbedding(rows, engram_head_dim)
+    }
+    if (!(c.dspark_block_size == null || (Number.isInteger(c.dspark_block_size) && c.dspark_block_size >= 0))) {
+      fail('dspark_block_size 값이 비음수 정수가 아니에요');
+    }
+    // DSpark 블록은 dspark_block_size가 있을 때만 만들어진다(Transformer.__init__) — 없으면 MTP 층 창도 없다.
+    if (!c.dspark_block_size) windowLayers = layerCount;
+    else if (nextn > 0) routedExperts.push(c.dspark_n_routed_experts || c.n_routed_experts); // ModelArgs.get_moe_config
+    if (!routedExperts.every(posInt)) fail('dspark_n_routed_experts 값이 양의 정수가 아니에요');
+  }
+  const caches = [];
+  for (const [ratio, layers] of [...byRatio].sort((a, b) => a[0] - b[0])) {
+    caches.push({ ratio, dim: headDim, layers }); // 주 KV(잠재 head_dim, K=V 공유)
+    // 인덱서 K: V4는 ratio 4 층만, V4.1은 모든 KV 소스(Indexer.owns_k)
+    if (family === 'deepseek_v41' || ratio === 4) caches.push({ ratio, dim: indexDim, layers });
+  }
+  return {
+    compressedKv: {
+      family, windowSize: c.sliding_window, windowLayers, headDim, caches, stateBytes, tokenStateBytes,
+      workspaceBytes: DEEPSEEK_INDEXER_WORKSPACE_BYTES,
+      kvLayers: [...byRatio.values()].reduce((s, n) => s + n, 0), oGroups: c.o_groups, indexHeads: c.index_n_heads,
+      vocabSize: c.vocab_size, routedExperts,
+    },
+    engramParams: engramParams ? engramParams / 1e9 : undefined,
+  };
 }
 
 // config 치수로 파라미터 수의 자릿수를 재구성한다(이름 추정 교차검증용, 정밀 산출 아님).
@@ -1813,8 +2121,16 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   if ((c.num_loops || 1) !== 1) {
     throw new Error('반복 레이어(num_loops) 아키텍처는 아직 지원하지 않아요');
   }
-  if (c.block_configs || c.gqa_layers || c.linear_attn_config || c.compress_ratios || c.num_hash_layers || c.index_topk) {
+  // DeepSeek-V4 계열(deepseek_v4 · deepseek_v41)만 압축·인덱스 키를 deepseekCompressedKv로 모델링한다. 같은 키를 쓰는
+  // 다른 계열(GLM DSA 등)은 그대로 거부한다 — 키 이름이 같아도 캐시 배치가 같다는 보장이 없다.
+  const dsFamily = modelType === 'deepseek_v4' || modelType === 'deepseek_v41' ? modelType : null;
+  if (c.block_configs || c.gqa_layers || c.linear_attn_config ||
+      (!dsFamily && (c.compress_ratios || c.num_hash_layers || c.index_topk))) {
     throw new Error('비표준 압축·희소·혼합 어텐션 아키텍처는 아직 지원하지 않아요');
+  }
+  // 공식 DeepSeek config에는 layer_types가 없다(참조 코드는 compress_ratios만 읽는다). 둘 다 있으면 다른 구현용 config다.
+  if (dsFamily && c.layer_types != null) {
+    throw new Error('DeepSeek-V4 계열 config에 layer_types가 함께 있어 어느 배치가 참인지 알 수 없어요 — 계산하지 않습니다');
   }
   // Mamba/SSM 블록 스케줄(Nemotron-H류)은 layer_types가 아니라 layers_block_type을 쓴다.
   // 이걸 못 보면 전 레이어를 full attention으로 계산해 KV를 수 배 과대 산정한다(실증: Nemotron-3.5-Lightning 52L 중 attention 6L).
@@ -1898,12 +2214,31 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   const kvHeads = c.num_key_value_heads ?? attnHeads ?? 1;
   const headDim = c.head_dim ?? (c.hidden_size && attnHeads ? Math.round(c.hidden_size / attnHeads) : 128);
 
+  // muse_spark: 층별 배열 두 개는 KV와 무관하지만, 층 수와 어긋난 배열은 다른 구조의 config다.
+  if (modelType === 'muse_spark') {
+    const perLayer = (k, ok) => {
+      if (c[k] != null && !(Array.isArray(c[k]) && c[k].length === layerCount && c[k].every(ok))) {
+        throw new Error(`config의 ${k}가 층 수만큼의 올바른 값 배열이 아니에요 — 계산하지 않습니다`);
+      }
+    };
+    perLayer('layer_rope_theta', (v) => Number.isFinite(v) && v >= 0);
+    perLayer('mlp_layer_types', (v) => v === 'sparse' || v === 'dense');
+  }
+
+  // DeepSeek-V4 계열: 창·압축 캐시는 compressedKv 하나로 나간다 — sliding_window를 일반 슬라이딩 경로에 넣지 않는다.
+  const ds = dsFamily ? deepseekCompressedKv(c, dsFamily, layerCount) : undefined;
+  const compressedKv = ds?.compressedKv;
+
   // 슬라이딩 윈도우가 "실제로" 쓰이는지 판별 (sliding_window 값만 있고 미사용인 모델 오탐 방지)
   const hasSlidingLayers = Array.isArray(c.layer_types) && c.layer_types.some((t) => String(t).includes('sliding'));
   const slidingActive =
+    !compressedKv &&
     (c.sliding_window || 0) > 0 &&
     c.use_sliding_window !== false &&
-    (hasSlidingLayers || (c.sliding_window < (c.max_position_embeddings || Infinity)));
+    // layer_types가 있으면 그것이 정본이다 — 전 층 full_attention이면 sliding_window 값이 있어도 슬라이딩이 아니다
+    // (transformers: sliding_window = config.sliding_window if layer_types[i] == "sliding_attention" else None).
+    // 종래엔 값만 보고 켜서 slidingSplit 기본 5:1로 KV를 1/6로 깎았다(Codex 리뷰 2026-10-18: Muse 전 층 full → 248 대신 40.4 GiB).
+    (Array.isArray(c.layer_types) ? hasSlidingLayers : c.sliding_window < (c.max_position_embeddings || Infinity));
   const sliding = slidingActive ? c.sliding_window : 0;
   if (sliding && !Array.isArray(c.layer_types) && !c.kv_lora_rank) {
     throw new Error('레이어별 sliding/full 구성이 없는 모델은 정확히 계산할 수 없어요');
@@ -1961,7 +2296,7 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     : undefined;
 
   // MLA(Multi-head Latent Attention) 감지 — kv_lora_rank 있으면 압축 KV 경로(GLM-5.2/GLM-4.7-Flash 등).
-  // ⚠ DeepSeek-V4류(kv_lora_rank 부재 + MQA/compressor)는 MLA 아님 → 표준 경로 유지.
+  // ⚠ DeepSeek-V4류(kv_lora_rank 부재 + MQA/compressor)는 MLA 아님 → compressedKv 경로(deepseekCompressedKv).
   const mlaKvLoraRank = c.kv_lora_rank || undefined;
   const mlaRopeDim = mlaKvLoraRank ? (c.qk_rope_head_dim || 0) : undefined;
 
@@ -2005,6 +2340,11 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     }
     totalParams = resolvedEvidence.totalParamsB;
     parameterSource = resolvedEvidence.source;
+  }
+  // DeepSeek-V4 계열 체크포인트는 FP4 전문가 + FP8 나머지 혼합이다. quantization_config는 fp8(1B)만 선언하므로 바이트에서
+  // 역산하면 FP4 전문가를 절반으로 센다(V4.1-Flash 510.3GB → 510B, 실제 논리 763.2B) — 거짓 fits 방향이라 증거를 요구한다.
+  if (dsFamily && !resolvedEvidence) {
+    throw new Error('DeepSeek-V4 계열은 FP4·FP8 혼합 체크포인트라 safetensors 파라미터 증거 없이 파라미터 수를 계산하지 않아요');
   }
   if (totalSize && !resolvedEvidence) {
     // 선-양자화 레포(MLX/AWQ/bnb): 저장 비트폭의 진실은 quantization(.bits) — torch_dtype은 원본 정밀도라
@@ -2159,6 +2499,8 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     expertsPerToken,
     mlaKvLoraRank,
     mlaRopeDim,
+    compressedKv,
+    engramParams: ds?.engramParams,
     mtpLayerCount,
     pleParams: pleParams ? +pleParams.toFixed(3) : undefined,
     pleOffloadVerified,
@@ -2296,4 +2638,4 @@ export const DATA_UPDATED = '2026-10';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.20.0';
+export const ENGINE_VERSION = '2.21.0';

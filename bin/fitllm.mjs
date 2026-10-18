@@ -355,6 +355,8 @@ if (has('--json')) {
   if (basis) {
     console.log(`  basis: model ${basis.model.name} (${basis.model.source.type}) · ${basis.model.totalParamsB}B params · ${basis.model.layers} layers`);
     console.log(`  attention: ${basis.attention.kind} · KV ${basis.attention.kvLayers}/${basis.attention.totalLayers} layers · ${basis.attention.kvHeads} heads × ${basis.attention.kvHeadDim} dim`);
+    const ck = basis.attention.compressedKv;
+    if (ck) console.log(`  compressed KV: ${ck.cachedElementsPerToken} cached elements/token (${ck.caches.map((c) => `${c.layers}×${c.dim}/${c.ratio}`).join(' + ')}) + ${ck.windowSize}-token window × ${ck.windowLayers} layers${ck.tokenStateBytesPerToken ? ` + ${ck.tokenStateBytesPerToken} B/token Engram history` : ''}`);
     console.log(`  hardware evidence: ${basis.hardware.evidence.status} · ${basis.hardware.memoryGB} GiB · ${basis.hardware.environment}`);
     const um = basis.hardware.unifiedMemory;
     if (um) console.log(`  unified-memory reserve${um.units > 1 ? ` (${um.units} units)` : ''}: ${fmtGB(um.notVisibleGiB)} not visible to the OS + ${fmtGB(um.osIdleGiB)} idle OS + ${fmtGB(um.runtimeFixedGiB)} runtime = ${fmtGB(um.reserveGiB)} GiB (sources: ${[...um.sources.osVisible, ...um.sources.osIdle].length} URLs in engine.js)`);
