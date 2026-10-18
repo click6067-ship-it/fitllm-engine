@@ -12,6 +12,8 @@ export const MODELS = [
   // added = 행이 카탈로그에 처음 들어온 날(KST). 계산에 쓰지 않는 메타데이터 — fitllm.run의 '새 모델' 띠가 최근 순으로 뽑는다(2.21.2).
   //   값은 fitllm-v2 src/lib/engine.js · fitllm-engine engine.js git 기록에서 그 이름 행이 처음 생긴 커밋 날짜 중 이른 쪽이다.
   //   2026-05-25 = v2 첫 커밋(v1에서 이식한 행). 새 행은 추가하는 날로 채운다 — 비면 test/catalog-added.test.mjs가 막는다.
+  // officialParams = 모델 카드가 공표한 총 파라미터(B, 출처 URL은 그 줄 주석). 표시용 메타데이터 — 메모리 계산은 totalParams(저장 텐서 실측)를 쓴다.
+  //   카드가 '백본'만 세거나(DeepSeek-V4.1 Engram 별도) 비전·오디오를 빼면 두 값이 다르다. null = 카드 미공표(2.21.3).
 
   // --- GLM (zAI, MLA) — 압축 KV(kv_lora_rank 512 + qk_rope 64 = 576 elem/tok/layer, ×1) ---
   { name: 'GLM-4.7-Flash', group: 'GLM', added: '2026-07-09', tags: ['moe', 'mla'],
@@ -485,6 +487,7 @@ export const MODELS = [
   // ==========================================================================
   { name: 'GLM-5.3', group: 'GLM', added: '2026-09-06', tags: ['moe', 'mla'],
     totalParams: 753, activeParams: 40, layerCount: 78, kvHeads: 64, kvHeadDim: 256, attnHeads: 64, hiddenSize: 6144,
+    officialParams: 744, // HF 카드(@aca966e)엔 미기재 · 공식 GitHub 모델 표 "GLM-5.3 | 744B-A40B" — https://github.com/zai-org/GLM-5/blob/83c03d317378f86f0a012f7c4cd48b6243c7e69b/README.md · AWS Bedrock 모델 카드 "744B total parameters" — https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-zai-glm-5-3.html (저장 텐서 753B는 MTP 층 포함)
     numExperts: 256, expertsPerToken: 8, mlaKvLoraRank: 512, mlaRopeDim: 64, maxContext: 1048576, benchmarks: null,
     desc: 'MoE · MLA · 753B / ~40B active · 256 experts(top-8) · 압축 KV · 최대 1M (4bit도 512GB급만 fit) · GLM-5.2와 같은 base(post-training만 차이)' },
 
@@ -503,6 +506,7 @@ export const MODELS = [
   // ==========================================================================
   { name: 'MiniCPM5-2B', group: 'MiniCPM', added: '2026-09-14', tags: ['dense'],
     totalParams: 2.517, activeParams: 2.517, layerCount: 42, kvHeads: 2, kvHeadDim: 128, attnHeads: 16, hiddenSize: 2048,
+    officialParams: 2.517, // 모델카드 "Number of Parameters: 2,516,756,480" — https://huggingface.co/openbmb/MiniCPM5-2B/blob/12a3808a956f869c767195e9266b59c4d21d92e2/README.md (= 위 3중 교차검증 값)
     maxContext: 131072, benchmarks: null,
     desc: 'Dense · 2.5B · 42레이어 · GQA(16/2) · on-device/edge · 최대 128K · Apache 2.0' },
 
@@ -554,6 +558,7 @@ export const MODELS = [
     added: '2026-09-14',
     tags: ['moe', 'vlm'],
     totalParams: 35.107,
+    officialParams: null, // 모델카드(@8742028) 총 파라미터 미공표(공식 X 글 "Mini (35B)"는 단일 출처·미검증) — 표시는 totalParams(실측)
     activeParams: null, // 모델카드 미공표
     layerCount: 40,
     fullAttnLayers: 10, // layer_types: full_attention 10 / linear_attention 30
@@ -579,6 +584,7 @@ export const MODELS = [
     added: '2026-09-14',
     tags: ['moe', 'vlm'],
     totalParams: 396.802,
+    officialParams: null, // 모델카드(@0f389ab) 총 파라미터 미공표(공식 X 글 "Pro (397B)"는 단일 출처·미검증) — 표시는 totalParams(실측)
     activeParams: null, // 모델카드 미공표
     layerCount: 60,
     fullAttnLayers: 15, // layer_types: full_attention 15 / linear_attention 45
@@ -614,6 +620,7 @@ export const MODELS = [
     // config.json이 바이트 동일하고 safetensors 논리 수(dtype별)도 같아 메모리 판정이 같다. 파생·미러 레포는 별칭이 아니라 HF 즉석 파싱으로 간다.
     aliases: ['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4.1-Flash', 'DeepSeek-V4.1-Flash'],
     totalParams: 763.2, activeParams: 16, layerCount: 40, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 5120,
+    officialParams: 552, // DeepSeek 공식 표기는 백본 552B(Engram 196B 별도 표기, 공식 합계 없음 · 저장 763.2B = 백본+Engram+비전·MTP) — V4.1-Flash 카드 "552B backbone parameters"·표 # Backbone Params 552B — https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/README.md · 1017 카드 = 그 minor update: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/README.md
     numExperts: 384, expertsPerToken: 6, mtpLayerCount: 3, maxContext: 1048576, benchmarks: null,
     compressedKv: {
       family: 'deepseek_v41', windowSize: 128, windowLayers: 43, headDim: 512,
@@ -635,6 +642,7 @@ export const MODELS = [
     name: 'DeepSeek-V4-Flash', group: 'DeepSeek', added: '2026-10-18', tags: ['moe'],
     aliases: ['deepseek-ai/DeepSeek-V4-Flash'],
     totalParams: 290.9, activeParams: 13, layerCount: 43, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 4096,
+    officialParams: 284, // 모델카드 "284B parameters (13B activated)" — https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/60d8d70770c6776ff598c94bb586a859a38244f1/README.md · V4.1-Flash 카드 표도 284B
     numExperts: 256, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
     compressedKv: {
       family: 'deepseek_v4', windowSize: 128, windowLayers: 44, headDim: 512,
@@ -652,6 +660,7 @@ export const MODELS = [
     name: 'DeepSeek-V4-Pro', group: 'DeepSeek', added: '2026-10-18', tags: ['moe'],
     aliases: ['deepseek-ai/DeepSeek-V4-Pro'],
     totalParams: 1598.8, activeParams: 49, layerCount: 61, kvHeads: 1, kvHeadDim: 512, attnHeads: 128, hiddenSize: 7168,
+    officialParams: 1600, // 모델카드 "1.6T parameters (49B activated)" — https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/b5968e9190ef611bbf34a7229255be88a0e937c1/README.md · V4.1-Flash 카드 표도 1.6T
     numExperts: 384, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
     compressedKv: {
       family: 'deepseek_v4', windowSize: 128, windowLayers: 62, headDim: 512,
@@ -679,6 +688,7 @@ export const MODELS = [
     name: 'Muse Spark Open', group: 'Muse', added: '2026-10-18', tags: ['moe', 'vlm'],
     aliases: ['Muse-Spark-Open-816B-A42B', 'meta-models/Muse-Spark-Open-816B-A42B'],
     totalParams: 822.0, activeParams: 42, layerCount: 62, kvHeads: 16, kvHeadDim: 64, attnHeads: 128, hiddenSize: 8192,
+    officialParams: 816, // 모델카드 "816B total / 42B active"(원본 gated, 미러 사본) — https://huggingface.co/unsloth/Muse-Spark-Open-816B-A42B/blob/49cade7b0c6ed297f0434229ac67eea5f9ae1220/README.md · 공식 레포 ID …-816B-A42B
     numExperts: 256, expertsPerToken: 8, maxContext: 1048576,
     slidingWindow: 2048, slidingPattern: '23:8', globalAttnLayers: 16, // layer_types: sliding 46 : full 16
     benchmarks: null,
@@ -2670,4 +2680,4 @@ export const DATA_UPDATED = '2026-10';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.21.2';
+export const ENGINE_VERSION = '2.21.3';

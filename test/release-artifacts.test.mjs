@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { ENGINE_VERSION, GPUS, GPU_QUANTS, LOCAL_MODELS, MACBOOK_RAM_GROUPS } from '../engine.js';
 
-const RELEASE_VERSION = '2.21.2';
+const RELEASE_VERSION = '2.21.3';
 const RELEASE_DATE = '2026-10-18'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — 2.21.0 DeepSeek-V4 3종·Muse 추가로 재생성
 const url = (rel) => new URL(`../${rel}`, import.meta.url);
 const read = (rel) => readFileSync(url(rel), 'utf8');
@@ -19,7 +19,7 @@ const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).dige
 const VECTORS_JSON_SHA256 = 'f5d7f283e48a0fa9ba74a9c78fd41627086eabeeeed45d9a3cb5fd3e29e0efc0';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
-test('release version surfaces agree on 2.21.2 and the package contract is unchanged', () => {
+test('release version surfaces agree on 2.21.3 and the package contract is unchanged', () => {
   const pkg = readJson('package.json');
   const lock = readJson('package-lock.json');
   assert.equal(pkg.version, RELEASE_VERSION);

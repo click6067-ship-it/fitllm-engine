@@ -218,8 +218,8 @@ test('AC4_parity_with_glm52: simulate/calcKVCache/calcMaxContext are JSON-identi
   assert.ok(cases >= 5000, `only ${cases} cases`);
   assert.equal(seen.has('yes') && seen.has('no'), true); // 퇴화 매트릭스가 아니다(512GB Mac 4bit는 yes, 24GB GPU는 no)
   assert.deepEqual(mismatches, []);
-  const { name: _n1, desc: _d1, added: _a1, ...shape52 } = a; // added = 행 메타데이터(카탈로그 진입일)라 모양 비교에서 뺀다
-  const { name: _n2, desc: _d2, added: _a2, ...shape53 } = b;
+  const { name: _n1, desc: _d1, added: _a1, officialParams: _o1, ...shape52 } = a; // added = 행 메타데이터(카탈로그 진입일)·officialParams(카드 표기)는 행 메타데이터라 모양 비교에서 뺀다
+  const { name: _n2, desc: _d2, added: _a2, officialParams: _o2, ...shape53 } = b;
   assert.deepEqual(shape53, shape52);
 });
 
