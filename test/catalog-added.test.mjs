@@ -30,3 +30,22 @@ test('added is metadata only — the verdict ignores it', () => {
     assert.equal(verdict(m), verdict(rest), m.name);
   }
 });
+
+// officialParams(2.21.3) — 모델 카드가 공표한 총 파라미터(B). '새 모델' 띠의 크기 표기용이고 계산은 totalParams를 쓴다.
+test('officialParams is a card number or an explicit null, never a computed input', () => {
+  for (const m of MODELS) {
+    if (!('officialParams' in m)) continue;
+    const v = m.officialParams;
+    assert.ok(v === null || (Number.isFinite(v) && v > 0), `${m.name}: officialParams must be null or a positive number`);
+  }
+  const card = Object.fromEntries(MODELS.filter((m) => 'officialParams' in m).map((m) => [m.name, m.officialParams]));
+  assert.deepEqual(card, {
+    'GLM-5.3': 744, 'MiniCPM5-2B': 2.517, 'Nex-N2.5-mini': null, 'Nex-N2.5-Pro': null,
+    'DeepSeek-V4.1-Flash-1017': 552, 'DeepSeek-V4-Flash': 284, 'DeepSeek-V4-Pro': 1600, 'Muse Spark Open': 816,
+  });
+  for (const m of LOCAL_MODELS) {
+    const { officialParams, ...rest } = m;
+    const verdict = (row) => JSON.stringify({ ...simulate(row, 512, 131072, 4), model: undefined });
+    assert.equal(verdict(m), verdict(rest), m.name);
+  }
+});
