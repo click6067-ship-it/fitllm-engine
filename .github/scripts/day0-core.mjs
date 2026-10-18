@@ -192,8 +192,9 @@ function isExcludedFullPrecisionVariant(id) {
   return FULL_PRECISION_VARIANT_RE.test(id.split('/')[1]);
 }
 
-// Valid-revision evaluation tier: text-generation first, unknown pipeline next, everything else
-// (currently only the reviewed image-text-to-text tag) last. Priority only; nothing is excluded.
+// Pipeline tiebreak: text-generation first, unknown pipeline next, everything else (currently only
+// the reviewed image-text-to-text tag) last. Priority only; nothing is excluded. Since 2026-10-18 it
+// sits *below* attention and demand in candidateSort — see the comment there.
 function pipelinePriority(tag) {
   if (tag === 'text-generation') return 0;
   if (tag === null || tag === undefined) return 1;
@@ -217,13 +218,27 @@ export function demandTier(modelInfo) {
   return 2;
 }
 
+// 후보 순서 계약: base → 지금의 화제(trendingScore) → 누적 수요 밴드 → 파이프라인 → 릴리스출처 → 최신순.
+//
+// 계기(2026-10-18): 파이프라인(text-generation 먼저)이 평가 큐의 **첫 키**였다. 그래서 HF 트렌딩
+// 1위 DeepSeek-V4.1-Flash-1017(image-text-to-text, 1071점)이 좋아요 25짜리 text 후보 둘에 밀렸다.
+// 9/6 도입 때의 전제("비전 체크포인트는 지원 못 하는 추적용")는 낡았다 — 지금 화제작은 대부분
+// image-text-to-text 이고 카탈로그도 멀티모달을 담는다. 중요도가 아닌 키는 중요도가 같을 때만 쓴다.
+//
+// trendingScore 는 원시값이다(밴드 아님). HF 가 시간 감쇠를 넣어 직접 매기는 "지금 관심" 순위이고,
+// 스케줄이 이슈를 실제로 만든 뒤로는 순서가 "누가 먼저"만 정하지 "누가 영영 빠지나"를 정하지 않는다.
+// 트렌딩 피드에 없는 후보(null)는 0 으로 보고 수요 밴드가 정한다.
 export function candidateSort(a, b) {
   // base/variant 는 수요보다 앞선다 — 우리는 base 체크포인트를 카탈로그에 넣고,
   // 다운로드 수가 그 원칙을 이기면 GGUF 미러가 맨 위로 올라온다.
   const variantDelta = Number(a.checkpointKind !== 'base') - Number(b.checkpointKind !== 'base');
   if (variantDelta) return variantDelta;
+  const trendDelta = (b.trendingScore ?? 0) - (a.trendingScore ?? 0);
+  if (trendDelta) return trendDelta;
   const demandDelta = demandTier(a.modelInfo) - demandTier(b.modelInfo);
   if (demandDelta) return demandDelta;
+  const pipelineDelta = pipelinePriority(a.pipelineTag) - pipelinePriority(b.pipelineTag);
+  if (pipelineDelta) return pipelineDelta;
   const releaseDelta = Number(!a.discoverySources.includes('hf_official_namespace_release'))
     - Number(!b.discoverySources.includes('hf_official_namespace_release'));
   if (releaseDelta) return releaseDelta;
@@ -246,9 +261,22 @@ function candidateFromModel(modelInfo, namespacePolicy, source) {
     createdAt: modelInfo.createdAt ?? null,
     checkpointKind: checkpointKind(id),
     discoverySources: [source],
+    // release 피드(author=…)에는 trendingScore 가 없다 — trending 피드에서 온 값만 신호다.
+    trendingScore: finiteOrNull(modelInfo.trendingScore),
     modelInfo,
   };
 }
+
+function finiteOrNull(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
+function meetsTrendThreshold(modelInfo, thresholds) {
+  return (finiteOrNull(modelInfo?.likes) ?? 0) >= thresholds.likes
+    || (finiteOrNull(modelInfo?.downloads) ?? 0) >= thresholds.downloads;
+}
+
+const NOT_ALLOWLISTED_LEAD_LIMIT = 5;
 
 export async function discoverCandidates({ policy, fetchImpl = fetch, now = new Date() }) {
   policy = loadSourcePolicy(policy);
@@ -257,6 +285,7 @@ export async function discoverCandidates({ policy, fetchImpl = fetch, now = new 
   const cutoff = now.getTime() - policy.releaseLookbackDays * 86400000;
   const sourceFailures = [];
   const droppedCandidates = [];
+  const notAllowlistedLeads = [];
   const discovered = new Map();
   let successfulSources = 0;
 
@@ -267,6 +296,11 @@ export async function discoverCandidates({ policy, fetchImpl = fetch, now = new 
       return;
     }
     const discoverySources = [...new Set([...existing.discoverySources, ...candidate.discoverySources])].sort();
+    // release 쪽 modelInfo 가 이겨도 trending 점수는 남긴다(2026-10-18: 이게 버려져 트렌딩 1위가 0점이 됐다).
+    const scores = [existing.trendingScore, candidate.trendingScore].filter(Number.isFinite);
+    const trendingScore = scores.length ? Math.max(...scores) : null;
+    existing.trendingScore = trendingScore;
+    candidate.trendingScore = trendingScore;
     const candidateIsRelease = candidate.discoverySources.includes('hf_official_namespace_release');
     const existingIsRelease = existing.discoverySources.includes('hf_official_namespace_release');
     if (candidateIsRelease && !existingIsRelease) {
@@ -336,6 +370,20 @@ export async function discoverCandidates({ policy, fetchImpl = fetch, now = new 
         const namespacePolicy = namespaceByName.get(id.split('/')[0]);
         if (!namespacePolicy) {
           droppedCandidates.push({ candidateId: id, reason: 'NAMESPACE_NOT_ALLOWLISTED' });
+          // 허용목록은 사람이 검토한 신원 경계라 자동으로 넓히지 않는다. 대신 공식 벤더가 새
+          // 네임스페이스로 옮긴 경우(2026-10: Meta → meta-models)를 놓치지 않게, 우리 게이트를
+          // 통과했을 base 후보만 리드로 남겨 보고서에 띄운다.
+          const pipelineTag = modelInfo.pipeline_tag ?? null;
+          if (checkpointKind(id) === 'base' && !isExcludedFullPrecisionVariant(id)
+              && (pipelineTag === null || allowedPipelines.has(pipelineTag))
+              && meetsTrendThreshold(modelInfo, policy.priorityThresholds)) {
+            notAllowlistedLeads.push({
+              modelId: id,
+              trendingScore: finiteOrNull(modelInfo.trendingScore),
+              likes: finiteOrNull(modelInfo.likes),
+              downloads: finiteOrNull(modelInfo.downloads),
+            });
+          }
           continue;
         }
         const candidate = candidateFromModel(modelInfo, namespacePolicy, 'hf_official_namespace_trending');
@@ -347,9 +395,7 @@ export async function discoverCandidates({ policy, fetchImpl = fetch, now = new 
           droppedCandidates.push({ candidateId: id, reason: 'PIPELINE_EXCLUDED' });
           continue;
         }
-        const likes = Number.isFinite(modelInfo.likes) ? modelInfo.likes : 0;
-        const downloads = Number.isFinite(modelInfo.downloads) ? modelInfo.downloads : 0;
-        if (likes < policy.priorityThresholds.likes && downloads < policy.priorityThresholds.downloads) {
+        if (!meetsTrendThreshold(modelInfo, policy.priorityThresholds)) {
           droppedCandidates.push({ candidateId: id, reason: 'BELOW_TREND_THRESHOLD' });
           continue;
         }
@@ -371,6 +417,9 @@ export async function discoverCandidates({ policy, fetchImpl = fetch, now = new 
     candidates: [...discovered.values()].sort(candidateSort),
     sourceFailures: sourceFailures.sort((a, b) => `${a.source}:${a.namespace}`.localeCompare(`${b.source}:${b.namespace}`)),
     droppedCandidates: droppedCandidates.sort((a, b) => `${a.candidateId}:${a.reason}`.localeCompare(`${b.candidateId}:${b.reason}`)),
+    notAllowlistedLeads: notAllowlistedLeads
+      .sort((a, b) => (b.trendingScore ?? 0) - (a.trendingScore ?? 0) || a.modelId.localeCompare(b.modelId, 'en'))
+      .slice(0, NOT_ALLOWLISTED_LEAD_LIMIT),
   };
 }
 
@@ -1110,9 +1159,9 @@ export function isAlreadyInCatalog(candidateId, catalogModelNames) {
   return false;
 }
 
-// 스케줄 런은 읽기 전용이라 이슈를 만들지 않는다(의도된 설계). 그 대신 계획이 **로그 고고학
-// 없이** 보이게 한다 — 그러지 않으면 발견은 매일 일어나는데 아무도 모른다(실측: 9/15~9/22
-// 사이 후보가 계속 잡혔지만 인박스에 올라온 건 0건이었다).
+// 계획이 **로그 고고학 없이** 보이게 한다 — 그러지 않으면 발견은 매일 일어나는데 아무도 모른다
+// (실측: 9/15~9/22 사이 후보가 계속 잡혔지만 인박스에 올라온 건 0건이었다). 그 뒤 2026-10-18 부터
+// 스케줄 런은 plan 모드로 돌고 같은 잡에서 이슈를 실제로 만든다. dry-run 은 수동 실행에만 남는다.
 // 실패시키지는 않는다: 상시 빨간불은 사람이 곧 무시하게 되고, 그게 무음 실패보다 나쁘다.
 export function renderRunSummary(summary) {
   const ops = summary.operations || [];
@@ -1128,9 +1177,19 @@ export function renderRunSummary(summary) {
   if (ops.length) {
     lines.push('### Candidates this run', '', '| action | model |', '|---|---|');
     for (const op of ops) lines.push(`| ${op.action} | \`${op.modelId}\` |`);
-    lines.push('', 'Nothing was filed — this run is read-only. To open these as issues, dispatch **day0-watch** with `mode: apply-issues`.', '');
+    lines.push('', summary.mode === 'plan'
+      ? 'Creates/updates above are filed by the next step, after the evidence artifact is uploaded.'
+      : 'Nothing was filed — this run is read-only. To open these as issues, dispatch **day0-watch** with `mode: apply-issues`.', '');
   } else {
     lines.push('No candidates cleared the gates this run.', '');
+  }
+  const leads = summary.notAllowlistedLeads || [];
+  if (leads.length) {
+    lines.push('### Trending outside the allowlist', '', '| model | trending | likes | downloads |', '|---|---|---|---|');
+    for (const lead of leads) {
+      lines.push(`| \`${lead.modelId}\` | ${lead.trendingScore === null ? '—' : Math.round(lead.trendingScore)} | ${lead.likes ?? '—'} | ${lead.downloads ?? '—'} |`);
+    }
+    lines.push('', 'Never auto-filed. If one is an official vendor (e.g. a new namespace), add it to `.github/day0-sources.json` with an identity evidence URL on the vendor\'s own domain.', '');
   }
   if (reasons.size) {
     lines.push('### Why the rest dropped', '', '| reason | count |', '|---|---|');
@@ -1162,10 +1221,25 @@ export async function runDay0Watch(deps, options = {}) {
   const trustedAuthors = trustedAuthorLogins(policy.trustedIssueAuthors);
   const candidatesWithValidRevision = [];
   const candidatesWithInvalidRevision = [];
+  // 이슈가 **될 수 있는** base 만 센다 — revision 이 무효·충돌이면 base 는 blocked 로 끝나므로
+  // 그때 변종까지 빼면 그 모델은 아무 이슈도 못 얻는다(Codex 교차 검수 2026-10-18).
+  const fileableBaseNames = discovery.candidates
+    .filter((candidate) => candidate.checkpointKind === 'base'
+      && REVISION_RE.test(candidate.revision || '') && !candidate.discoveryRevisionConflict)
+    .map(({ id }) => id.split('/')[1]);
   for (const candidate of discovery.candidates) {
     // 카탈로그 중복은 evidence 예산과 mutation 상한 **이전에** 떨어진다.
     if (isAlreadyInCatalog(candidate.id, catalogModelNames)) {
       discovery.droppedCandidates.push({ candidateId: candidate.id, reason: 'CATALOG_ALREADY_PRESENT' });
+      continue;
+    }
+    // 같은 런에 base 가 있는 양자화 재배포본(-FP8·-NVFP4·-GGUF…)은 따로 이슈가 될 이유가 없다 —
+    // base 이슈 하나가 그 모델을 대표한다. 스케줄이 이슈를 실제로 만들면서(2026-10-18) 이게
+    // 남아 있으면 base 하나당 변종 이슈가 서너 개씩 쌓인다. base 가 없으면 변종은 그대로 남는다.
+    const basename = candidate.id.split('/')[1];
+    const stripped = stripQuantSuffixes(basename);
+    if (stripped !== basename && isAlreadyInCatalog(stripped, fileableBaseNames)) {
+      discovery.droppedCandidates.push({ candidateId: candidate.id, reason: 'VARIANT_OF_DISCOVERED_BASE' });
       continue;
     }
     const target = REVISION_RE.test(candidate.revision || '') && !candidate.discoveryRevisionConflict
@@ -1177,9 +1251,10 @@ export async function runDay0Watch(deps, options = {}) {
     candidate.id,
     trustedManagedIssueForModel(existingIssues, candidate.id, trustedAuthors) ? 1 : 0,
   ]));
+  // 이미 이슈가 있는 모델(갱신)은 새 모델 뒤다 — 갱신은 카탈로그에 새 모델을 하나도 더하지 않는다.
+  // 그 안의 순서는 candidateSort 하나가 정한다(화제 → 수요 → 파이프라인 …).
   const evaluationCandidates = [
-    ...[...candidatesWithValidRevision].sort((a, b) => pipelinePriority(a.pipelineTag) - pipelinePriority(b.pipelineTag)
-      || issuePriorityById.get(a.id) - issuePriorityById.get(b.id)
+    ...[...candidatesWithValidRevision].sort((a, b) => issuePriorityById.get(a.id) - issuePriorityById.get(b.id)
       || candidateSort(a, b)),
     ...candidatesWithInvalidRevision,
   ];
@@ -1235,6 +1310,7 @@ export async function runDay0Watch(deps, options = {}) {
       ...(reason ? { reason } : {}),
     })),
     droppedCandidates: issuePlan.dropped,
+    notAllowlistedLeads: discovery.notAllowlistedLeads,
   };
   await Promise.all([
     writeFile(path.join(outputDir, 'run-observation.json'), `${JSON.stringify(observation, null, 2)}\n`, 'utf8'),

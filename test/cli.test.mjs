@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 const BIN = new URL('../bin/fitllm.mjs', import.meta.url).pathname;
 const run = (args) => {
   try { return { out: execFileSync(process.execPath, [BIN, ...args], { encoding: 'utf8' }), code: 0 }; }
@@ -147,4 +147,24 @@ test('붙여 쓴 카탈로그 이름은 네트워크 없이 해석되고 띄어 
   assert.notEqual(glued.code, 2, glued.out);
   assert.equal(glued.code, spaced.code);
   assert.deepEqual(JSON.parse(glued.out), JSON.parse(spaced.out));
+});
+
+// 2026-10-18: "Hugging Face model rejected" 로 끝나는 두 경로(엔진의 아키텍처 거부, gated config)가
+// exit 2 라는 계약을 고정한다. exit 0 이면 다운로드 전 가드가 거부를 "들어간다"로 읽는다.
+// 네트워크 없이 돌도록 fetch 를 스텁으로 바꾼다(test/fixtures/hf-fetch-stub.mjs).
+test('Hugging Face rejection (architecture or gated) exits 2 with no verdict', () => {
+  const stub = new URL('./fixtures/hf-fetch-stub.mjs', import.meta.url).href;
+  for (const [scenario, message] of [
+    ['architecture', /Hugging Face model rejected: 반복 레이어\(num_loops\)/],
+    ['gated', /Hugging Face model rejected: config\.json is gated, private, or not found/],
+  ]) {
+    for (const extra of [[], ['--json']]) {
+      const result = spawnSync(process.execPath, [
+        '--import', stub, BIN, 'example-org/Example-Model', '--gpu', 'DGX Spark', '--count', '4', ...extra,
+      ], { encoding: 'utf8', env: { ...process.env, FITLLM_TEST_HF_SCENARIO: scenario } });
+      assert.equal(result.status, 2, `${scenario} ${extra.join(' ')}: ${result.stderr}`);
+      assert.match(result.stderr, message);
+      assert.equal(result.stdout, '', 'a rejected model must not print a verdict');
+    }
+  }
 });

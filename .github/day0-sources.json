@@ -22,6 +22,10 @@
       "identityEvidenceUrl": "https://github.com/meta-llama"
     },
     {
+      "namespace": "meta-models",
+      "identityEvidenceUrl": "https://dev.meta.ai/resources/blog/build-with-muse-spark-open"
+    },
+    {
       "namespace": "mistralai",
       "identityEvidenceUrl": "https://docs.mistral.ai/"
     },
