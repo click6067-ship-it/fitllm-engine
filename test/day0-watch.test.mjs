@@ -694,12 +694,13 @@ test('runDay0Watch dry-run은 GET 외 GitHub 호출 없이 temp evidence만 쓴�
     policy: await sourcePolicy(), fetchImpl, ghClient, now: new Date('2026-09-03T00:00:00Z'),
   }, { outputDir, sourceRoot: new URL('..', import.meta.url).pathname, mode: 'dry-run' });
   assert.equal(result.summary.mode, 'dry-run');
-  // Queue order now puts text-generation and unknown-pipeline candidates first; look the multimodal
-  // fixture up by id instead of assuming it is the first evaluated record.
   const flashNext = result.records.find(({ manifest }) => manifest.candidateId.startsWith('Qwen/Qwen3.8-Flash-Next@'));
   assert.equal(flashNext.manifest.lifecycleState, 'UNSUPPORTED_ARCHITECTURE');
-  assert.deepEqual(result.records.map(({ manifest }) => manifest.pipelineTag),
-    ['text-generation', null, 'image-text-to-text']);
+  // 수요 순(2026-10-18): 좋아요 4,709 인 base 가 먼저, 좋아요 101 인 미상 파이프라인이 다음.
+  // 예전 순서는 좋아요 20 인 FP8 변종을 맨 앞에 두었다 — 그 변종은 이제 base 가 같은 런에 있어 빠진다.
+  assert.deepEqual(result.records.map(({ manifest }) => manifest.pipelineTag), ['image-text-to-text', null]);
+  assert.ok(result.issuePlan.dropped.some(({ candidateId, reason }) => candidateId === 'Qwen/Qwen3.8-Flash-Next-FP8'
+    && reason === 'VARIANT_OF_DISCOVERED_BASE'));
   assert.deepEqual(githubCalls.map(([method]) => method), ['GET']);
   assert.equal(JSON.parse(await readFile(path.join(outputDir, 'summary.json'), 'utf8')).mode, 'dry-run');
 });
@@ -852,22 +853,27 @@ const mutationOps = (plan) => plan.operations
   .filter(({ action }) => action === 'create' || action === 'update')
   .map(({ action, modelId }) => [action, modelId]);
 
-test('mixed pipeline queue는 mutation cap 전에 text-generation candidates를 new-before-update 순으로 먼저 평가한다', async () => {
+// 화제·수요가 같은 후보들(전부 0)일 때만 아래 두 테스트의 순서가 성립한다 — 그때 파이프라인이
+// text → 미상 → 비전 순으로 정하고, 이미 이슈가 있는 모델(갱신)은 어느 파이프라인이든 새 모델 뒤다.
+test('수요가 같으면 새 모델이 갱신보다, text가 미상·비전보다 먼저 상한을 쓴다', async () => {
   const { discovery, trustedIssueFor, run } = await mixedPipelineFixture();
   assert.equal(discovery.candidates.length, 7);
-  assert.deepEqual(discovery.candidates.slice(0, 4).map(({ pipelineTag }) => pipelineTag),
-    [null, 'image-text-to-text', 'image-text-to-text', 'image-text-to-text']);
-  // Text-U already has a trusted managed issue with a stale digest, so it is an update and must
-  // queue behind the two issue-less text candidates even though it is newer than both.
+  // 최신순이었다면 미상·비전 넷이 맨 앞이었다(픽스처가 그렇게 짜여 있다).
+  assert.deepEqual(discovery.candidates.map(({ pipelineTag }) => pipelineTag), [
+    'text-generation', 'text-generation', 'text-generation', null,
+    'image-text-to-text', 'image-text-to-text', 'image-text-to-text',
+  ]);
+  // Text-U already has a trusted managed issue with a stale digest, so it is an update: it queues
+  // behind every issue-less candidate even though it is the newest text checkpoint.
   const result = await run([await trustedIssueFor('Qwen/Text-U', 'capability-v0')], 'fitllm-day0-mixed-cap-');
   assert.equal(result.summary.sourceFailures, 0);
   assert.equal(result.issuePlan.mutationCount, 3);
   assert.deepEqual(mutationOps(result.issuePlan), [
     ['create', 'Qwen/Text-N1'],
     ['create', 'Qwen/Text-N2'],
-    ['update', 'Qwen/Text-U'],
+    ['create', 'Qwen/Unknown-P'],
   ]);
-  for (const modelId of ['Qwen/Unknown-P', 'Qwen/Img-A', 'Qwen/Img-B', 'Qwen/Img-C']) {
+  for (const modelId of ['Qwen/Text-U', 'Qwen/Img-A', 'Qwen/Img-B', 'Qwen/Img-C']) {
     assert.ok(
       result.issuePlan.dropped.some(({ candidateId, reason }) => candidateId.startsWith(`${modelId}@`) && reason === 'MUTATION_LIMIT'),
       `${modelId} must stay queued behind the mutation cap, not be excluded`,
@@ -875,19 +881,15 @@ test('mixed pipeline queue는 mutation cap 전에 text-generation candidates를 
   }
 });
 
-test('text-generation candidates가 noop으로 capacity를 비우면 unknown pipeline 다음에 image-text-to-text가 남아 있다', async () => {
+test('text 후보가 전부 이미 이슈면 평가 예산도 쓰지 않고 미상 다음 비전이 상한을 쓴다', async () => {
   const { trustedIssueFor, run } = await mixedPipelineFixture();
   const existingIssues = await Promise.all(
     ['Qwen/Text-U', 'Qwen/Text-N1', 'Qwen/Text-N2'].map((modelId) => trustedIssueFor(modelId, 'capability-v1')),
   );
   const result = await run(existingIssues, 'fitllm-day0-mixed-freed-');
-  // The text tier is still evaluated first (deterministic createdAt order inside the tier) ...
-  assert.deepEqual(result.issuePlan.operations.slice(0, 3).map(({ action, modelId }) => [action, modelId]), [
-    ['noop', 'Qwen/Text-U'],
-    ['noop', 'Qwen/Text-N1'],
-    ['noop', 'Qwen/Text-N2'],
-  ]);
-  // ... and the freed slots go to unknown-pipeline before image-text-to-text, in discovery order.
+  // Already-filed (noop) models queue behind every new one, so they are not even re-evaluated here ...
+  assert.ok(!result.issuePlan.operations.some(({ action }) => action === 'noop'));
+  // ... and the slots go to unknown-pipeline before image-text-to-text, in discovery order.
   assert.equal(result.issuePlan.mutationCount, 3);
   assert.deepEqual(mutationOps(result.issuePlan), [
     ['create', 'Qwen/Unknown-P'],
@@ -1072,4 +1074,143 @@ test('candidateOrderPutsDemandAheadOfRecency: 수요 높은 후보가 최신 저
   const a = make('v/A', 200, 20000, '2026-09-10T00:00:00Z');
   const b = make('v/B', 210, 21000, '2026-09-01T00:00:00Z');
   assert.ok(candidateSort(a, b) < 0, '같은 수요 밴드에서 최신순이 깨졌다');
+});
+
+// ── 2026-10-18: 파이프라인 태그가 수요를 이긴다 ────────────────────────────────
+// 실측 계기: 10/18 dry-run 이 상한 3칸을 tencent/Hy-Memory-30B-A3B(좋아요 172) ·
+// ibm-granite/granite-switch-4.1-8b·30b(좋아요 25·21, 트렌딩 밖)로 채웠다. 그 사이
+// deepseek-ai/DeepSeek-V4.1-Flash-1017(10/17 공개, HF 트렌딩 1위 1071점)이 MUTATION_LIMIT
+// 으로 떨어졌다. 9/13 에도 V4.1-Flash 가 같은 이유로 떨어졌다(위 2026-09-14 블록).
+//
+// 원인: 평가 큐의 첫 키가 pipeline_tag(text-generation 먼저)였다(9/6 도입 — "image-text-to-text
+// 는 지원 못 하는 추적용"이라는 전제). 지금 화제작은 대부분 image-text-to-text 이고 카탈로그도
+// 멀티모달(Qwen 3.8 27B, Gemma 4)을 담는다. 수요 밴드(9/22)는 그 키 **아래**에 있어서 이겨 본 적이 없다.
+// 또 release 피드와 trending 피드를 합칠 때 release 쪽 modelInfo 가 이겨 trendingScore 가 버려졌다.
+//
+// 결함류: "중요도가 아닌 키가 상한을 정한다". 9/14(카탈로그 중복)·9/22(수요 없음)·10/18(파이프라인)
+// 이 같은 류다. 그래서 개별 사례가 아니라 **순서 계약**을 고정한다: 화제(트렌딩) → 수요 → 그 밖의 것.
+const D1018_CONFIG = Buffer.from(JSON.stringify({
+  model_type: 'llama', num_hidden_layers: 2, num_attention_heads: 2,
+  num_key_value_heads: 2, hidden_size: 128, head_dim: 64,
+  intermediate_size: 256, vocab_size: 1024, torch_dtype: 'bfloat16',
+}));
+
+function oct18Feeds() {
+  // [id, pipeline, likes, downloads, trendingScore|null, createdAt, feeds]
+  const rows = [
+    ['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'image-text-to-text', 1149, 10233, 1071, '2026-10-17', ['release', 'trending']],
+    ['openbmb/MiniCPM-V-4.7-35B-A3B', 'image-text-to-text', 909, 57935, 727, '2026-10-07', ['release', 'trending']],
+    ['meta-models/Muse-Spark-Open-816B-A42B', 'image-text-to-text', 521, 1809, 484, '2026-09-15', ['trending']],
+    ['meta-models/Muse-Spark-Open-816B-A42B-NVFP4', 'image-text-to-text', 168, 2875, 148, '2026-09-15', ['trending']],
+    ['tencent/Hy-Memory-30B-A3B', 'text-generation', 172, 1187, 172, '2026-10-15', ['release', 'trending']],
+    ['tencent/Hy-Memory-30B-A3B-FP8', 'text-generation', 6, 32, null, '2026-10-16', ['release']],
+    ['ibm-granite/granite-switch-4.1-8b', 'text-generation', 25, 762, null, '2026-10-14', ['release']],
+    ['ibm-granite/granite-switch-4.1-30b', 'text-generation', 21, 563, null, '2026-10-14', ['release']],
+    // 허용목록 밖 — 보고서 리드 후보(공식 벤더일 수도, 커뮤니티일 수도)
+    ['LiquidAI/LFM2.5-24B-A2B', 'text-generation', 454, 13007, 439, '2026-10-12', ['trending']],
+    ['LiquidAI/LFM2.5-24B-A2B-GGUF', 'text-generation', 198, 107599, 194, '2026-10-09', ['trending']],
+    ['fishaudio/drama-3', 'text-to-speech', 641, 9620, 617, '2026-10-01', ['trending']],
+  ];
+  const models = rows.map(([id, pipelineTag, likes, downloads, trendingScore, day, feeds], index) => ({
+    id, feeds,
+    info: {
+      id,
+      sha: (index + 1).toString(16).padStart(2, '0').repeat(20),
+      pipeline_tag: pipelineTag, likes, downloads,
+      createdAt: `${day}T00:00:00.000Z`,
+      tags: ['license:mit'],
+      siblings: ['config.json', 'model.safetensors.index.json', 'LICENSE'].map((rfilename) => ({ rfilename })),
+    },
+    trendingScore,
+  }));
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/models') {
+      const author = parsed.searchParams.get('author');
+      // 실측과 같게: release 피드(author=…)에는 trendingScore 가 없고 trending 피드에만 있다.
+      if (author) return jsonResponse(models.filter((m) => m.feeds.includes('release') && m.id.startsWith(`${author}/`)).map((m) => m.info));
+      return jsonResponse(models.filter((m) => m.feeds.includes('trending')).map((m) => ({ ...m.info, trendingScore: m.trendingScore })));
+    }
+    const [, revision, filename] = parsed.pathname.match(/\/resolve\/([0-9a-f]{40})\/(.+)$/);
+    const bytes = filename === 'config.json' ? D1018_CONFIG
+      : filename === 'model.safetensors.index.json' ? Buffer.from(JSON.stringify({ metadata: { total_size: 1_000_000 } }))
+        : Buffer.from('MIT');
+    return new Response(bytes, { headers: { 'x-repo-commit': revision, etag: `"${filename}"` } });
+  };
+  return { fetchImpl, now: new Date('2026-10-18T09:00:00Z') };
+}
+
+test('oct18HotModelsTakeTheCap: 화제작 셋이 3칸을 먹고 저수요 text 후보는 뒤로 간다', async () => {
+  const { fetchImpl, now } = oct18Feeds();
+  const result = await runDay0Watch({ policy: await sourcePolicy(), fetchImpl, existingIssues: [], now }, {
+    outputDir: await mkdtemp(path.join(tmpdir(), 'fitllm-day0-oct18-')),
+    sourceRoot: new URL('..', import.meta.url).pathname,
+    mode: 'dry-run',
+  });
+  assert.deepEqual(mutationOps(result.issuePlan), [
+    ['create', 'deepseek-ai/DeepSeek-V4.1-Flash-1017'],
+    ['create', 'openbmb/MiniCPM-V-4.7-35B-A3B'],
+    ['create', 'meta-models/Muse-Spark-Open-816B-A42B'],
+  ]);
+  const reasonOf = (modelId) => result.issuePlan.dropped.find(({ candidateId }) => candidateId.replace(/@.*/, '') === modelId)?.reason;
+  // 떨어지는 게 아니라 다음 런으로 밀린다 — 저수요라도 공식 신모델은 결국 이슈가 된다.
+  for (const modelId of ['tencent/Hy-Memory-30B-A3B', 'ibm-granite/granite-switch-4.1-8b', 'ibm-granite/granite-switch-4.1-30b']) {
+    assert.equal(reasonOf(modelId), 'MUTATION_LIMIT', modelId);
+  }
+  // 같은 런에 base 가 있는 양자화 변종은 이슈 거리가 아니다(base 이슈 하나면 된다).
+  assert.equal(reasonOf('tencent/Hy-Memory-30B-A3B-FP8'), 'VARIANT_OF_DISCOVERED_BASE');
+  assert.equal(reasonOf('meta-models/Muse-Spark-Open-816B-A42B-NVFP4'), 'VARIANT_OF_DISCOVERED_BASE');
+});
+
+test('trendingScoreSurvivesFeedMerge: release 피드와 합쳐져도 trending 점수가 남는다', async () => {
+  const { fetchImpl, now } = oct18Feeds();
+  const discovery = await discoverCandidates({ policy: await sourcePolicy(), fetchImpl, now });
+  const ds = discovery.candidates.find(({ id }) => id === 'deepseek-ai/DeepSeek-V4.1-Flash-1017');
+  assert.deepEqual(ds.discoverySources, ['hf_official_namespace_release', 'hf_official_namespace_trending']);
+  assert.equal(ds.trendingScore, 1071);
+  assert.equal(discovery.candidates.find(({ id }) => id === 'ibm-granite/granite-switch-4.1-8b').trendingScore, null);
+});
+
+test('importanceOutranksPipelineAndRecency: 파이프라인·최신순은 화제·수요가 같을 때만 순서를 정한다', () => {
+  const make = (id, { pipelineTag = 'text-generation', likes = 0, downloads = 0, trendingScore = null, createdAt = '2026-10-01T00:00:00Z', kind = 'base', sources = ['hf_official_namespace_release'] } = {}) => ({
+    id, pipelineTag, checkpointKind: kind, discoverySources: sources, createdAt, trendingScore, modelInfo: { likes, downloads },
+  });
+  const hotVision = make('v/HotVision', { pipelineTag: 'image-text-to-text', likes: 1149, downloads: 10233, trendingScore: 1071 });
+  const coldText = make('v/ColdText', { likes: 25, downloads: 762, createdAt: '2026-10-17T00:00:00Z' });
+  assert.ok(candidateSort(hotVision, coldText) < 0, '저수요 text 후보가 화제작보다 앞섰다 — 10/18 사고 재발');
+  // 트렌딩은 누적 수요보다 앞선다: 오래 쌓인 다운로드보다 지금 관심이 day-0 의 질문이다.
+  const trendingNow = make('v/TrendingNow', { pipelineTag: 'image-text-to-text', likes: 521, downloads: 1809, trendingScore: 484 });
+  const oldPopular = make('v/OldPopular', { likes: 6314, downloads: 2485835, trendingScore: 175 });
+  assert.ok(candidateSort(trendingNow, oldPopular) < 0);
+  // 트렌딩 밖이면 기존 수요 밴드가 정한다.
+  assert.ok(candidateSort(make('v/Tier1', { likes: 172 }), make('v/Tier2', { likes: 25 })) < 0);
+  // base/variant 원칙은 그대로 맨 앞이다.
+  assert.ok(candidateSort(coldText, make('v/HotVision-GGUF', { trendingScore: 9999, likes: 9999, kind: 'quantized_variant' })) < 0);
+  // 화제·수요가 같을 때만 파이프라인(text → 미상 → 비전)이 정한다.
+  assert.ok(candidateSort(make('v/T', {}), make('v/I', { pipelineTag: 'image-text-to-text' })) < 0);
+});
+
+test('notAllowlistedLeadsSurfaceInSummary: 허용목록 밖 상위 후보가 보고서에 뜬다', async () => {
+  const { fetchImpl, now } = oct18Feeds();
+  const result = await runDay0Watch({ policy: await sourcePolicy(), fetchImpl, existingIssues: [], now }, {
+    outputDir: await mkdtemp(path.join(tmpdir(), 'fitllm-day0-leads-')),
+    sourceRoot: new URL('..', import.meta.url).pathname,
+    mode: 'dry-run',
+  });
+  // base 체크포인트·허용 파이프라인만, 트렌딩 순. GGUF 미러와 TTS 는 리드가 아니다.
+  assert.deepEqual(result.summary.notAllowlistedLeads.map(({ modelId }) => modelId), ['LiquidAI/LFM2.5-24B-A2B']);
+  assert.deepEqual(result.summary.notAllowlistedLeads[0], {
+    modelId: 'LiquidAI/LFM2.5-24B-A2B', trendingScore: 439, likes: 454, downloads: 13007,
+  });
+  const md = renderRunSummary(result.summary);
+  assert.match(md, /LiquidAI\/LFM2\.5-24B-A2B/);
+  assert.match(md, /day0-sources\.json/); // 무엇을 하면 되는지까지 적는다
+});
+
+test('metaModelsIsAllowlisted: Meta 의 새 공식 네임스페이스가 허용목록에 있다', async () => {
+  const policy = await sourcePolicy();
+  const entry = policy.officialNamespaces.find(({ namespace }) => namespace === 'meta-models');
+  assert.ok(entry, 'meta-models 가 없으면 Muse 계열은 NAMESPACE_NOT_ALLOWLISTED 로 아예 안 보인다');
+  // 근거는 Meta 자신의 도메인이어야 한다(HF 조직 페이지는 자기 주장일 뿐이다).
+  assert.equal(new URL(entry.identityEvidenceUrl).hostname, 'dev.meta.ai');
 });

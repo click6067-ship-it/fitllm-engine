@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'dry-run은 읽기 전용, apply-issues만 최대 3개 issue create/update'
+        description: 'dry-run은 읽기 전용, apply-issues는 최대 3개 issue create/update (schedule은 항상 apply-issues)'
         required: true
         type: choice
         options:
@@ -18,9 +18,12 @@ concurrency:
   group: day0-watch-${{ github.repository }}
   cancel-in-progress: false
 
+# schedule은 apply-issues 잡을 돈다(2026-10-18). 발견이 dry-run 요약에만 남으면 아무도 행동하지
+# 않는다(9/13·10/18 실측). 쓰기 권한은 여전히 이 잡 하나에만 있고, 이슈는 증거 artifact 업로드
+# 뒤에만 쓰며, 같은 다이제스트는 noop이라 6시간마다 돌아도 같은 이슈를 다시 만들지 않는다.
 jobs:
   dry-run:
-    if: github.event_name == 'schedule' || inputs.mode != 'apply-issues'
+    if: github.event_name == 'workflow_dispatch' && inputs.mode != 'apply-issues'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,7 +41,7 @@ jobs:
         run: npm run day0:dry-run
 
   apply-issues:
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-issues'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'apply-issues')
     runs-on: ubuntu-latest
     permissions:
       contents: read

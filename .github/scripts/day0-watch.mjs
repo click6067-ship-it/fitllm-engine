@@ -79,8 +79,9 @@ async function writeJobSummary(summary) {
 async function main() {
   const apply = args.has('--apply-issues');
   if (apply) {
-    if (process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || process.env.DAY0_MODE !== 'apply-issues') {
-      throw new Error('issue apply requires explicit workflow_dispatch mode=apply-issues');
+    // schedule 도 apply 잡을 돈다(workflow 주석 참고). 그 밖의 이벤트(push·PR 등)에서는 절대 쓰지 않는다.
+    if (!['workflow_dispatch', 'schedule'].includes(process.env.GITHUB_EVENT_NAME) || process.env.DAY0_MODE !== 'apply-issues') {
+      throw new Error('issue apply requires the day0-watch apply-issues job (schedule or workflow_dispatch mode=apply-issues)');
     }
     const planPath = valueFor('--plan');
     const artifactUrl = process.env.DAY0_ARTIFACT_URL;
@@ -89,6 +90,10 @@ async function main() {
     const rawPlan = JSON.parse(await readFile(planPath, 'utf8'));
     const plan = attachArtifactRef(rawPlan, { url: artifactUrl, digest: artifactDigest });
     const result = await applyIssuePlan(plan, githubClient(), currentHfModel);
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      const rows = result.results.map(({ modelId, status, issueNumber }) => `| ${status} | \`${modelId}\` | ${issueNumber ? `#${issueNumber}` : '—'} |`);
+      await appendFile(process.env.GITHUB_STEP_SUMMARY, ['### Issue apply', '', '| status | model | issue |', '|---|---|---|', ...rows, ''].join('\n'), 'utf8');
+    }
     console.log(JSON.stringify({ mode: 'apply-issues', ...result }, null, 2));
     return;
   }
