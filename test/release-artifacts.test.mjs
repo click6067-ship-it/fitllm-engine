@@ -6,19 +6,20 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { ENGINE_VERSION, GPUS, GPU_QUANTS, LOCAL_MODELS, MACBOOK_RAM_GROUPS } from '../engine.js';
 
-const RELEASE_VERSION = '2.20.0';
-const RELEASE_DATE = '2026-10-16'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — 2.20.0 하드웨어 9행 추가로 재생성
+const RELEASE_VERSION = '2.21.0';
+const RELEASE_DATE = '2026-10-18'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — 2.21.0 DeepSeek-V4 3종·Muse 추가로 재생성
 const url = (rel) => new URL(`../${rel}`, import.meta.url);
 const read = (rel) => readFileSync(url(rel), 'utf8');
 const readJson = (rel) => JSON.parse(read(rel));
 const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).digest('hex');
 
-// 2.20.0 vectors 바이트 — GB10 클러스터 판정 벡터 2개만 append 하고 기존 36개는 손대지 않는다(2.19.0: GB10 3개, 2.16.0: 신규 3모델 kv 3개).
+// 2.21.0 vectors 바이트 — DeepSeek-V4·Muse 앵커 8개(kv 5 + 판정 3)만 append 하고 기존 38개는 손대지 않는다
+// (2.20.0: GB10 클러스터 판정 2개, 2.19.0: GB10 3개, 2.16.0: 신규 3모델 kv 3개).
 // 러너(run.mjs) 바이트는 2.14.1 이후 불변이다(아래 SHA) — 벡터가 늘어도 검증 코드는 안 바뀐다는 게 요점.
-const VECTORS_JSON_SHA256 = 'fd86a32da9e5ef437fbfffc434a2e090e43814f41e563bf90eed237b3c4d96b1';
+const VECTORS_JSON_SHA256 = 'f5d7f283e48a0fa9ba74a9c78fd41627086eabeeeed45d9a3cb5fd3e29e0efc0';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
-test('release version surfaces agree on 2.20.0 and the package contract is unchanged', () => {
+test('release version surfaces agree on 2.21.0 and the package contract is unchanged', () => {
   const pkg = readJson('package.json');
   const lock = readJson('package-lock.json');
   assert.equal(pkg.version, RELEASE_VERSION);
@@ -46,15 +47,20 @@ test('release version surfaces agree on 2.20.0 and the package contract is uncha
   assert.equal(read('AGENTS.md').includes('2.14.1'), false);
 });
 
-test('the 38 conformance vectors append only the GB10 verdict anchors, with 15/3/4/16 kinds and no new export paths', () => {
+test('the 46 conformance vectors append only the DeepSeek-V4 and Muse anchors, with 18/5/4/19 kinds and no new export paths', () => {
   assert.equal(sha256('vectors/fit-vectors-v1.json'), VECTORS_JSON_SHA256);
   assert.equal(sha256('vectors/run.mjs'), VECTORS_RUNNER_SHA256);
   const { version, vectors } = readJson('vectors/fit-vectors-v1.json');
-  assert.equal(version, '1.8.0');
-  assert.equal(vectors.length, 38);
+  assert.equal(version, '1.9.0');
+  assert.equal(vectors.length, 46);
   const kinds = {};
   for (const v of vectors) kinds[v.kind] = (kinds[v.kind] || 0) + 1;
-  assert.deepEqual(kinds, { kv_total_bytes: 15, kv_per_token_bytes: 3, linear_state_bytes: 4, verdict: 16 });
+  assert.deepEqual(kinds, { kv_total_bytes: 18, kv_per_token_bytes: 5, linear_state_bytes: 4, verdict: 19 });
+  // 2026-10-18 append 된 8개 — 압축 캐시 원소 수(V4.1 1,600 · V4 3,440 · V4-Pro 4,924/토큰), TP 복제, Engram FP8 하한을 고정한다. 손계산은 note에.
+  for (const id of ['dsv41-flash-1017-kv-per-token-f16', 'dsv41-flash-1017-kv-1m-f16', 'dsv4-flash-kv-1m-q8', 'dsv4-pro-kv-per-token-f16',
+    'muse-spark-open-kv-1m-f16', 'v-dsv41-1017-4xdgxspark128-q4km-8k', 'v-dsv4flash-4xdgxspark128-q8-224k', 'v-dsv41-1017-m3ultra512-4bit-8k']) {
+    assert.ok(vectors.some((v) => v.id === id), `missing vector: ${id}`);
+  }
   for (const id of ['v-gptoss120b-2xdgxspark128-q8-8k', 'v-nexpro-4xdgxspark128-q8-128k']) assert.ok(vectors.some((v) => v.id === id), `missing vector: ${id}`);
   // 2026-10-16 append 된 3개 — GB10 reserve(128 − 121.69 + 5.0 + 2.0)와 공유 풀 headroom을 고정한다. 손계산은 note에.
   for (const id of ['v-gptoss120b-dgxspark128-q4-8k', 'v-gptoss120b-dgxspark128-q6k-32k', 'v-lagunas-dgxspark128-q6k-256k']) {
@@ -79,7 +85,7 @@ test('census counts, date, schema, URLs, licence boundary and checksums are deri
   const devices = GPUS.length + macConfigs;
   const rowsPerModel = GPUS.length * GPU_QUANTS.length + macConfigs * 3;
   const rows = LOCAL_MODELS.length * rowsPerModel;
-  assert.equal(LOCAL_MODELS.length, 30);
+  assert.equal(LOCAL_MODELS.length, 34);
   assert.equal(devices, 104);
   assert.equal(census.version, 1);
   assert.equal(census.schema_version, 2);
@@ -135,7 +141,7 @@ test('README and AGENTS model/verdict counts are derived from the catalog and ce
   assert.ok(readme.includes(`**${verdicts}** (${LOCAL_MODELS.length} models incl. draft tier × ${manifest.devices} GPUs/Macs × quant tiers)`), 'README census sentence');
   assert.ok(readme.includes(`Open data: the full **Fit Census** (${verdicts}, **CC0**)`), 'README open-data sentence');
   assert.ok(agents.includes(`${verdicts}, model × device × quant`), 'AGENTS census line');
-  assert.ok(agents.includes('38 byte-exact anchors'));
+  assert.ok(agents.includes('46 byte-exact anchors'));
 });
 
 test('README and CONTRIBUTING claims stay bounded: GLM-5.3 is listed as supported, never as universally runnable or more accurate', () => {

@@ -1,6 +1,6 @@
 {
-  "version": "1.8.0",
-  "generated": "2026-10-16",
+  "version": "1.9.0",
+  "generated": "2026-10-18",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
     {
@@ -409,6 +409,93 @@
       "kvBits": 16,
       "expect": "no",
       "note": "4 units, 2 KV heads < 4 -> KV replicated x2: weights 392.68 + KV 3.75*2 = 7.50 + linear state 0.18 + overhead (0.12*w + 0.15*KV + 131072*0.00003*4) 63.98 + reserve 4*13.31 = 517.58 > 512. Without the replication and per-unit activation buffers a port would say 'tight' (501.47)"
+    },
+    {
+      "id": "dsv41-flash-1017-kv-per-token-f16",
+      "kind": "kv_per_token_bytes",
+      "model": "DeepSeek-V4.1-Flash-1017",
+      "ctx": 1,
+      "kvBits": 16,
+      "expect": 3208,
+      "note": "CSA2 shares KV across layers: only the 4 kv_source_layer_ids (2, 8, 14 at compress ratio 2; 20 at ratio 1) keep a compressed main KV (head_dim 512, one shared head) and indexer keys (index_head_dim 128); the other 36 layers keep only their sliding window and read the source's cache. Per token: 3 x (512 + 128) / 2 + 1 x (512 + 128) / 1 = 1,600 elements x 2 B (the reference code's bf16 buffers) = 3,200 B + 8 B Engram n-gram token history (NgramHashState.cache, int64 per position) = 3,208 B. The same 1,600 elements in DeepSeek's FP4 formats (main 1,280 x 0.5625 B + indexer 320 x 0.53125 B) give the 890 B/token the tech report states. Charging all 40 layers a 512-dim cache at 2 B gives 40,960 B/token (12.8x). Source: deepseek-ai/DeepSeek-V4.1-Flash-1017 config.json at revision 1bae0e1088993b9b82de08f59de5be5a34e42170 and inference/model.py + inference/engram.py at the same revision."
+    },
+    {
+      "id": "dsv41-flash-1017-kv-1m-f16",
+      "kind": "kv_total_bytes",
+      "model": "DeepSeek-V4.1-Flash-1017",
+      "ctx": 1048576,
+      "kvBits": 16,
+      "expect": 3906363392,
+      "note": "3,208 B/token x 1,048,576 ctx = 3,363,831,808 B + sliding windows 128 tokens x 512 x 2 B x 43 layers (40 backbone + 3 DSpark draft blocks, all compress ratio 0 past layer 39) = 5,636,096 B + compressor fp32 state for the three ratio-2 sources 3 x 2 x (2 x 512) x 4 B = 24,576 B + the 512 MiB indexer prefill workspace (vLLM VLLM_SPARSE_INDEXER_MAX_LOGITS_MB default; vllm/envs.py at 2067297b2f15f0776be6d2a7e1b435bd20af60c1) = 536,870,912 B -> 3,906,363,392 B (3.64 GiB). Source: deepseek-ai/DeepSeek-V4.1-Flash-1017 config.json at revision 1bae0e1088993b9b82de08f59de5be5a34e42170 and inference/model.py + inference/engram.py at the same revision."
+    },
+    {
+      "id": "dsv4-flash-kv-1m-q8",
+      "kind": "kv_total_bytes",
+      "model": "DeepSeek-V4-Flash",
+      "ctx": 1048576,
+      "kvBits": 8,
+      "expect": 4159062016,
+      "note": "V4 (CSA + HCA): every compressed layer owns its cache. compress_ratios over 43 layers = 2 x 0 (window only), 21 x 4 (CSA: 512-dim main KV + 128-dim indexer keys, both 1 per 4 tokens), 20 x 128 (HCA: 512-dim main KV, 1 per 128 tokens). Per token: 21 x (512 + 128) / 4 + 20 x 512 / 128 = 3,440 elements x 1 B = 3,440 B -> x 1,048,576 = 3,607,101,440 B + windows 128 x 512 x 1 B x 44 layers (incl. the MTP block) = 2,883,584 B + compressor fp32 state (CSA 21 x (2 x 8 x 1024 + 2 x 8 x 256) x 4 B + HCA 20 x 2 x 128 x 512 x 4 B) = 12,206,080 B + the 512 MiB indexer prefill workspace (vLLM VLLM_SPARSE_INDEXER_MAX_LOGITS_MB default; vllm/envs.py at 2067297b2f15f0776be6d2a7e1b435bd20af60c1) = 536,870,912 B -> 4,159,062,016 B (3.87 GiB). The state and the workspace do not shrink with --kv. Source: deepseek-ai/DeepSeek-V4-Flash config.json and inference/model.py at revision 60d8d70770c6776ff598c94bb586a859a38244f1."
+    },
+    {
+      "id": "dsv4-pro-kv-per-token-f16",
+      "kind": "kv_per_token_bytes",
+      "model": "DeepSeek-V4-Pro",
+      "ctx": 1,
+      "kvBits": 16,
+      "expect": 9848,
+      "note": "compress_ratios over 61 layers = 30 x 4 (CSA) and 31 x 128 (HCA; layers 0 and 1 are HCA here, unlike Flash). Per token: 30 x (512 + 128) / 4 + 31 x 512 / 128 = 4,924 elements x 2 B = 9,848 B. A uniform 61-layer x 512-dim cache would be 62,464 B/token (6.3x). Source: deepseek-ai/DeepSeek-V4-Pro config.json at revision b5968e9190ef611bbf34a7229255be88a0e937c1."
+    },
+    {
+      "id": "muse-spark-open-kv-1m-f16",
+      "kind": "kv_total_bytes",
+      "model": "Muse Spark Open",
+      "ctx": 1048576,
+      "kvBits": 16,
+      "expect": 69105352704,
+      "note": "standard GQA with a 1:3 full/sliding schedule: 16 full_attention layers keep the whole context and 46 sliding_attention layers keep 2,048 tokens. 2 (K+V) x 16 kv-heads x head_dim 64 x 2 B = 4,096 B/layer/token -> 16 x 4,096 x 1,048,576 = 68,719,476,736 B + 46 x 4,096 x 2,048 = 385,875,968 B -> 69,105,352,704 B (64.36 GiB). Using the 128 query heads gives 8x; charging all 62 layers the full context gives 3.9x. Source: unsloth/Muse-Spark-Open-816B-A42B config.json at revision 49cade7b0c6ed297f0434229ac67eea5f9ae1220, the same git blob (e6df3a846ebfcb0d55c350c1e79e7886c65b7399) as the gated meta-models/Muse-Spark-Open-816B-A42B original; attention per huggingface/transformers models/muse_spark at 487dcfa6ab1c294ce2695005108fdf19a63363eb."
+    },
+    {
+      "id": "v-dsv41-1017-4xdgxspark128-q4km-8k",
+      "kind": "verdict",
+      "model": "DeepSeek-V4.1-Flash-1017",
+      "device": {
+        "type": "gpu",
+        "gpu": "4× DGX Spark 128GB"
+      },
+      "ctx": 8192,
+      "weightBpw": 4.8944,
+      "kvBits": 16,
+      "expect": "no",
+      "note": "weights (763.2e9 - 196.6138496e9 Engram) x 4.8944 / 8 + 196.6138496e9 x 8.25 / 8 (Engram tables never below their FP8 + E8M0-scale storage) = 511.66 GiB (the whole checkpoint resident: 552B backbone + Engram + DSpark and vision weights) + KV 2.119 (one KV head, replicated on all 4 units, incl. 0.5 GiB indexer workspace each) + overhead (0.12 x weights + 0.15 x KV + 8192 x 0.00003 x 4 units) 62.70 + reserve 4 x 13.31 = 629.72 > 512. A port that sizes the weights from the 552B backbone figure says yes (408.92)."
+    },
+    {
+      "id": "v-dsv4flash-4xdgxspark128-q8-224k",
+      "kind": "verdict",
+      "model": "DeepSeek-V4-Flash",
+      "device": {
+        "type": "gpu",
+        "gpu": "4× DGX Spark 128GB"
+      },
+      "ctx": 229376,
+      "weightBpw": 8.5008,
+      "kvBits": 16,
+      "expect": "tight",
+      "note": "weights 290.9e9 x 8.5008 / 8 = 287.88 GiB + KV 1.99 GiB per unit (incl. the 0.5 GiB indexer workspace) x 4 units (the single KV head, the compressed caches and the workspace are per tensor-parallel rank) = 7.95 + overhead 63.26 + reserve 53.24 = 412.33 -> free 99.67 < 102.4 headroom. Counting the KV once (1.99) gives free 106.52 -> yes."
+    },
+    {
+      "id": "v-dsv41-1017-m3ultra512-4bit-8k",
+      "kind": "verdict",
+      "model": "DeepSeek-V4.1-Flash-1017",
+      "device": {
+        "type": "mac",
+        "ram": 512
+      },
+      "ctx": 8192,
+      "weightBpw": 4,
+      "kvBits": 16,
+      "expect": "no",
+      "note": "Mac 512GB, 4-bit: the 196.6B Engram tables stay at their FP8 + scale storage (8.25 bit): (763.2e9 - 196.6138496e9) x 0.5 + 196.6138496e9 x 1.03125 = 452.67 GiB weights + KV 0.53 + overhead 54.65 + macOS/runtime reserve 8.0 = 515.85 > 512. Quantizing the Engram tables to 4 bits as well (no runtime verified to do so) gives 406.89 -> yes."
     }
   ]
 }

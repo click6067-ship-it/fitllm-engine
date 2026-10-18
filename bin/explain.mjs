@@ -21,6 +21,23 @@ function attentionBasis(model) {
     };
   }
 
+  if (model.compressedKv) {
+    const ck = model.compressedKv;
+    return {
+      kind: 'compressed-sparse',
+      ...basis,
+      kvLayers: ck.kvLayers, // 자기 압축 캐시를 가진 층(나머지는 창만, 또는 앞 층 캐시를 재사용)
+      compressedKv: {
+        windowSize: ck.windowSize,
+        windowLayers: ck.windowLayers,
+        caches: ck.caches.map((c) => ({ ...c })),
+        cachedElementsPerToken: ck.caches.reduce((s, c) => s + (c.layers * c.dim) / c.ratio, 0),
+        tokenStateBytesPerToken: ck.tokenStateBytes,
+        fixedStateBytes: ck.stateBytes,
+      },
+    };
+  }
+
   if (model.mlaKvLoraRank) {
     return {
       kind: 'mla',

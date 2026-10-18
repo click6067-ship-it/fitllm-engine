@@ -167,15 +167,15 @@ test('test_catalog_append_index_and_group_order_stable', () => {
   ];
   // ?m= 공유링크 인덱스 0–25 불변, Granite는 2.14.0 시점 배열 끝 append(MODELS 인덱스 26) — 이후 모델이 뒤에 붙어도 이 인덱스는 불변
   assert.deepEqual(MODELS.slice(0, BASE_NAMES.length).map((m) => m.name), BASE_NAMES);
-  assert.equal(MODELS.length, BASE_NAMES.length + 6); // GLM-5.3(27) + 2026-09-14 배치 4종
+  assert.equal(MODELS.length, BASE_NAMES.length + 10); // GLM-5.3(27) + 2026-09-14 배치 4종 + 2.21.0 DeepSeek-V4 3종·Muse
   assert.equal(MODELS[BASE_NAMES.length].name, 'Granite-4.2-30B');
   assert.equal(LOCAL_MODELS[25].name, 'Granite-4.2-30B'); // ?m=25
   assert.equal(MODELS.filter((m) => /granite/i.test(m.name)).length, 1); // 3B/8B 형제·base 모델은 이번 변경에 넣지 않는다
-  assert.equal(LOCAL_MODELS.length, 30); // 27(2.15.0) + 2026-09-14 로컬 3종 — 앞 27개는 그대로
+  assert.equal(LOCAL_MODELS.length, 34); // 27(2.15.0) + 2026-09-14 로컬 3종 + 2.21.0 4종 — 앞 27개는 그대로
   // 기존 그룹의 상대 순서 불변 + Granite 그룹 등재(신규 그룹은 앞 — Spark 전례)
   const BASE_ORDER = ['Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5', 'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft'];
-  assert.deepEqual(MODEL_GROUP_ORDER.filter((g) => g !== 'Granite' && g !== 'Nex'), BASE_ORDER);
-  assert.equal(MODEL_GROUP_ORDER[1], 'Granite'); // 2026-09-14 'Nex'가 앞에 붙었다 — 신규 그룹 우선 규칙은 그대로
+  assert.deepEqual(MODEL_GROUP_ORDER.filter((g) => !['Granite', 'Nex', 'DeepSeek', 'Muse'].includes(g)), BASE_ORDER);
+  assert.equal(MODEL_GROUP_ORDER[3], 'Granite'); // 2026-09-14 'Nex', 2.21.0 'DeepSeek'·'Muse'가 앞에 붙었다 — 신규 그룹 우선 규칙은 그대로
   // 이름 해석: 정확 일치 + 토큰 일치(표기 차이 무관). 별칭 테이블은 추가하지 않는다 — 정본 이름 하나뿐.
   assert.equal(resolveLocalModel('Granite-4.2-30B').matchedBy, 'exact');
   for (const q of ['granite-4.2-30b', 'granite 4.2 30b', 'Granite 4.2 30B', 'GRANITE_4_2_30B']) {
@@ -249,7 +249,7 @@ test('test_census_contains_granite_rows', () => {
   const manifest = readJson('../census/manifest.json');
   const rows = census.data.filter((r) => r.model === 'Granite-4.2-30B');
   assert.equal(rows.length, 57 * 3 + 47 * 5); // Mac 57구성 × 3 tiers + GPU 47종 × 5 tiers = 406 rows/model (2.19.0: GPU 9행, 2.20.0: GB10 클러스터 2행)
-  const total = LOCAL_MODELS.length * (57 * 3 + 47 * 5); // 30 × 406 = 12,180 (2.20.0: 2×·4× DGX Spark)
+  const total = LOCAL_MODELS.length * (57 * 3 + 47 * 5); // 34 × 406 = 13,804 (2.21.0: DeepSeek-V4 3종·Muse)
   assert.equal(census.verdicts, total);
   assert.equal(census.data.length, total);
   assert.equal(manifest.rows, total);
@@ -262,19 +262,19 @@ test('test_release_version_bumped_and_readme_counts', () => {
   // 2.15.0 = PLE parser fail-closed + residency-policy 정정 + text-only GLM-5.3 (minor bump, 카탈로그 27행).
   const pkg = readJson('../package.json');
   const lock = readJson('../package-lock.json');
-  assert.equal(pkg.version, '2.20.0');
-  assert.equal(lock.version, '2.20.0');
-  assert.equal(ENGINE_VERSION, '2.20.0');
+  assert.equal(pkg.version, '2.21.0');
+  assert.equal(lock.version, '2.21.0');
+  assert.equal(ENGINE_VERSION, '2.21.0');
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
   const verdicts = `${readJson('../census/manifest.json').rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.20.0', 'conformance_vectors-38%2F38', '38 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.21.0', 'conformance_vectors-46%2F46', '46 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
-  for (const s of [verdicts, '38 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
+  for (const s of [verdicts, '46 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
   assert.doesNotMatch(readme, /Granite[^\n]*tok(?:ens)?\/s/i); // 속도 주장 금지
   const vectors = readJson('../vectors/fit-vectors-v1.json');
-  assert.equal(vectors.vectors.length, 38);
+  assert.equal(vectors.vectors.length, 46);
   const v = vectors.vectors.find((x) => x.id === 'granite42-30b-kv-128k-f16');
   assert.deepEqual(v, {
     id: 'granite42-30b-kv-128k-f16', kind: 'kv_total_bytes', model: 'Granite-4.2-30B', ctx: 131072, kvBits: 16, expect: KV_128K_F16,
