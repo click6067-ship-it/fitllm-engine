@@ -1221,8 +1221,11 @@ export async function runDay0Watch(deps, options = {}) {
   const trustedAuthors = trustedAuthorLogins(policy.trustedIssueAuthors);
   const candidatesWithValidRevision = [];
   const candidatesWithInvalidRevision = [];
-  const discoveredBaseNames = discovery.candidates
-    .filter(({ checkpointKind: kind }) => kind === 'base')
+  // 이슈가 **될 수 있는** base 만 센다 — revision 이 무효·충돌이면 base 는 blocked 로 끝나므로
+  // 그때 변종까지 빼면 그 모델은 아무 이슈도 못 얻는다(Codex 교차 검수 2026-10-18).
+  const fileableBaseNames = discovery.candidates
+    .filter((candidate) => candidate.checkpointKind === 'base'
+      && REVISION_RE.test(candidate.revision || '') && !candidate.discoveryRevisionConflict)
     .map(({ id }) => id.split('/')[1]);
   for (const candidate of discovery.candidates) {
     // 카탈로그 중복은 evidence 예산과 mutation 상한 **이전에** 떨어진다.
@@ -1235,7 +1238,7 @@ export async function runDay0Watch(deps, options = {}) {
     // 남아 있으면 base 하나당 변종 이슈가 서너 개씩 쌓인다. base 가 없으면 변종은 그대로 남는다.
     const basename = candidate.id.split('/')[1];
     const stripped = stripQuantSuffixes(basename);
-    if (stripped !== basename && isAlreadyInCatalog(stripped, discoveredBaseNames)) {
+    if (stripped !== basename && isAlreadyInCatalog(stripped, fileableBaseNames)) {
       discovery.droppedCandidates.push({ candidateId: candidate.id, reason: 'VARIANT_OF_DISCOVERED_BASE' });
       continue;
     }

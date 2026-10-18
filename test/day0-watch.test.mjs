@@ -1214,3 +1214,32 @@ test('metaModelsIsAllowlisted: Meta 의 새 공식 네임스페이스가 허용�
   // 근거는 Meta 자신의 도메인이어야 한다(HF 조직 페이지는 자기 주장일 뿐이다).
   assert.equal(new URL(entry.identityEvidenceUrl).hostname, 'dev.meta.ai');
 });
+
+test('variantStaysWhenBaseCannotBeFiled: base 가 blocked 면 변종은 빠지지 않고 이슈가 된다', async () => {
+  const policy = await sourcePolicy();
+  policy.officialNamespaces = policy.officialNamespaces.slice(0, 1);
+  const models = [
+    { id: 'Qwen/New-Model', sha: 'not-a-sha' },          // revision 무효 → blocked
+    { id: 'Qwen/New-Model-FP8', sha: 'b'.repeat(40) },   // 유효 → 이 모델의 유일한 이슈 경로
+  ].map((m) => ({
+    ...m, pipeline_tag: 'text-generation', createdAt: '2026-10-17T00:00:00.000Z', tags: ['license:mit'],
+    siblings: ['config.json', 'model.safetensors.index.json', 'LICENSE'].map((rfilename) => ({ rfilename })),
+  }));
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/models') return jsonResponse(parsed.searchParams.has('author') ? models : []);
+    const [, revision, filename] = parsed.pathname.match(/\/resolve\/([0-9a-f]{40})\/(.+)$/);
+    const bytes = filename === 'config.json' ? D1018_CONFIG
+      : filename === 'model.safetensors.index.json' ? Buffer.from(JSON.stringify({ metadata: { total_size: 1_000_000 } }))
+        : Buffer.from('MIT');
+    return new Response(bytes, { headers: { 'x-repo-commit': revision, etag: `"${filename}"` } });
+  };
+  const result = await runDay0Watch({ policy, fetchImpl, existingIssues: [], now: new Date('2026-10-18T00:00:00Z') }, {
+    outputDir: await mkdtemp(path.join(tmpdir(), 'fitllm-day0-blocked-base-')),
+    sourceRoot: new URL('..', import.meta.url).pathname,
+    mode: 'dry-run',
+  });
+  assert.deepEqual(mutationOps(result.issuePlan), [['create', 'Qwen/New-Model-FP8']]);
+  assert.ok(result.issuePlan.operations.some(({ action, modelId }) => action === 'blocked' && modelId === 'Qwen/New-Model'));
+  assert.ok(!result.issuePlan.dropped.some(({ reason }) => reason === 'VARIANT_OF_DISCOVERED_BASE'));
+});
