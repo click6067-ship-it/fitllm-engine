@@ -4,7 +4,7 @@
  "generated": "2026-10-20",
  "engine_data": "2026-10",
  "verdicts": 13804,
- "assumptions": "ctx=min(8192,model max), KV cache F16, engine reserve/headroom per platform",
+ "assumptions": "ctx=min(8192,model max), KV cache F16, engine reserve/headroom per platform; one-unit GB10 rows count GGUF weights at file size, calibrated on llama.cpp/Ollama logs with flash attention on (the default) — flash attention off and single-unit vLLM need more and are not budgeted",
  "definitions": {
   "predicted_total_to_run_gb": "Total memory required to RUN: weights + KV cache + linear-attention state + runtime overhead + OS/GPU reserve. This is what the verdict uses. (used_gb is its v1 alias.)",
   "linear_state_gb": "Fixed recurrent state of hybrid linear-attention (Gated DeltaNet) layers. Unlike KV cache this does NOT grow with context — it is a constant per sequence. Exactly 0 for standard full/sliding attention models.",
