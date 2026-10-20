@@ -2252,8 +2252,8 @@ Qwen 3.6 35B-A3B,35,RTX PRO 2000 Blackwell,gpu,16,FP16,8192,F16,no,75.5,75.5,65.
 Qwen 3.6 35B-A3B,35,DGX Spark 128GB,gpu,128,Q4_K_M,8192,F16,yes,33.74,33.74,19.94,19.94,0.16,0.06,0.27,13.31,94.26,262144,,,,,,,
 Qwen 3.6 35B-A3B,35,DGX Spark 128GB,gpu,128,Q5_K_M,8192,F16,yes,37.04,37.04,23.24,23.24,0.16,0.06,0.27,13.31,90.96,262144,,,,,,,
 Qwen 3.6 35B-A3B,35,DGX Spark 128GB,gpu,128,Q6_K,8192,F16,yes,40.54,40.54,26.74,26.74,0.16,0.06,0.27,13.31,87.46,262144,,,,,,,
-Qwen 3.6 35B-A3B,35,DGX Spark 128GB,gpu,128,Q8_0,8192,F16,yes,48.43,48.43,34.64,34.64,0.16,0.06,0.27,13.31,79.57,262144,40.3,generation_peak,102400,different_ctx,GiB,community_unverified,https://github.com/ollama/ollama/issues/16610
-Qwen 3.6 35B-A3B,35,DGX Spark 128GB,gpu,128,FP16,8192,F16,yes,78.99,78.99,65.19,65.19,0.16,0.06,0.27,13.31,49.01,262144,67.42,generation_peak,102400,different_ctx,GiB,maintainer_verified,https://github.com/ollama/ollama/issues/16610
+Qwen 3.6 35B-A3B,35,DGX Spark 128GB,gpu,128,Q8_0,8192,F16,yes,48.43,48.43,34.64,34.64,0.16,0.06,0.27,13.31,79.57,262144,40.3,allocation_floor,102400,different_ctx,GiB,community_unverified,https://github.com/ollama/ollama/issues/16610
+Qwen 3.6 35B-A3B,35,DGX Spark 128GB,gpu,128,FP16,8192,F16,yes,78.99,78.99,65.19,65.19,0.16,0.06,0.27,13.31,49.01,262144,67.42,allocation_floor,102400,different_ctx,GiB,maintainer_verified,https://github.com/ollama/ollama/issues/16610
 Qwen 3.6 35B-A3B,35,2× DGX Spark 128GB,gpu,256,Q4_K_M,8192,F16,yes,49.69,49.69,19.94,22.34,0.16,0.06,2.91,26.62,206.31,262144,,,,,,,
 Qwen 3.6 35B-A3B,35,2× DGX Spark 128GB,gpu,256,Q5_K_M,8192,F16,yes,53.38,53.38,23.24,26.03,0.16,0.06,3.3,26.62,202.62,262144,,,,,,,
 Qwen 3.6 35B-A3B,35,2× DGX Spark 128GB,gpu,256,Q6_K,8192,F16,yes,57.3,57.3,26.74,29.95,0.16,0.06,3.72,26.62,198.7,262144,,,,,,,
@@ -4689,7 +4689,7 @@ Gemma 4 31b,30.7,DGX Spark 128GB,gpu,128,Q4_K_M,8192,F16,yes,32.67,32.67,17.49,1
 Gemma 4 31b,30.7,DGX Spark 128GB,gpu,128,Q5_K_M,8192,F16,yes,35.56,35.56,20.38,20.38,1.41,0,0.46,13.31,92.44,262144,,,,,,,
 Gemma 4 31b,30.7,DGX Spark 128GB,gpu,128,Q6_K,8192,F16,yes,38.63,38.63,23.46,23.46,1.41,0,0.46,13.31,89.37,262144,,,,,,,
 Gemma 4 31b,30.7,DGX Spark 128GB,gpu,128,Q8_0,8192,F16,yes,45.55,45.55,30.38,30.38,1.41,0,0.46,13.31,82.45,262144,,,,,,,
-Gemma 4 31b,30.7,DGX Spark 128GB,gpu,128,FP16,8192,F16,yes,72.36,72.36,57.18,57.18,1.41,0,0.46,13.31,55.64,262144,62.6,generation_peak,65536,different_ctx,GiB,maintainer_verified,https://forums.developer.nvidia.com/t/366162
+Gemma 4 31b,30.7,DGX Spark 128GB,gpu,128,FP16,8192,F16,yes,72.36,72.36,57.18,57.18,1.41,0,0.46,13.31,55.64,262144,62.6,allocation_floor,65536,different_ctx,GiB,maintainer_verified,https://forums.developer.nvidia.com/t/366162
 Gemma 4 31b,30.7,2× DGX Spark 128GB,gpu,256,Q4_K_M,8192,F16,yes,48.32,48.32,17.49,19.59,1.41,0,2.8,26.62,207.68,262144,,,,,,,
 Gemma 4 31b,30.7,2× DGX Spark 128GB,gpu,256,Q5_K_M,8192,F16,yes,51.56,51.56,20.38,22.83,1.41,0,3.15,26.62,204.44,262144,,,,,,,
 Gemma 4 31b,30.7,2× DGX Spark 128GB,gpu,256,Q6_K,8192,F16,yes,55,55,23.46,26.27,1.41,0,3.52,26.62,201,262144,,,,,,,

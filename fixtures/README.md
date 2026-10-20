@@ -12,6 +12,7 @@ Why it matters: theoretical math can be right on paper and off in practice (runt
 | `load_peak` | Peak while loading the model | between weights and total |
 | `generation_peak` | Peak during active generation (process-level) | weights + KV + runtime (no OS reserve) |
 | `system_total_peak` | Whole-device peak incl. OS/driver | `predicted_total_to_run_gb` (= fitllm's verdict number) |
+| `allocation_floor` | What the runtime itself reported allocating — logged buffers (weights, KV, state, compute) or a per-process `nvidia-smi` snapshot. A **floor**: no CUDA context or host memory the source does not show, no sampled peak | weights + KV + state + runtime (no OS reserve) — the prediction should not be below it |
 
 An `idle_resident` reading **below** fitllm's total is expected — the total deliberately includes KV, runtime overhead and OS/GPU reserve, because it answers "can I run this", not "how big are the weights".
 

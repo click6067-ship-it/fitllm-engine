@@ -45,7 +45,7 @@ test('CLI --json: breakdown fields sum to usedGB (Apple path — the 2GB double-
 });
 
 test('fixtures/measured.json: every entry typed and schema-conformant', () => {
-  const KINDS = ['idle_resident', 'load_peak', 'generation_peak', 'system_total_peak', 'unknown'];
+  const KINDS = ['idle_resident', 'load_peak', 'generation_peak', 'system_total_peak', 'allocation_floor', 'unknown'];
   const data = JSON.parse(readFileSync(new URL('../fixtures/measured.json', import.meta.url), 'utf8'));
   assert.ok(data.length > 0);
   for (const e of data) {

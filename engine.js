@@ -1331,7 +1331,7 @@ const STRUCTURAL_ASSUMPTIONS = Object.freeze({
   }),
   unified: Object.freeze({
     id: 'gb10-unified-memory-reserve',
-    statement: 'GB10 systems share one 128 GB LPDDR5x pool between DGX OS, CPU processes and the GPU. The reserve subtracts the 6.3 GiB the OS cannot see on current DGX OS (121.7 GiB visible; early firmware shows about 2 GiB less), about 5 GiB of idle DGX OS use and a 2 GiB runtime allowance. On one unit the GGUF weights count at their file size with no extra percentage, plus 15% of the KV cache and an activation allowance that grows with context — public llama.cpp and Ollama allocation logs on GB10 show compute buffers of 0.5–1.7 GiB on top of the weights and KV cache (fixtures/measured.json). Other running apps, the file page cache and llama-server\'s host-side prompt cache (--cache-ram, 8 GiB by default) are not budgeted, and weights are assumed resident once: a loader that keeps an mmap page-cache copy can need up to the weight size again while loading.',
+    statement: 'GB10 systems share one 128 GB LPDDR5x pool between DGX OS, CPU processes and the GPU. The reserve subtracts the 6.3 GiB the OS cannot see on current DGX OS (121.7 GiB visible; early firmware shows about 2 GiB less), about 5 GiB of idle DGX OS use and a 2 GiB runtime allowance. On one unit the GGUF weights count at their file size with no extra percentage, plus 15% of the KV cache and an activation allowance that grows with context. That is calibrated on public llama.cpp and Ollama allocation logs on GB10 with flash attention on — the default in both (--flash-attn auto) — whose compute buffers were 0.5–1.7 GiB on top of the weights and KV cache (fixtures/measured.json). With flash attention off, llama.cpp holds the full attention scores (context × batch × heads × 4 bytes, about 24 GiB for 48 heads at 262K tokens and batch 512), and vLLM adds CUDA-graph memory and pre-allocates its KV pool; neither is budgeted. Other running apps, the file page cache and llama-server\'s host-side prompt cache (--cache-ram, 8 GiB by default) and context checkpoints are not budgeted, and weights are assumed resident once: a loader that keeps an mmap page-cache copy can need up to the weight size again while loading.',
   }),
 });
 
@@ -1398,6 +1398,8 @@ export function calcParamMemory(model, bits, device) {
 //   가중치 외 계산 버퍼는 0.49 GiB(65K)·0.70 GiB(102K)인데 12% 몫은 7.82 GiB였다(https://github.com/ollama/ollama/issues/16610 첨부 로그).
 //   DGX Spark · Gemma 4 31B F16 65K: nvidia-smi 64,107 MiB vs 계산 69.34 GiB(https://forums.developer.nvidia.com/t/366162).
 // KV padding 15%·활성화 몫·reserve의 런타임 2 GiB는 그대로 둔다(호스트 쪽 버퍼·CUDA 컨텍스트는 위 로그에 안 잡힌다).
+// 근거 범위 = flash attention을 켠 llama.cpp·Ollama(둘 다 기본값 auto: llama.cpp common/common.h flash_attn_type,
+//   ollama llm/llama_server.go LlamaServerFlashAttention). flash attention을 끈 경로(KQ 점수 전체 보유)·vLLM은 전제 문구로 밝힌다.
 // 디스크리트 GPU·맥·GB10 클러스터(vLLM·TensorRT-LLM)는 실측이 없어 12%를 유지한다.
 const WEIGHT_OVERHEAD_RATIO = 0.12;
 function weightOverheadRatio(device) {

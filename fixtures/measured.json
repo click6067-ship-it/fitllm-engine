@@ -157,7 +157,15 @@
     "ctx": 65536,
     "kvBits": 8,
     "measuredPeakGB": 66.84,
-    "measurementKind": "generation_peak",
+    "measurementKind": "allocation_floor",
+    "scope": "llama.cpp buffer allocations logged at context creation (model, KV, recurrent state, compute, output) — a floor of the run, not a sampled peak",
+    "allocationsMiB": {
+      "model": 67191.98,
+      "kv": 680.0,
+      "recurrentState": 62.81,
+      "compute": 504.6,
+      "output": 0.95
+    },
     "unit": "GiB",
     "includesOsReserve": false,
     "evidenceLevel": "maintainer_verified",
@@ -169,7 +177,7 @@
     "modelRevision": "ollama qwen3.6:35b-a3b-bf16, GGUF blob sha256:b2e1285b022c507b1c369ed296465cdfd1743c81010c207a2fb1fcda69c87107",
     "rawOutputSha256": "6e079048ef2557a0a09a75815920547333b9271b82f80b71ec1273f912efc343",
     "verifiedBy": "click6067-ship-it",
-    "notes": "Hardware: ASUS Ascent GX10 (NVIDIA GB10, 128 GiB unified LPDDR5x; the census row 'DGX Spark 128GB' covers every GB10 128GB system — same memory pool and DGX OS reserve). 66.84 GiB = the sum of the runtime's own allocation lines in the attached 0.30.6 log (https://github.com/user-attachments/files/28686286/_ollama_logs.txt, sha256 above): CUDA0 model buffer 66,221.98 MiB + CUDA_Host model buffer 970.00 MiB + CUDA0 KV buffer 680.00 MiB + CUDA0 recurrent-state buffer 62.81 MiB + CUDA0 compute 360.30 MiB + CUDA_Host compute 144.30 MiB + CUDA_Host output 0.95 MiB = 68,440.34 MiB. Logged at context creation; llama.cpp sizes these buffers for the largest batch and keeps them for the run, so they are the runtime's working set during generation. NOT included: the CUDA context, process heap, the CPU-side vision encoder and its 248.10 MiB CPU compute buffer, llama-server's host prompt cache (size limit 8,192 MiB) and context checkpoints — on GB10 those share the same pool. Maintainer checks 2026-10-20: (1) physical consistency — model buffers 67,191.98 MiB = the logged GGUF file size 65.62 GiB (15.88 BPW, 41 blocks incl. the MTP layer); the KV buffer equals the hand count 65,536 x 10 full-attention layers x 2 (K,V) x 2 KV heads x 256 x 1.0625 B (q8_0) = 680.00 MiB exactly; (2) engine reproduction — fitllm 2.19.0-2.21.3 predicted weights 65.19 + KV 0.63 + state 0.06 + runtime 9.88 = 75.76 GiB (+13.4%), the runtime term being 12% of the weights (7.82) + 15% of KV (0.09) + 65,536 x 0.00003 (1.97); (3) the reporter measured their own machine (issue author); (4) raw artifact = the attached log."
+    "notes": "Hardware: ASUS Ascent GX10 (NVIDIA GB10, 128 GiB unified LPDDR5x; the census row 'DGX Spark 128GB' covers every GB10 128GB system — same memory pool and DGX OS reserve). 66.84 GiB = the sum of the runtime's own allocation lines in the attached 0.30.6 log (https://github.com/user-attachments/files/28686286/_ollama_logs.txt, sha256 above): CUDA0 model buffer 66,221.98 MiB + CUDA_Host model buffer 970.00 MiB + CUDA0 KV buffer 680.00 MiB + CUDA0 recurrent-state buffer 62.81 MiB + CUDA0 compute 360.30 MiB + CUDA_Host compute 144.30 MiB + CUDA_Host output 0.95 MiB = 68,440.34 MiB. Logged at context creation; llama.cpp sizes these device buffers for the largest batch and keeps them for the run. Not in it: the CUDA context and process heap; the vision encoder llama-server keeps on the CPU and its 248.10 MiB CPU compute buffer (log line 466); llama-server's host prompt cache (size limit 8,192 MiB, line 476) and context checkpoints (up to 32 x 62.81 MiB, the first created at line 518 after the first request). On GB10 all of these use the same memory pool. Maintainer checks 2026-10-20 (they verify these allocation figures, not a process peak): (1) physical consistency — model buffers 67,191.98 MiB = the logged GGUF file size 65.62 GiB (15.88 BPW, 41 blocks incl. the MTP layer); the KV buffer equals the hand count 65,536 x 10 full-attention layers x 2 (K,V) x 2 KV heads x 256 x 1.0625 B (q8_0) = 680.00 MiB exactly; (2) engine reproduction — fitllm 2.19.0-2.21.3 predicted weights 65.19 + KV 0.63 + state 0.06 + runtime 9.88 = 75.76 GiB (+13.4%), the runtime term being 12% of the weights (7.82) + 15% of KV (0.09) + 65,536 x 0.00003 (1.97); (3) the reporter measured their own machine (issue author); (4) raw artifact = the attached log."
   },
   {
     "model": "Qwen 3.6 35B-A3B",
@@ -178,7 +186,15 @@
     "ctx": 102400,
     "kvBits": 8,
     "measuredPeakGB": 67.42,
-    "measurementKind": "generation_peak",
+    "measurementKind": "allocation_floor",
+    "scope": "llama.cpp buffer allocations logged at context creation (model, KV, recurrent state, compute, output) — a floor of the run, not a sampled peak",
+    "allocationsMiB": {
+      "model": 67191.98,
+      "kv": 1062.5,
+      "recurrentState": 62.81,
+      "compute": 720.6,
+      "output": 0.95
+    },
     "unit": "GiB",
     "includesOsReserve": false,
     "evidenceLevel": "maintainer_verified",
@@ -190,7 +206,7 @@
     "modelRevision": "ollama qwen3.6:35b-a3b-bf16, GGUF blob sha256:b2e1285b022c507b1c369ed296465cdfd1743c81010c207a2fb1fcda69c87107",
     "rawOutputSha256": "6e079048ef2557a0a09a75815920547333b9271b82f80b71ec1273f912efc343",
     "verifiedBy": "click6067-ship-it",
-    "notes": "Hardware: ASUS Ascent GX10 (NVIDIA GB10, 128 GiB unified LPDDR5x; the census row 'DGX Spark 128GB' covers every GB10 128GB system — same memory pool and DGX OS reserve). Same log and method as the 65,536 entry, second load: model 66,221.98 + 970.00 MiB, KV 1,062.50 MiB (= 102,400 x 10 x 2 x 2 x 256 x 1.0625 B, exact), recurrent state 62.81 MiB, compute 504.30 + 216.30 MiB, output 0.95 MiB = 69,038.84 MiB. Same exclusions (CUDA context, CPU vision encoder, host prompt cache, checkpoints). fitllm 2.19.0-2.21.3 predicted 65.19 + 0.98 + 0.06 + runtime 11.04 = 77.27 GiB (+14.6%)."
+    "notes": "Hardware: ASUS Ascent GX10 (NVIDIA GB10, 128 GiB unified LPDDR5x; the census row 'DGX Spark 128GB' covers every GB10 128GB system — same memory pool and DGX OS reserve). Same log and method as the 65,536 entry, second load: model 66,221.98 + 970.00 MiB, KV 1,062.50 MiB (= 102,400 x 10 x 2 x 2 x 256 x 1.0625 B, exact), recurrent state 62.81 MiB, compute 504.30 + 216.30 MiB, output 0.95 MiB = 69,038.84 MiB. Same exclusions as the 65,536 entry (CUDA context, CPU vision encoder and its compute buffer, host prompt cache, context checkpoints). fitllm 2.19.0-2.21.3 predicted 65.19 + 0.98 + 0.06 + runtime 11.04 = 77.27 GiB (+14.6%)."
   },
   {
     "model": "Qwen 3.6 35B-A3B",
@@ -199,7 +215,8 @@
     "ctx": 102400,
     "kvBits": 8,
     "measuredPeakGB": 40.3,
-    "measurementKind": "generation_peak",
+    "measurementKind": "allocation_floor",
+    "scope": "Ollama's own allocation summary after the alloc step (weights, KV, compute graph on CUDA and CPU) — a floor, not a sampled peak",
     "unit": "GiB",
     "includesOsReserve": false,
     "evidenceLevel": "community_unverified",
@@ -220,7 +237,8 @@
     "ctx": 65536,
     "kvBits": 8,
     "measuredPeakGB": 62.6,
-    "measurementKind": "generation_peak",
+    "measurementKind": "allocation_floor",
+    "scope": "per-process nvidia-smi GPU memory (allocations incl. the CUDA context; host memory of the process not shown) — one snapshot, a floor of the run, not a sampled peak",
     "unit": "GiB",
     "includesOsReserve": false,
     "evidenceLevel": "maintainer_verified",
@@ -231,6 +249,6 @@
     "caseId": "gb10-gemma4-31b-f16-ctx65536-kvq8",
     "modelRevision": "ggml-org/gemma-4-31B-it-GGUF gemma-4-31B-it-f16.gguf (the repo's 16-bit file is 61,413,189,856 B = 57.195 GiB at revision 3d47a7e680fb9526dcac74335858f0f31acc9c27)",
     "verifiedBy": "click6067-ship-it",
-    "notes": "Hardware: DGX Spark (GB10, 128 GiB unified), Ubuntu 24.04.4, CUDA 13.0. 62.60 GiB = nvidia-smi per-process figure 'llama-server 64107MiB' pasted in the post's 'Measured Memory Usage (April 9, 2026)' section (post revision 4, 2026-04-10). Per-process nvidia-smi counts the process's GPU allocations including its CUDA context; host-side allocations of the process are not in it. The same box was also running a NIM Nemotron container and swapping 8.4 GiB, which does not change llama-server's own GPU allocation. Maintainer checks 2026-10-20: (1) physical consistency — the 16-bit GGUF is 57.195 GiB (engine 57.185) + KV q8_0 2.891 x 1.0625 = 3.07 GiB -> 2.33 GiB left for compute/output buffers and the CUDA context; (2) engine reproduction — fitllm 2.19.0-2.21.3 predicted 57.18 + KV 2.89 + runtime 9.26 = 69.34 GiB (+10.8%), 6.86 of it the 12% weight share; (3) the poster ran it on their own machine; (4) raw artifact = the pasted nvidia-smi output (no log file)."
+    "notes": "Hardware: DGX Spark (GB10, 128 GiB unified), Ubuntu 24.04.4, CUDA 13.0. 62.60 GiB = nvidia-smi per-process figure 'llama-server 64107MiB' pasted in the post's 'Measured Memory Usage (April 9, 2026)' section (post revision 4, 2026-04-10). Per-process nvidia-smi counts the process's GPU allocations including its CUDA context; host-side allocations of the process are not in it. The same box was also running a NIM Nemotron container and swapping 8.4 GiB, which does not change llama-server's own GPU allocation. Maintainer checks 2026-10-20 (they verify this snapshot, not a process peak): (1) physical consistency — the 16-bit GGUF is 57.195 GiB (engine 57.185) + KV q8_0 2.891 x 1.0625 = 3.07 GiB -> 2.33 GiB left for compute/output buffers and the CUDA context; (2) engine reproduction — fitllm 2.19.0-2.21.3 predicted 57.18 + KV 2.89 + runtime 9.26 = 69.34 GiB (+10.8%), 6.86 of it the 12% weight share; (3) the poster ran it on their own machine; (4) raw artifact = the pasted nvidia-smi output (no log file)."
   }
 ]
