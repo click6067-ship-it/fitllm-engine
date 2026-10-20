@@ -1331,7 +1331,7 @@ const STRUCTURAL_ASSUMPTIONS = Object.freeze({
   }),
   unified: Object.freeze({
     id: 'gb10-unified-memory-reserve',
-    statement: 'GB10 systems share one 128 GB LPDDR5x pool between DGX OS, CPU processes and the GPU. The reserve subtracts the 6.3 GiB the OS cannot see on current DGX OS (121.7 GiB visible; early firmware shows about 2 GiB less), about 5 GiB of idle DGX OS use and a 2 GiB runtime allowance. Other running apps and the file page cache are not budgeted, and weights are assumed resident once: a loader that keeps an mmap page-cache copy can need up to the weight size again while loading.',
+    statement: 'GB10 systems share one 128 GB LPDDR5x pool between DGX OS, CPU processes and the GPU. The reserve subtracts the 6.3 GiB the OS cannot see on current DGX OS (121.7 GiB visible; early firmware shows about 2 GiB less), about 5 GiB of idle DGX OS use and a 2 GiB runtime allowance. On one unit the GGUF weights count at their file size with no extra percentage, plus 15% of the KV cache and an activation allowance that grows with context. That is calibrated on public llama.cpp and Ollama allocation logs on GB10 with flash attention on — the default in both (--flash-attn auto) — whose compute buffers were 0.5–1.7 GiB on top of the weights and KV cache (fixtures/measured.json). With flash attention off, llama.cpp holds the full attention scores (context × batch × heads × 4 bytes, about 24 GiB for 48 heads at 262K tokens and batch 512), and vLLM adds CUDA-graph memory and pre-allocates its KV pool; neither is budgeted. Other running apps, the file page cache and llama-server\'s host-side prompt cache (--cache-ram, 8 GiB by default) and context checkpoints are not budgeted, and weights are assumed resident once: a loader that keeps an mmap page-cache copy can need up to the weight size again while loading.',
   }),
 });
 
@@ -1391,12 +1391,26 @@ export function calcParamMemory(model, bits, device) {
 // 이론 43GB, 실제 ~54GB'라고 적었으나 그 '실제 54GB'를 뒷받침하는 측정 픽스처가 없고
 // (system_total_peak 0행), 엔진은 그 시나리오에서 49.94 GiB를 낸다. 2026-09-03 조사: 54는
 // 주장이 도입된 커밋 시점 엔진에서도 나오지 않았다(49.88). total-to-run 캘리브레이션은 아직 없다.
+//
+// 가중치 12% 몫의 예외 — GB10 한 대(llama.cpp·Ollama, GGUF): 0. GGUF tier bpw는 블록 스케일·비양자 텐서를 이미 포함한
+// 파일 평균이라 12%를 또 얹으면 이중 계상이다. 공개 실측(fixtures/measured.json GB10 4건, 2026-10-20 검증)이 근거:
+//   ASUS Ascent GX10 · Qwen3.6-35B-A3B BF16 — CUDA0 model buffer 66,221.98 MiB + CUDA_Host 970.00 MiB = 파일 65.62 GiB 그대로,
+//   가중치 외 계산 버퍼는 0.49 GiB(65K)·0.70 GiB(102K)인데 12% 몫은 7.82 GiB였다(https://github.com/ollama/ollama/issues/16610 첨부 로그).
+//   DGX Spark · Gemma 4 31B F16 65K: nvidia-smi 64,107 MiB vs 계산 69.34 GiB(https://forums.developer.nvidia.com/t/366162).
+// KV padding 15%·활성화 몫·reserve의 런타임 2 GiB는 그대로 둔다(호스트 쪽 버퍼·CUDA 컨텍스트는 위 로그에 안 잡힌다).
+// 근거 범위 = flash attention을 켠 llama.cpp·Ollama(둘 다 기본값 auto: llama.cpp common/common.h flash_attn_type,
+//   ollama llm/llama_server.go LlamaServerFlashAttention). flash attention을 끈 경로(KQ 점수 전체 보유)·vLLM은 전제 문구로 밝힌다.
+// 디스크리트 GPU·맥·GB10 클러스터(vLLM·TensorRT-LLM)는 실측이 없어 12%를 유지한다.
+const WEIGHT_OVERHEAD_RATIO = 0.12;
+function weightOverheadRatio(device) {
+  return device?.unifiedMemory && clusterUnitsOf(device) === 1 ? 0 : WEIGHT_OVERHEAD_RATIO;
+}
 export function calcRuntimeOverhead(model, ctx, bitsOrQuant, device) {
   ctx = Math.max(0, Math.floor(Number(ctx)) || 0); // 음수/NaN 가드 (활성화 버퍼 ctx 비례)
   const { weightBpw, kvBits } = toQuant(bitsOrQuant); // weight↔KV 분리(GGUF: KV padding이 weight bpw 오염 금지)
   const paramMem = calcParamMemory(model, weightBpw, device).totalGB; // PLE: GPU면 상주분만(오버헤드도 상주 가중치 비례)
   const kvMem = calcKVCache(clusterKvModel(model, device), ctx, kvBits).totalGB; // 클러스터: 복제된 KV까지
-  const paramOverhead = paramMem * 0.12;
+  const paramOverhead = paramMem * weightOverheadRatio(device);
   const kvOverhead = kvMem * 0.15;
   const activationOverhead = ctx * 0.00003 * clusterUnitsOf(device); // 활성화 버퍼는 대마다 생긴다
   // GPU는 고정 reserve가 device.envReserveGB로 분리됨 → 런타임 fixed=0 (simulate의 rtDyn과 일치, 이중차감 금지)
@@ -1422,7 +1436,7 @@ export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
   const paramBytes = (residentParamsB(model, device) * 1e9 * wbpe + precisionFloorBytes(model, weightBpw)) * quantMultiplier; // PLE: GPU면 상주분만 · Engram FP8 하한
   const linearStateBytes = calcLinearState(model).totalBytes; // ctx 무관 고정 → 예산에서 먼저 뺀다
   const budget =
-    device.memoryGB * 1024 ** 3 * (1 - device.headroomRatio) - paramBytes - paramBytes * 0.12 - device.reserveGB * 1024 ** 3 - linearStateBytes;
+    device.memoryGB * 1024 ** 3 * (1 - device.headroomRatio) - paramBytes - paramBytes * weightOverheadRatio(device) - device.reserveGB * 1024 ** 3 - linearStateBytes;
   if (budget <= 0) return 0;
   const overhead = 1.15; // KV 블록 할당 padding
   const km = clusterKvModel(model, device); // GB10 클러스터: TP 복제된 KV 헤드·MLA 잠재 차원(그 밖 원래 모델)
@@ -2680,4 +2694,4 @@ export const DATA_UPDATED = '2026-10';
 
 // 이 엔진 스냅샷의 버전 — package.json version과 같이 올린다.
 // 소비처(v2 영수증 /api/r 등)가 자기 package.json 버전을 엔진 버전으로 표시하던 드리프트를 막는 단일 출처.
-export const ENGINE_VERSION = '2.21.3';
+export const ENGINE_VERSION = '2.21.4';

@@ -1,6 +1,6 @@
 {
-  "version": "1.9.0",
-  "generated": "2026-10-18",
+  "version": "1.10.0",
+  "generated": "2026-10-20",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
     {
@@ -352,7 +352,7 @@
       "weightBpw": 4.8944,
       "kvBits": 16,
       "expect": "yes",
-      "note": "GB10 unified memory: weights 116.8e9*4.8944/8 = 66.55 GiB + KV 0.29 + overhead 8.27 + reserve 13.31 (128-121.69 OS-visible + 5.0 idle DGX OS + 2.0 runtime) = 88.42 of 128; headroom 20% = 25.6"
+      "note": "GB10 unified memory, one unit: weights 116.8e9*4.8944/8 = 66.55 GiB (GGUF file size, no extra weight percentage on one GB10 since 2.21.4) + KV 0.29 + overhead 0.15*KV 0.04 + 8192*0.00003 0.25 + reserve 13.31 (128-121.69 OS-visible + 5.0 idle DGX OS + 2.0 runtime) = 80.43 of 128; headroom 20% = 25.6"
     },
     {
       "id": "v-gptoss120b-dgxspark128-q6k-32k",
@@ -366,7 +366,7 @@
       "weightBpw": 6.5633,
       "kvBits": 16,
       "expect": "tight",
-      "note": "89.24 + KV 1.13 + overhead 11.86 + reserve 13.31 = 115.54 -> free 12.46 < 25.6 headroom. A port that treats GB10 as a discrete card (0.6 reserve, 5% headroom) wrongly says yes"
+      "note": "116.8e9*6.5633/8 = 89.24 + KV 1.13 + overhead (0.15*KV 0.17 + 32768*0.00003 0.98) 1.15 + reserve 13.31 = 104.84 -> free 23.16 < 25.6 headroom. A port that treats GB10 as a discrete card (0.6 reserve, 5% headroom) wrongly says yes"
     },
     {
       "id": "v-lagunas-dgxspark128-q6k-256k",
@@ -379,8 +379,8 @@
       "ctx": 262144,
       "weightBpw": 6.5633,
       "kvBits": 16,
-      "expect": "no",
-      "note": "89.83 + KV(12 global x 2*8*128*2B*262144 + 36 sliding x 512) 12.07 + overhead 20.45 + reserve 13.31 = 135.66 > 128. Discrete-card reserve would give 122.95 (tight) - the unified reserve flips it"
+      "expect": "tight",
+      "note": "117.562e9*6.5633/8 = 89.83 + KV(12 global x 2*8*128*2B*262144 + 36 sliding x 512) 12.07 + overhead (0.15*KV 1.81 + 262144*0.00003 7.86) 9.67 + reserve 13.31 = 124.88 of 128 -> free 3.12 < 25.6 headroom -> tight. Until 2.21.3 a further 12% of the weights (10.78) made it 135.66 -> no; public GB10 llama.cpp/Ollama allocation logs (fixtures/measured.json) show GGUF weights load at their file size, so one GB10 adds no weight percentage. A port that keeps it still says no"
     },
     {
       "id": "v-gptoss120b-2xdgxspark128-q8-8k",
@@ -394,7 +394,7 @@
       "weightBpw": 8.5008,
       "kvBits": 16,
       "expect": "yes",
-      "note": "GB10 cluster, 2 units, tensor parallel 2: weights 116.8e9*8.5008/8 = 115.64 GiB + KV 0.29 (8 KV heads >= 2 units, no replication) + overhead 0.12*w + 0.15*KV + 8192*0.00003*2 units + reserve 2*13.31 = 156.90 of 256 -> free 99.10 >= 51.2 headroom. One unit alone is 'no' (143.34 of 128)"
+      "note": "GB10 cluster, 2 units, tensor parallel 2: weights 116.8e9*8.5008/8 = 115.64 GiB + KV 0.29 (8 KV heads >= 2 units, no replication) + overhead 0.12*w + 0.15*KV + 8192*0.00003*2 units + reserve 2*13.31 = 156.90 of 256 -> free 99.10 >= 51.2 headroom. One unit alone is 'no' (129.47 of 128 since 2.21.4: no 12% weight share on one unit; 143.34 before)"
     },
     {
       "id": "v-nexpro-4xdgxspark128-q8-128k",

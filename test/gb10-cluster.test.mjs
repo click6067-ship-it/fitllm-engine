@@ -91,9 +91,10 @@ test('simulate: used = weights + KV×복제 + 선형상태 + 동적(활성화×�
   const rtDyn = s.param * 0.12 + kv * 0.15 + ctx * 0.00003 * 4;
   assert.ok(Math.abs(s.rtDyn - rtDyn) < 1e-9);
   assert.ok(Math.abs(s.used - (s.param + kv + s.linearState + rtDyn + PER_UNIT_RESERVE * 4)) < 1e-9);
-  // 한 대 결과는 바뀌지 않는다(2.19.0 값)
+  // 클러스터는 가중치 12% 몫을 유지하고(위 rtDyn), 한 대는 2.21.4부터 0이다(GGUF 파일 크기 그대로 — 공개 GB10 실측):
+  //   116.8e9 × 4.8944/8 = 66.55 GiB + KV 0.29 + 0.15×KV 0.04 + 8192×0.00003 0.25 + reserve 13.31 = 80.43 (2.19.0–2.21.3: 88.42)
   const one = simulate(model('gpt-oss-120b'), gpuDevice(spark), 8192, { weightBpw: 4.8944, kvBits: 16 });
-  assert.equal(+one.used.toFixed(2), 88.42);
+  assert.equal(+one.used.toFixed(2), 80.43);
 });
 
 test('calcMaxContext는 같은 복제·활성화 규칙을 쓴다 (경계에서 simulate와 일치)', () => {

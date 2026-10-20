@@ -6,20 +6,21 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { ENGINE_VERSION, GPUS, GPU_QUANTS, LOCAL_MODELS, MACBOOK_RAM_GROUPS } from '../engine.js';
 
-const RELEASE_VERSION = '2.21.3';
-const RELEASE_DATE = '2026-10-18'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — 2.21.0 DeepSeek-V4 3종·Muse 추가로 재생성
+const RELEASE_VERSION = '2.21.4';
+const RELEASE_DATE = '2026-10-20'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — 2.21.4 GB10 한 대 가중치 몫 보정·실측 4건으로 재생성
 const url = (rel) => new URL(`../${rel}`, import.meta.url);
 const read = (rel) => readFileSync(url(rel), 'utf8');
 const readJson = (rel) => JSON.parse(read(rel));
 const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).digest('hex');
 
-// 2.21.0 vectors 바이트 — DeepSeek-V4·Muse 앵커 8개(kv 5 + 판정 3)만 append 하고 기존 38개는 손대지 않는다
-// (2.20.0: GB10 클러스터 판정 2개, 2.19.0: GB10 3개, 2.16.0: 신규 3모델 kv 3개).
+// 2.21.4 vectors 바이트 — 개수는 46 그대로. GB10 한 대 판정 3개의 note를 새 손계산으로 고치고, Laguna S 256K의 기대값이
+// 'no' → 'tight'로 바뀐다(가중치 12% 몫 10.78 GiB 제거, fixtures/measured.json GB10 실측). 버전 1.9.0 → 1.10.0.
+// (2.21.0: DeepSeek-V4·Muse 앵커 8개, 2.20.0: GB10 클러스터 판정 2개, 2.19.0: GB10 3개, 2.16.0: 신규 3모델 kv 3개).
 // 러너(run.mjs) 바이트는 2.14.1 이후 불변이다(아래 SHA) — 벡터가 늘어도 검증 코드는 안 바뀐다는 게 요점.
-const VECTORS_JSON_SHA256 = 'f5d7f283e48a0fa9ba74a9c78fd41627086eabeeeed45d9a3cb5fd3e29e0efc0';
+const VECTORS_JSON_SHA256 = '05ab2371b35bafcc623e6b6f3e2f0824f9f4a5f45bf433a5e1848a6c7e33054f';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
-test('release version surfaces agree on 2.21.3 and the package contract is unchanged', () => {
+test('release version surfaces agree on 2.21.4 and the package contract is unchanged', () => {
   const pkg = readJson('package.json');
   const lock = readJson('package-lock.json');
   assert.equal(pkg.version, RELEASE_VERSION);
@@ -47,11 +48,11 @@ test('release version surfaces agree on 2.21.3 and the package contract is uncha
   assert.equal(read('AGENTS.md').includes('2.14.1'), false);
 });
 
-test('the 46 conformance vectors append only the DeepSeek-V4 and Muse anchors, with 18/5/4/19 kinds and no new export paths', () => {
+test('the 46 conformance vectors keep 18/5/4/19 kinds; 2.21.4 re-derives the one-unit GB10 verdicts; no new export paths', () => {
   assert.equal(sha256('vectors/fit-vectors-v1.json'), VECTORS_JSON_SHA256);
   assert.equal(sha256('vectors/run.mjs'), VECTORS_RUNNER_SHA256);
   const { version, vectors } = readJson('vectors/fit-vectors-v1.json');
-  assert.equal(version, '1.9.0');
+  assert.equal(version, '1.10.0');
   assert.equal(vectors.length, 46);
   const kinds = {};
   for (const v of vectors) kinds[v.kind] = (kinds[v.kind] || 0) + 1;
@@ -63,8 +64,10 @@ test('the 46 conformance vectors append only the DeepSeek-V4 and Muse anchors, w
   }
   for (const id of ['v-gptoss120b-2xdgxspark128-q8-8k', 'v-nexpro-4xdgxspark128-q8-128k']) assert.ok(vectors.some((v) => v.id === id), `missing vector: ${id}`);
   // 2026-10-16 append 된 3개 — GB10 reserve(128 − 121.69 + 5.0 + 2.0)와 공유 풀 headroom을 고정한다. 손계산은 note에.
-  for (const id of ['v-gptoss120b-dgxspark128-q4-8k', 'v-gptoss120b-dgxspark128-q6k-32k', 'v-lagunas-dgxspark128-q6k-256k']) {
-    assert.ok(vectors.some((v) => v.id === id && v.device.gpu === 'DGX Spark 128GB'), `missing vector: ${id}`);
+  // 2.21.4: 한 대는 가중치 12% 몫이 없다 → yes · tight · tight (Laguna S 256K는 2.21.3까지 no)
+  const gb10Expect = { 'v-gptoss120b-dgxspark128-q4-8k': 'yes', 'v-gptoss120b-dgxspark128-q6k-32k': 'tight', 'v-lagunas-dgxspark128-q6k-256k': 'tight' };
+  for (const [id, expect] of Object.entries(gb10Expect)) {
+    assert.ok(vectors.some((v) => v.id === id && v.device.gpu === 'DGX Spark 128GB' && v.expect === expect), `missing vector: ${id} (${expect})`);
   }
   // 2026-09-14 append 된 3개 — 손계산 근거는 각 벡터의 note에 있다.
   for (const id of ['minicpm5-2b-kv-128k-f16', 'nex-n25-mini-kv-128k-f16', 'nex-n25-pro-kv-128k-f16']) {
