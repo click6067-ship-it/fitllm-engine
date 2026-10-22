@@ -256,12 +256,12 @@ test('test_release_version_and_readme_counts', () => {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
   const verdicts = `${readJson('../census/manifest.json').rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.21.4', 'conformance_vectors-46%2F46', '46 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.21.4', 'conformance_vectors-49%2F49', '49 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
-  for (const s of [verdicts, '46 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
+  for (const s of [verdicts, '49 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
   const vectors = readJson('../vectors/fit-vectors-v1.json');
-  assert.equal(vectors.vectors.length, 46); // 2026-10-16 GB10 3개 + 클러스터 2개, 2.21.0 DeepSeek-V4·Muse 8개 추가 — Spark 벡터는 id로 고정
+  assert.equal(vectors.vectors.length, 49); // 2026-10-16 GB10 3개 + 클러스터 2개, 2.21.0 DeepSeek-V4·Muse 8개, 2026-10-23 출시 FP4 전문가 3개 추가 — Spark 벡터는 id로 고정
   const sparkVector = vectors.vectors.find((v) => v.id === 'spark-x25-4b-kv-1m-f16');
   assert.deepEqual(sparkVector, {
     id: 'spark-x25-4b-kv-1m-f16', kind: 'kv_total_bytes', model: 'Spark-X2.5-4B', ctx: 1048576, kvBits: 16, expect: 38711328768,

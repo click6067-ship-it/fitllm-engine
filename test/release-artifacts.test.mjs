@@ -7,17 +7,20 @@ import { existsSync, readFileSync } from 'node:fs';
 import { ENGINE_VERSION, GPUS, GPU_QUANTS, LOCAL_MODELS, MACBOOK_RAM_GROUPS } from '../engine.js';
 
 const RELEASE_VERSION = '2.21.4';
-const RELEASE_DATE = '2026-10-20'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — 2.21.4 GB10 한 대 가중치 몫 보정·실측 4건으로 재생성
+const RELEASE_DATE = '2026-10-23'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — 출시 FP4 전문가 상한(gpt-oss·DeepSeek-V4)으로 재생성(CENSUS_DATE 고정). 버전 올림은 릴리스 단계 몫
 const url = (rel) => new URL(`../${rel}`, import.meta.url);
 const read = (rel) => readFileSync(url(rel), 'utf8');
 const readJson = (rel) => JSON.parse(read(rel));
 const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).digest('hex');
 
-// 2.21.4 vectors 바이트 — 개수는 46 그대로. GB10 한 대 판정 3개의 note를 새 손계산으로 고치고, Laguna S 256K의 기대값이
-// 'no' → 'tight'로 바뀐다(가중치 12% 몫 10.78 GiB 제거, fixtures/measured.json GB10 실측). 버전 1.9.0 → 1.10.0.
+// vectors 바이트 — 1.11.0(2026-10-23): 출시 FP4 전문가(gpt-oss MXFP4 · DeepSeek-V4 FP4)는 4.25 bit 위로 세지 않는다.
+// 기대값 2개가 바뀌고(gpt-oss-120b 한 대 Q6_K 32K tight → yes, V4-Flash 4대 Q8_0 224K tight → yes) note 5개를 새 손계산으로 고친다.
+// 3개 추가(46 → 49): gpt-oss-120b 한 대 Q8_0 8K yes(평균 bit로 세는 구현은 no) · Laguna S 한 대 Q6_K 8K tight(GB10을 디스크리트로
+// 보는 구현은 yes — q6k-32k 벡터가 하던 확인을 넘겨받는다) · V4-Flash 2대 Q8_0 160K tight(KV를 한 번만 세면 yes — KV 복제 경계).
+// 2.21.4: GB10 한 대 판정 3개의 note를 새 손계산으로 고치고, Laguna S 256K의 기대값이 'no' → 'tight'(가중치 12% 몫 제거). 1.9.0 → 1.10.0.
 // (2.21.0: DeepSeek-V4·Muse 앵커 8개, 2.20.0: GB10 클러스터 판정 2개, 2.19.0: GB10 3개, 2.16.0: 신규 3모델 kv 3개).
 // 러너(run.mjs) 바이트는 2.14.1 이후 불변이다(아래 SHA) — 벡터가 늘어도 검증 코드는 안 바뀐다는 게 요점.
-const VECTORS_JSON_SHA256 = '05ab2371b35bafcc623e6b6f3e2f0824f9f4a5f45bf433a5e1848a6c7e33054f';
+const VECTORS_JSON_SHA256 = '686ce0cdb6a36751d6f0850efdae2991d336020c478484b6efb182c8a80ee6cd';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
 test('release version surfaces agree on 2.21.4 and the package contract is unchanged', () => {
@@ -48,24 +51,31 @@ test('release version surfaces agree on 2.21.4 and the package contract is uncha
   assert.equal(read('AGENTS.md').includes('2.14.1'), false);
 });
 
-test('the 46 conformance vectors keep 18/5/4/19 kinds; 2.21.4 re-derives the one-unit GB10 verdicts; no new export paths', () => {
+test('the 49 conformance vectors keep 18/5/4/22 kinds; 1.11.0 counts shipped FP4 experts at their storage; no new export paths', () => {
   assert.equal(sha256('vectors/fit-vectors-v1.json'), VECTORS_JSON_SHA256);
   assert.equal(sha256('vectors/run.mjs'), VECTORS_RUNNER_SHA256);
   const { version, vectors } = readJson('vectors/fit-vectors-v1.json');
-  assert.equal(version, '1.10.0');
-  assert.equal(vectors.length, 46);
+  assert.equal(version, '1.11.0');
+  assert.equal(vectors.length, 49);
   const kinds = {};
   for (const v of vectors) kinds[v.kind] = (kinds[v.kind] || 0) + 1;
-  assert.deepEqual(kinds, { kv_total_bytes: 18, kv_per_token_bytes: 5, linear_state_bytes: 4, verdict: 19 });
+  assert.deepEqual(kinds, { kv_total_bytes: 18, kv_per_token_bytes: 5, linear_state_bytes: 4, verdict: 22 });
   // 2026-10-18 append 된 8개 — 압축 캐시 원소 수(V4.1 1,600 · V4 3,440 · V4-Pro 4,924/토큰), TP 복제, Engram FP8 하한을 고정한다. 손계산은 note에.
   for (const id of ['dsv41-flash-1017-kv-per-token-f16', 'dsv41-flash-1017-kv-1m-f16', 'dsv4-flash-kv-1m-q8', 'dsv4-pro-kv-per-token-f16',
     'muse-spark-open-kv-1m-f16', 'v-dsv41-1017-4xdgxspark128-q4km-8k', 'v-dsv4flash-4xdgxspark128-q8-224k', 'v-dsv41-1017-m3ultra512-4bit-8k']) {
     assert.ok(vectors.some((v) => v.id === id), `missing vector: ${id}`);
   }
   for (const id of ['v-gptoss120b-2xdgxspark128-q8-8k', 'v-nexpro-4xdgxspark128-q8-128k']) assert.ok(vectors.some((v) => v.id === id), `missing vector: ${id}`);
+  // 1.11.0: KV 복제 경계는 V4-Flash 2대 160K(tight)로 옮겼다 — 4대 224K는 출시 FP4 크기로 yes
+  assert.ok(vectors.some((v) => v.id === 'v-dsv4flash-2xdgxspark128-q8-160k' && v.device.gpu === '2× DGX Spark 128GB' && v.expect === 'tight'));
+  assert.ok(vectors.some((v) => v.id === 'v-dsv4flash-4xdgxspark128-q8-224k' && v.expect === 'yes'));
   // 2026-10-16 append 된 3개 — GB10 reserve(128 − 121.69 + 5.0 + 2.0)와 공유 풀 headroom을 고정한다. 손계산은 note에.
   // 2.21.4: 한 대는 가중치 12% 몫이 없다 → yes · tight · tight (Laguna S 256K는 2.21.3까지 no)
-  const gb10Expect = { 'v-gptoss120b-dgxspark128-q4-8k': 'yes', 'v-gptoss120b-dgxspark128-q6k-32k': 'tight', 'v-lagunas-dgxspark128-q6k-256k': 'tight' };
+  // 1.11.0: gpt-oss-120b Q6_K 32K는 출시 MXFP4 크기로 yes가 되고, GB10≠디스크리트 확인은 Laguna S 8K(tight)가 넘겨받는다
+  const gb10Expect = {
+    'v-gptoss120b-dgxspark128-q4-8k': 'yes', 'v-gptoss120b-dgxspark128-q6k-32k': 'yes', 'v-lagunas-dgxspark128-q6k-256k': 'tight',
+    'v-gptoss120b-dgxspark128-q8-8k': 'yes', 'v-lagunas-dgxspark128-q6k-8k': 'tight',
+  };
   for (const [id, expect] of Object.entries(gb10Expect)) {
     assert.ok(vectors.some((v) => v.id === id && v.device.gpu === 'DGX Spark 128GB' && v.expect === expect), `missing vector: ${id} (${expect})`);
   }
@@ -144,7 +154,7 @@ test('README and AGENTS model/verdict counts are derived from the catalog and ce
   assert.ok(readme.includes(`**${verdicts}** (${LOCAL_MODELS.length} models incl. draft tier × ${manifest.devices} GPUs/Macs × quant tiers)`), 'README census sentence');
   assert.ok(readme.includes(`Open data: the full **Fit Census** (${verdicts}, **CC0**)`), 'README open-data sentence');
   assert.ok(agents.includes(`${verdicts}, model × device × quant`), 'AGENTS census line');
-  assert.ok(agents.includes('46 byte-exact anchors'));
+  assert.ok(agents.includes('49 byte-exact anchors'));
 });
 
 test('README and CONTRIBUTING claims stay bounded: GLM-5.3 is listed as supported, never as universally runnable or more accurate', () => {

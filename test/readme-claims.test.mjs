@@ -36,7 +36,7 @@ test('Quick start 첫 예시는 실제로 성공(FITS) 데모 — Gemma 4 12b ×
 
 test('README: 현행 사실 필수 표기', () => {
   for (const required of [
-    '46 language-neutral', '× 104 GPUs', 'M1–M6', '46%2F46', CENSUS_VERDICTS,
+    '49 language-neutral', '× 104 GPUs', 'M1–M6', '49%2F49', CENSUS_VERDICTS,
     'npm install fitllm-engine', '?template=measurement.yml',
     "from 'fitllm-engine'",
     'The CLI, API, and MCP use a curated catalog pinned to official configs.', // 문법 파손 정정문(감사 제안) 고정

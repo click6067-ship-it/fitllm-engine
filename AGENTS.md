@@ -24,7 +24,7 @@ parseHfConfig(id, configJson, totalSizeBytes)            // modeled HF architect
 ## Rules for agents modifying this repo
 
 1. **Every hardware number needs ≥2 independent source URLs** embedded next to the value — no source, no merge.
-2. **Engine math changes require conformance vectors to pass**: `node vectors/run.mjs` (46 byte-exact anchors). A port in any language is conformant iff all vectors pass.
+2. **Engine math changes require conformance vectors to pass**: `node vectors/run.mjs` (49 byte-exact anchors). A port in any language is conformant iff all vectors pass.
 3. Run `npm test` (CLI behavior) — exit codes 0/1/2 are a public contract.
 4. `npm run census` regenerates the dataset after model/hardware changes.
 5. Never add tokens/sec predictions — fit is a verifiable claim, speed is not (project principle).

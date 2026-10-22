@@ -118,13 +118,17 @@ test('totalParams is the HF logical safetensors sum; FP4 experts reported as I8 
   assert.equal(byName('DeepSeek-V4-Pro').totalParams, 1598.8);
 });
 
-test('Engram tables are never counted below their FP8 + scale storage (8.25 bit); other weights follow the chosen quant', () => {
+test('Engram tables are never counted below their FP8 + scale storage (8.25 bit); shipped FP4 experts never above 4.25 bit; the rest follows the chosen quant', () => {
   const v41 = byName('DeepSeek-V4.1-Flash-1017');
   const engram = (384006168 + 384016682) * 256; // config engram_num_embeddings × engram_head_dim
   assert.equal(Math.round(v41.engramParams * 1e9), engram);
+  const fp4 = 557171343360; // HF safetensors I8 = FP4 전문가 논리 수
+  assert.equal(Math.round(v41.nativeFp4Params * 1e9), fp4);
   const gib = (b) => b / 1024 ** 3;
+  // 4bit < 4.25: FP4 전문가도 선택한 4bit로(다시 양자화한 빌드) — Engram만 8.25 하한
   assert.equal(calcParamMemory(v41, 4).totalGB, gib((763.2e9 - engram) * 0.5 + engram * 8.25 / 8));
-  assert.equal(calcParamMemory(v41, 16).totalGB, gib(763.2e9 * 2)); // 16-bit은 하한보다 높다 — 그대로
+  // 16-bit: Engram은 하한보다 높아 그대로, FP4 전문가는 출시 크기 4.25 bit (2.21.4까지 763.2e9 × 2 = 1421.57 GiB)
+  assert.ok(Math.abs(calcParamMemory(v41, 16).totalGB - gib((763.2e9 - fp4) * 2 + fp4 * 4.25 / 8)) < 1e-9);
   // Mac 512GB 4bit: 하한 적용 시 안 맞음(515.85), Engram도 4bit로 깎으면 맞는다고 잘못 말한다(406.89)
   const mac = simulate(v41, 512, 8192, 4);
   assert.equal(mac.verdict, 'no');
@@ -138,7 +142,10 @@ test('4× DGX Spark: V4.1-Flash-1017 does not fit at Q4_K_M; KV is replicated pe
   const v41 = byName('DeepSeek-V4.1-Flash-1017');
   const s = simulate(v41, spark4, 8192, { weightBpw: 4.8944, kvBits: 16 });
   assert.equal(s.verdict, 'no');
-  assert.equal(+s.used.toFixed(2), 629.72);
+  // 가중치 = FP4 전문가 557.17134336e9 × 4.25/8 + 나머지 206.02865664e9 × 4.8944/8 + Engram 196.61e9 × (8.25 − 4.8944)/8
+  //   = 504.52e9 B = 469.87 GiB (2.21.4: 전부 4.8944 bit → 511.67 GiB, used 629.72)
+  assert.equal(+s.param.toFixed(2), 469.87);
+  assert.equal(+s.used.toFixed(2), 582.91);
   // TP 4: 단일 KV 헤드의 창·압축 캐시·인덱서 K를 대마다 둔다
   assert.equal(calcKVCache({ ...v41, compressedKv: { ...v41.compressedKv, replicas: 4 } }, 8192, 16).totalBytes,
     4 * calcKVCache(v41, 8192, 16).totalBytes);
@@ -146,13 +153,16 @@ test('4× DGX Spark: V4.1-Flash-1017 does not fit at Q4_K_M; KV is replicated pe
   for (const id of ['deepseek-compressed-sparse-kv', 'mtp-ordinary-generation', 'gb10-unified-memory-reserve', 'gb10-cluster-tensor-parallel']) {
     assert.ok(s.structuralAssumptions.some((a) => a.id === id), id);
   }
-  // calcMaxContext는 'yes'(free ≥ headroom)를 지키는 최대 ctx — 그 경계에서 simulate와 맞물린다
+  // calcMaxContext는 'yes'(free ≥ headroom)를 지키는 최대 ctx — 그 경계에서 simulate와 맞물린다.
+  // V4-Flash Q8_0 가중치가 출시 FP4 전문가 크기로 147.6 GiB라(2.21.4: 287.9) 4대에서는 1M까지 들어간다 → 경계는 2대에서 본다.
   const v4 = byName('DeepSeek-V4-Flash');
   const q = { weightBpw: 8.5008, kvBits: 16 };
-  const max = calcMaxContext(v4, spark4, q);
+  assert.equal(calcMaxContext(v4, spark4, q), v4.maxContext);
+  const spark2 = device('2× DGX Spark 128GB');
+  const max = calcMaxContext(v4, spark2, q);
   assert.ok(max > 100000 && max < v4.maxContext, `max ${max}`);
-  assert.equal(simulate(v4, spark4, max, q).verdict, 'yes');
-  assert.notEqual(simulate(v4, spark4, max + 1, q).verdict, 'yes');
+  assert.equal(simulate(v4, spark2, max, q).verdict, 'yes');
+  assert.notEqual(simulate(v4, spark2, max + 1, q).verdict, 'yes');
 });
 
 test('tensor parallel split must also divide o_groups, indexer heads, experts and vocab (reference code asserts) — otherwise no cluster fit', () => {
@@ -261,7 +271,7 @@ test('CLI: the reported command now answers — official ID via the pinned row, 
   assert.equal(j.verdict, 'no');
   assert.equal(j.modelSource.type, 'huggingface');
   assert.equal(j.modelSource.revision, '1bae0e1088993b9b82de08f59de5be5a34e42170');
-  assert.equal(j.usedGB, 629.72);
+  assert.equal(j.usedGB, 582.91); // HF 즉석 파싱도 같은 FP4 전문가 수(I8, 바이트 등식 확인)를 읽어 카탈로그 행과 같다
   assert.equal(j.basis.attention.kind, 'compressed-sparse');
   assert.equal(j.basis.attention.kvLayers, 4);
   assert.equal(j.basis.attention.compressedKv.cachedElementsPerToken, 1600);

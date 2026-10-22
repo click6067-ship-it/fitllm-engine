@@ -40,13 +40,28 @@ export const MODELS = [
   //     https://huggingface.co/api/models/openai/gpt-oss-120b/revision/b5c939de8f754692c1647ca79fbf85e8c1e70f8a
   //     https://huggingface.co/openai/gpt-oss-120b/resolve/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json
   // 활성 파라미터 3.6B/5.1B는 OpenAI 모델카드 표기를 유지한다(https://huggingface.co/openai/gpt-oss-20b · https://huggingface.co/openai/gpt-oss-120b).
+  // nativeFp4Params = 위 U8(MXFP4 전문가) 논리 수 — 어느 정밀도를 골라도 이 몫은 출시 크기(4.25 bit)로 센다(FP4_STORAGE_BPW 주석).
+  //  공개 파일 바이트(HF 파일 목록, 2026-10-23 조회 · 단계 폴더/파일 합) — 출시 원본보다 큰 GGUF 단계는 F16뿐이다(F32 노름·메타데이터):
+  //   20b  원본 13,761,316,904 · unsloth/gpt-oss-20b-GGUF@d449b42 Q4_K_M 11,624,759,488 · Q5_K_M 11,717,357,248 · Q6_K 12,041,000,128
+  //        · Q8_0 12,109,567,168 · F16 13,792,639,168 · ggml-org/gpt-oss-20b-GGUF@15dcfc7 MXFP4 12,109,566,624
+  //        · MLX mlx-community/gpt-oss-20b-MXFP4-Q4@f356f27 11,178,569,159 · -MXFP4-Q8@773a7da 12,076,207,568
+  //   120b 원본 65,248,893,184 · unsloth/gpt-oss-120b-GGUF@ff1a82d Q4_K_M 62,768,723,552 · Q5_K_M 62,889,522,272 · Q6_K 63,284,496,960
+  //        · Q8_0 63,387,347,520 · F16 65,369,017,728 · ggml-org/gpt-oss-120b-GGUF@7200b74 MXFP4 63,387,346,208
+  //        · MLX mlx-community/gpt-oss-120b-MXFP4-Q4@bce781b 62,330,057,589 · -MXFP4-Q8@81e5ac3 63,386,948,506 · -mxfp4-bf16@a0ed0ff 65,248,907,820
+  //   https://huggingface.co/api/models/unsloth/gpt-oss-120b-GGUF/revision/ff1a82da6ad466e32284fa3d2b86694db3204789?blobs=true
+  //   https://huggingface.co/api/models/ggml-org/gpt-oss-120b-GGUF/revision/7200b74bea78b0a2964ef9f3897eefa401e890ff?blobs=true
+  //   https://huggingface.co/api/models/unsloth/gpt-oss-20b-GGUF/revision/d449b42d93e1c2c7bda5312f5c25c8fb91dfa9b4?blobs=true
+  //   https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF/revision/15dcfc7e7c608c6161507211ed43c5b590801b4b?blobs=true
+  //  2.21.4까지는 전부 선택 단계 평균 bit로 세서 120b Q8_0이 115.6 GiB(실파일 59.0), Q4_K_M이 66.6 GiB(실파일 58.5)였다.
   { name: 'gpt-oss-20b', group: 'gpt-oss', added: '2026-07-09', tags: ['moe'],
     totalParams: 20.9, activeParams: 3.6, layerCount: 24, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
     numExperts: 32, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 12, benchmarks: null,
+    nativeFp4Params: 19.1102976, // 19,110,297,600 = 24층 × 32 전문가 × (2880×5760 + 2880×2880)
     desc: 'MoE · 20.9B / 3.6B active · 32 experts(top-4) · 슬라이딩128(full 12/24) · 최대 128K' }, // config.json: openai/gpt-oss-20b @ 6cee5e8
   { name: 'gpt-oss-120b', group: 'gpt-oss', added: '2026-07-09', tags: ['moe'],
     totalParams: 116.8, activeParams: 5.1, layerCount: 36, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
     numExperts: 128, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 18, benchmarks: null,
+    nativeFp4Params: 114.6617856, // 114,661,785,600 = 36층 × 128 전문가 × (2880×5760 + 2880×2880)
     desc: 'MoE · 116.8B / 5.1B active · 128 experts(top-4) · 슬라이딩128(full 18/36) · 최대 128K' }, // config.json: openai/gpt-oss-120b @ b5c939d
 
   // === Qwen 3.6 27B (dense, 하이브리드 linear+full attn ~3:1) — HF config.json ===
@@ -632,6 +647,11 @@ export const MODELS = [
       vocabSize: 129280, routedExperts: [384, 128], // 본체 384 · DSpark 초안 블록 128
     },
     engramParams: 196.6138496, // (384,006,168 + 384,016,682) 행 × 256 — FP8 저장, ENGRAM_MIN_BPW 하한으로 센다
+    // 위 I8 = FP4 전문가 — 출시 크기(4.25 bit) 위로 세지 않는다(FP4_STORAGE_BPW). 바이트 확인: I8 × 4.25/8 + BF16×2 + F32×4 + F8×1
+    //   + Engram E8M0 스케일(196.6138496e9 / 32) = 510,278,795,096 B vs 샤드 합 510,296,708,312 B(차 17.9 MB = 헤더·FP8 블록 스케일).
+    //   공개 GGUF unsloth/DeepSeek-V4.1-Flash-1017-GGUF@60ad365(2026-10-23 조회): UD-Q4_K_XL 500,707,576,573 · UD-Q8_K_XL 508,376,763,197
+    //   (+ DSpark Q8_0 7,976,914,240 · mmproj BF16 972,208,288 별도 파일) — FP4 전문가를 그대로 둔다. UD-IQ1_S 232,979,608,475는 다시 양자화한 빌드.
+    nativeFp4Params: 557.17134336,
     desc: 'MoE · 763.2B(Engram 196.6B·비전·DSpark 포함) / 16B active · 384 experts(top-6) · CSA2 KV 공유(소스 4/40층) · 최대 1M · MIT',
   },
   {
@@ -639,11 +659,14 @@ export const MODELS = [
     // https://huggingface.co/api/models/deepseek-ai/DeepSeek-V4-Flash/revision/60d8d70770c6776ff598c94bb586a859a38244f1
     // https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/60d8d70770c6776ff598c94bb586a859a38244f1/config.json
     // KV: CSA(ratio 4) 21층 512 + 인덱서 128 · HCA(ratio 128) 20층 512 · 앞 2층은 창만 → 토큰당 3,440원소.
+    // nativeFp4Params = I8(FP4 전문가). I8 × 4.25/8 + 나머지 dtype 바이트 = 159,609,118,280 B vs 샤드 합 159,617,149,040 B(차 8.0 MB).
+    //   공개 GGUF unsloth/DeepSeek-V4-Flash-GGUF@e3aa0d6(2026-10-23 조회): UD-Q4_K_XL 155,095,240,320 · UD-Q8_K_XL 161,869,614,720 B.
     name: 'DeepSeek-V4-Flash', group: 'DeepSeek', added: '2026-10-18', tags: ['moe'],
     aliases: ['deepseek-ai/DeepSeek-V4-Flash'],
     totalParams: 290.9, activeParams: 13, layerCount: 43, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 4096,
     officialParams: 284, // 모델카드 "284B parameters (13B activated)" — https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/60d8d70770c6776ff598c94bb586a859a38244f1/README.md · V4.1-Flash 카드 표도 284B
     numExperts: 256, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
+    nativeFp4Params: 283.467841536, // 44층(본체 43 + MTP 1) × 256 × 3 × 4096 × 2048
     compressedKv: {
       family: 'deepseek_v4', windowSize: 128, windowLayers: 44, headDim: 512,
       caches: [{ ratio: 4, dim: 512, layers: 21 }, { ratio: 4, dim: 128, layers: 21 }, { ratio: 128, dim: 512, layers: 20 }],
@@ -657,11 +680,14 @@ export const MODELS = [
     // https://huggingface.co/api/models/deepseek-ai/DeepSeek-V4-Pro/revision/b5968e9190ef611bbf34a7229255be88a0e937c1
     // https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json
     // KV: CSA 30층 + HCA 31층(앞 2층 포함) → 토큰당 4,924원소.
+    // nativeFp4Params = I8(FP4 전문가). I8 × 4.25/8 + 나머지 dtype 바이트 = 864,703,378,552 B vs 샤드 합 864,721,029,744 B(차 17.7 MB).
+    //   공개 GGUF는 후속 체크포인트 빌드만 있다: unsloth/DeepSeek-V4-Pro-0813-GGUF@6d05361 UD-Q4_K_XL 849,683,927,055 · UD-Q8_K_XL 873,445,601,295 B.
     name: 'DeepSeek-V4-Pro', group: 'DeepSeek', added: '2026-10-18', tags: ['moe'],
     aliases: ['deepseek-ai/DeepSeek-V4-Pro'],
     totalParams: 1598.8, activeParams: 49, layerCount: 61, kvHeads: 1, kvHeadDim: 512, attnHeads: 128, hiddenSize: 7168,
     officialParams: 1600, // 모델카드 "1.6T parameters (49B activated)" — https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/b5968e9190ef611bbf34a7229255be88a0e937c1/README.md · V4.1-Flash 카드 표도 1.6T
     numExperts: 384, expertsPerToken: 6, mtpLayerCount: 1, maxContext: 1048576, benchmarks: null,
+    nativeFp4Params: 1572.763336704,
     compressedKv: {
       family: 'deepseek_v4', windowSize: 128, windowLayers: 62, headDim: 512,
       caches: [{ ratio: 4, dim: 512, layers: 30 }, { ratio: 4, dim: 128, layers: 30 }, { ratio: 128, dim: 512, layers: 31 }],
@@ -1317,6 +1343,10 @@ const STRUCTURAL_ASSUMPTIONS = Object.freeze({
     id: 'deepseek-compressed-sparse-kv',
     statement: "KV memory follows the cache buffers of DeepSeek's reference inference code: every layer keeps a sliding-window cache, and only the layers that compress their own KV keep a compressed cache (one entry per compress_ratio tokens) plus indexer keys; layers that reuse an earlier layer's cache add nothing. Elements are counted at the chosen KV precision (16-bit matches the reference code's bf16 buffers; FP8/FP4 block scales are not counted separately), plus the compressors' fp32 state, V4.1's Engram token history and a 512 MiB indexer prefill workspace (vLLM's default bound, VLLM_SPARSE_INDEXER_MAX_LOGITS_MB); on linked GB10 units all of it is counted on every unit. Whole-prompt prefill as in DeepSeek's reference generate.py needs far more workspace and is not modeled, nor is a runtime that caches uncompressed KV. V4.1's Engram tables are counted at no less than their FP8 storage (8.25 bits with scales) whatever the weight quantization; the vision tower and MTP/DSpark draft weights count as resident weights.",
   }),
+  nativeFp4: Object.freeze({
+    id: 'native-fp4-expert-weights',
+    statement: 'This release ships its expert weights in FP4 (4-bit E2M1 values plus one E8M0 scale per 32, 4.25 bits — the MXFP4 layout). At any weight precision above 4.25 bits they are counted at that shipped size, because llama.cpp GGUF builds (native MXFP4 type) and MLX MXFP4 builds keep them as released; only the other weights follow the chosen quantization. Builds that re-expand the experts to 8 or 16 bits are larger without adding precision and are not what this counts; below 4.25 bits the experts are counted at the chosen precision.',
+  }),
   mtp: Object.freeze({
     id: 'mtp-ordinary-generation',
     statement: 'KV memory assumes ordinary non-speculative generation; an MTP draft context is not included.',
@@ -1352,6 +1382,7 @@ export function structuralAssumptions(model, device) {
   if (model.mlaKvLoraRank) result.push(STRUCTURAL_ASSUMPTIONS.mla);
   if (model.compressedKv) result.push(STRUCTURAL_ASSUMPTIONS.compressedKv);
   if (pleDeductionApplies(device) && guardedPleParamsB(model)) result.push(STRUCTURAL_ASSUMPTIONS.ple);
+  if (nativeFp4ParamsB(model)) result.push(STRUCTURAL_ASSUMPTIONS.nativeFp4);
   if (model.mtpLayerCount > 0) result.push(STRUCTURAL_ASSUMPTIONS.mtp);
   if (device?.unifiedMemory) result.push(STRUCTURAL_ASSUMPTIONS.unified);
   if (device?.clusterUnits > 1) result.push(STRUCTURAL_ASSUMPTIONS.cluster);
@@ -1373,10 +1404,38 @@ function precisionFloorBytes(model, bits) {
   return model.engramParams ? model.engramParams * 1e9 * Math.max(0, ENGRAM_MIN_BPW - bits) / 8 : 0;
 }
 
+// 출시 체크포인트가 FP4로 내놓은 가중치(nativeFp4Params, B) — 반대 방향의 하한이다: 이 텐서는 선택한 정밀도가 더 높아도
+// 출시 저장 크기 위로 세지 않는다. 형식은 E2M1 4bit + 32원소당 E8M0 스케일 1B = 4.25 bit(MXFP4 배치) — 바이트로 확인:
+//   gpt-oss-120b 114,661,785,600 × 4.25/8 + BF16 2,167,371,072 × 2 = 65,248,815,744 B vs 샤드 합 65,248,893,184 B(차 77 KB = 헤더).
+// GGUF는 MXFP4를 자체 타입으로 담고(ggml.h GGML_TYPE_MXFP4), llama-quantize는 이미 양자화된 텐서를 --allow-requantize 없이
+// 다시 양자화하지 않는다(llama-quant.cpp "requantizing from type %s is disabled"):
+//   https://github.com/ggml-org/llama.cpp/blob/970b51ce7c9ba5fff0726c5e9994f1c2f0e4eedc/ggml/include/ggml.h
+//   https://github.com/ggml-org/llama.cpp/blob/970b51ce7c9ba5fff0726c5e9994f1c2f0e4eedc/src/llama-quant.cpp
+// 공개 GGUF도 Q4_K_M~F16 어느 단계든 이 텐서를 그대로 둔다(HF 파일 목록 2026-10-23 — 행 주석에 단계별 바이트).
+// 그래서 4.25 bit보다 높은 정밀도에서는 이 몫만 4.25 bit로 세고 나머지는 선택한 정밀도 그대로 센다. 8·16bit로 다시 편 빌드
+// (lmstudio-community/gpt-oss-120b-MLX-8bit 124,168,924,424 B = 115.6 GiB)는 품질 이득 없이 크기만 키우므로 기준으로 삼지 않는다.
+// 4.25 bit 미만은 다시 양자화한 빌드라 선택한 정밀도로 센다(종래와 같음 — DeepSeek-V4 UD-IQ1·Q2·Q3 GGUF가 실제로 그렇다).
+// FP8(E4M3)은 이 부류가 아니다: GGUF에 FP8 타입이 없어 Q8_0(8.5 bit)·BF16으로 다시 쓴다 — GLM-5.3 FP8 출시 755,632,050,320 B인데
+// unsloth/GLM-5.3-GGUF Q8_0 801,357,677,216 B · BF16 1,507,988,027,936 B(@346b359)라 종래 단계별 계산이 공개 파일과 맞는다.
+const FP4_STORAGE_BPW = 4 + 8 / 32;
+function nativeFp4ParamsB(model) {
+  const p = model.nativeFp4Params;
+  return p > 0 && p < model.totalParams ? p : 0;
+}
+// 가중치 바이트의 단일 진실원 — calcParamMemory·calcMaxContext가 같은 식을 쓴다(인라인 중복 금지).
+function weightBytes(model, bits, device) {
+  const resident = residentParamsB(model, device);
+  const fp4 = bits > FP4_STORAGE_BPW ? nativeFp4ParamsB(model) : 0;
+  const bytes = fp4
+    ? (resident - fp4) * 1e9 * (bits / 8) + fp4 * 1e9 * (FP4_STORAGE_BPW / 8)
+    : resident * 1e9 * (bits / 8);
+  return bytes + precisionFloorBytes(model, bits);
+}
+
 export function calcParamMemory(model, bits, device) {
   if (!model.totalParams) return { totalGB: 0, activeGB: null };
   const bpe = bits / 8;
-  const baseTotalGB = (residentParamsB(model, device) * 1e9 * bpe + precisionFloorBytes(model, bits)) / 1024 ** 3;
+  const baseTotalGB = weightBytes(model, bits, device) / 1024 ** 3;
   const baseActiveGB = model.activeParams ? (model.activeParams * 1e9 * bpe) / 1024 ** 3 : null;
   // quantAdjust는 정수 bits(Apple NVFP4/MXFP8 4/8/16) 보정용. GGUF는 weightBpw가 소수(4.8944 등)라
   // 매치 안 돼 multiplier=1.0 — 이는 *의도*다: GGUF bpw는 블록 스케일 등 실측 오버헤드를 이미 포함하므로
@@ -1430,10 +1489,9 @@ export function calcMaxContext(model, deviceOrRam, bitsOrQuant) {
   if (!clusterTensorParallelOk(model, device)) return 0; // 대수로 나눌 수 없는 모델 — 클러스터 수치를 내지 않는다
   const { weightBpw, kvBits } = toQuant(bitsOrQuant);
   const attnLayers = model.fullAttnLayers || model.layerCount; // 하이브리드: 풀어텐션 레이어만 KV
-  const wbpe = weightBpw / 8; // 파라미터(weight) 바이트
   const kbpe = kvBits / 8;    // KV 원소 바이트(GPU 기본 F16=16)
   const quantMultiplier = (quantAdjust[model.name] && quantAdjust[model.name][weightBpw]) || 1.0;
-  const paramBytes = (residentParamsB(model, device) * 1e9 * wbpe + precisionFloorBytes(model, weightBpw)) * quantMultiplier; // PLE: GPU면 상주분만 · Engram FP8 하한
+  const paramBytes = weightBytes(model, weightBpw, device) * quantMultiplier; // PLE: GPU면 상주분만 · Engram FP8 하한 · 출시 FP4 상한
   const linearStateBytes = calcLinearState(model).totalBytes; // ctx 무관 고정 → 예산에서 먼저 뺀다
   const budget =
     device.memoryGB * 1024 ** 3 * (1 - device.headroomRatio) - paramBytes - paramBytes * weightOverheadRatio(device) - device.reserveGB * 1024 ** 3 - linearStateBytes;
@@ -2131,6 +2189,29 @@ export function resolveParameterCount({
   };
 }
 
+// HF 즉석 파싱도 카탈로그 행과 같은 FP4 상한(weightBytes)을 쓴다 — 출시 FP4 전문가 수를 safetensors 증거에서 읽되,
+// 샤드 바이트가 그 수로 정확히 설명될 때만 받는다. 선언: quant_method 'mxfp4'(gpt-oss — U8 컨테이너) ·
+// expert_dtype 'fp4'(DeepSeek-V4 계열 — I8 컨테이너). 등식: FP4 수 × 4.25/8 + 1:1 dtype 바이트(+ V4.1 Engram의 32원소당
+// E8M0 스케일) ≤ 샤드 합 ≤ 그 값 + 헤더 여유(resolveParameterCount의 1:1 상한과 같다). 실측: gpt-oss-120b 77 KB · V4.1 17.9 MB.
+// 확인되지 않으면 상한을 두지 않는다 — 전부 선택한 정밀도로 세는 종래 계산(크게 세는 쪽)이 남는다.
+function nativeFp4FromEvidence({ container, safetensorsParameters, checkpointBytes, extraBytes = 0 }) {
+  if (!container || !safetensorsParameters || !(Number.isSafeInteger(checkpointBytes) && checkpointBytes > 0)) return undefined;
+  let fp4 = 0;
+  let bytes = extraBytes;
+  for (const [rawDtype, count] of Object.entries(safetensorsParameters)) {
+    const dtype = String(rawDtype).toUpperCase();
+    if (dtype === container) { fp4 += count; continue; }
+    const width = ONE_TO_ONE_SAFETENSORS_DTYPES.get(dtype);
+    if (!width) return undefined; // 다른 packed 컨테이너가 섞이면 어느 수가 FP4인지 확정할 수 없다
+    bytes += count * width;
+  }
+  if (!(fp4 > 0)) return undefined;
+  bytes += fp4 * (FP4_STORAGE_BPW / 8);
+  const slack = checkpointBytes - bytes;
+  const maxSlack = Math.min(Math.max(1_000_000, bytes * 0.01), 64_000_000);
+  return slack >= 0 && slack <= maxSlack ? fp4 / 1e9 : undefined;
+}
+
 export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   // 일반 파싱은 의도적으로 fail-closed다. 익숙한 필드명을 쓰면서 메모리 레이아웃이 다른 config
   // (반복 레이어·혼합 linear/GQA·압축/인덱스 어텐션·멀티모달 프로젝터)는 그럴듯한 오답을 만든다.
@@ -2526,6 +2607,18 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   const pleOffloadVerified = Boolean(
     pinnedPle && pleBody && pleParamsProvenance && totalParams && totalParams - pleParams >= pleBody
   );
+  const fp4Scopes = [inner, raw, ...[inner, raw].flatMap((s) => [s.quantization, s.quantization_config])].filter(Boolean);
+  const fp4Container = fp4Scopes.some((s) => String(s.quant_method || '').toLowerCase() === 'mxfp4') ? 'U8'
+    : fp4Scopes.some((s) => String(s.expert_dtype || '').toLowerCase() === 'fp4') ? 'I8'
+      : null;
+  const nativeFp4Params = resolvedEvidence
+    ? nativeFp4FromEvidence({
+      container: fp4Container,
+      safetensorsParameters: parameterEvidence?.safetensorsParameters,
+      checkpointBytes: totalSize,
+      extraBytes: ds?.engramParams ? (ds.engramParams * 1e9) / 32 : 0, // V4.1 Engram FP8 표의 E8M0 스케일(파라미터 수에 안 잡힌다)
+    })
+    : undefined;
 
   return {
     name: id.split('/').pop(),
@@ -2551,6 +2644,7 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     mlaRopeDim,
     compressedKv,
     engramParams: ds?.engramParams,
+    nativeFp4Params,
     mtpLayerCount,
     pleParams: pleParams ? +pleParams.toFixed(3) : undefined,
     pleOffloadVerified,

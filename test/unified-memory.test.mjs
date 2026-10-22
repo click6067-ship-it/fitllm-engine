@@ -146,7 +146,7 @@ test('CLI: --list에 DGX Spark와 별칭이 보이고, --gpu 별칭으로 같은
   const jb = JSON.parse(b.stdout);
   assert.deepEqual(jb, ja);
   assert.equal(ja.hardware, 'DGX Spark 128GB (128GB unified memory)');
-  assert.deepEqual(ja.structuralAssumptions.map((x) => x.id), ['gb10-unified-memory-reserve']);
+  assert.deepEqual(ja.structuralAssumptions.map((x) => x.id), ['native-fp4-expert-weights', 'gb10-unified-memory-reserve']);
 });
 
 test('CLI: 다른 카드와 풀링·--count 3은 exit 2로 거절된다', () => {
