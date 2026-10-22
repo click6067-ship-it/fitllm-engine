@@ -10,12 +10,15 @@
 //   https://huggingface.co/api/models/unsloth/DeepSeek-V4-Flash-GGUF/revision/e3aa0d6a5fa4f820d9e132ac1fd1d01e1b2b49e0?blobs=true
 //   https://huggingface.co/api/models/unsloth/GLM-5.3-GGUF/revision/346b3591c7f28d1a23716f97a065ecf12ec14771?blobs=true
 //   https://huggingface.co/api/models/bartowski/Nex-N2.5-Pro-GGUF/revision/f7c3c07945cf420f149226c010e10b1343f5d149?blobs=true
+//   https://huggingface.co/api/models/bartowski/openai_gpt-oss-120b-GGUF/revision/8d64014efc314685c68ad448590f905fcb20e534?blobs=true
+//   https://huggingface.co/api/models/bartowski/openai_gpt-oss-20b-GGUF/revision/e39ba3aa000c47c83dacdc9e1ca2c9dd0808c205?blobs=true
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import {
   GPUS, GPU_QUANTS, LOCAL_MODELS, MACBOOK_RAM_GROUPS, appleDevice, calcMaxContext, calcParamMemory, gpuDevice, parseHfConfig,
-  simulate, structuralAssumptions,
+  simulate, simulateStack, structuralAssumptions,
 } from '../engine.js';
 
 const BIN = new URL('../bin/fitllm.mjs', import.meta.url).pathname;
@@ -26,9 +29,16 @@ const tier = (t) => GPU_QUANTS.find((q) => q.tier === t).bpw;
 const weightBytes = (model, bits, device) => calcParamMemory(model, bits, device).totalGB * GIB;
 
 const RELEASE_BYTES = { 'gpt-oss-120b': 65248893184, 'gpt-oss-20b': 13761316904 }; // safetensors 샤드 합(original/ 제외)
-const GGUF_BYTES = { // unsloth 단계별 파일(분할 파일 합)
-  'gpt-oss-120b': { Q4_K_M: 62768723552, Q5_K_M: 62889522272, Q6_K: 63284496960, Q8_0: 63387347520, FP16: 65369017728 },
-  'gpt-oss-20b': { Q4_K_M: 11624759488, Q5_K_M: 11717357248, Q6_K: 12041000128, Q8_0: 12109567168, FP16: 13792639168 },
+// 단계별 공개 GGUF(분할 파일 합) — unsloth @ff1a82d/@d449b42 · bartowski @8d64014/@e39ba3a. 엔진은 단계마다 가장 큰 파일을 쓴다.
+const GGUF_BYTES = {
+  'gpt-oss-120b': {
+    Q4_K_M: [62768723552, 62841713344], Q5_K_M: [62889522272], Q6_K: [63284496960, 63284496064], Q8_0: [63387347520, 63387346368],
+    FP16: [65369017728, 65369016768],
+  },
+  'gpt-oss-20b': {
+    Q4_K_M: [11624759488, 11673418816], Q5_K_M: [11717357248, 11728415296], Q6_K: [12041000128, 12040998976], Q8_0: [12109567168, 12109566016],
+    FP16: [13792639168, 13792637760],
+  },
 };
 const FP4_ROWS = ['gpt-oss-20b', 'gpt-oss-120b', 'DeepSeek-V4.1-Flash-1017', 'DeepSeek-V4-Flash', 'DeepSeek-V4-Pro'];
 
@@ -47,21 +57,29 @@ test('catalog: exactly the five FP4-release rows carry nativeFp4Params, equal to
   assert.equal(byName('Nex-N2.5-Pro').nativeFp4Params, undefined);
 });
 
-test('gpt-oss: no GGUF tier counts more than the release file, and each tier lands within 4% under the published GGUF (2.21.4: 6–240% over)', () => {
+test('gpt-oss: each GGUF tier counts the largest public file of that tier; only F16 is above the release, by its F32 small tensors (2.21.4: 9.5–257% over)', () => {
   const discrete = gpu('RTX 4090');
+  const over = [];
   for (const name of ['gpt-oss-20b', 'gpt-oss-120b']) {
     const m = byName(name);
-    for (const [t, file] of Object.entries(GGUF_BYTES[name])) {
+    for (const [t, files] of Object.entries(GGUF_BYTES[name])) {
+      const file = Math.max(...files);
+      assert.equal(m.ggufFileBytes[t], file, `${name} ${t} row = largest public file`);
       const w = weightBytes(m, tier(t), discrete);
-      assert.ok(w <= RELEASE_BYTES[name], `${name} ${t} ${w} > release ${RELEASE_BYTES[name]}`);
-      assert.ok(w <= file && (file - w) / file < 0.04, `${name} ${t}: engine ${(w / GIB).toFixed(2)} vs file ${(file / GIB).toFixed(2)} GiB`);
-      const old = m.totalParams * 1e9 * tier(t) / 8; // 2.21.4: 전부 단계 평균 bit
-      assert.ok(old / file > 1.06, `${name} ${t} old ${(old / GIB).toFixed(2)}`);
+      assert.ok(Math.abs(w - file) < 1, `${name} ${t}: engine ${w} vs file ${file}`);
+      // 단계 공식(MXFP4 4.25 bit + 나머지 단계 bpw)은 파일 아래로 0.1–3.7% — 그래서 공개 파일을 하한으로 둔다
+      const formula = (m.totalParams - m.nativeFp4Params) * 1e9 * tier(t) / 8 + m.nativeFp4Params * 1e9 * 4.25 / 8;
+      assert.ok(formula <= file && (file - formula) / file < 0.04, `${name} ${t} formula ${(formula / GIB).toFixed(2)}`);
+      if (t === 'FP16') assert.ok(file > RELEASE_BYTES[name] && (file - RELEASE_BYTES[name]) / RELEASE_BYTES[name] < 0.0025, `${name} F16`);
+      else assert.ok(file <= RELEASE_BYTES[name], `${name} ${t} file above the release`);
+      over.push(m.totalParams * 1e9 * tier(t) / 8 / file - 1); // 2.21.4: 전부 단계 평균 bit
     }
     // Mac 8·16bit도 출시 크기를 넘지 않는다(4bit는 4.25 미만이라 종래 그대로)
     for (const bits of [8, 16]) assert.ok(weightBytes(m, bits, appleDevice(128)) <= RELEASE_BYTES[name], `${name} mac ${bits}`);
     assert.equal(calcParamMemory(m, 4, appleDevice(128)).totalGB, (m.totalParams * 1e9 * 0.5) / GIB);
   }
+  assert.equal(+(Math.min(...over) * 100).toFixed(2), 9.54); // 20b Q4_K_M
+  assert.equal(+(Math.max(...over) * 100).toFixed(2), 257.37); // 120b FP16
   // 바이트 확인: MXFP4 전문가 × 4.25/8 + BF16 × 2 = 원본 샤드 합(차는 safetensors 헤더 77 KB)
   assert.equal(RELEASE_BYTES['gpt-oss-120b'] - (114661785600 * 4.25 / 8 + 2167371072 * 2), 77440);
 });
@@ -71,13 +89,13 @@ test('GB10 one unit: gpt-oss-120b fits at 4-bit and 8-bit (2.21.4 said 8-bit doe
   const m = byName('gpt-oss-120b');
   const q4 = simulate(m, spark, 8192, { weightBpw: tier('Q4_K_M'), kvBits: 16 });
   const q8 = simulate(m, spark, 8192, { weightBpw: tier('Q8_0'), kvBits: 16 });
-  // 가중치: 114.6617856e9 × 4.25/8 + 2.1382144e9 × bpw/8 — 실파일 Q4_K_M 58.46 · Q8_0(=ggml-org MXFP4) 59.03 GiB
-  assert.equal(+q4.param.toFixed(2), 57.95); // 2.21.4: 66.55
-  assert.equal(+q8.param.toFixed(2), 58.85); // 2.21.4: 115.59
+  // 가중치 = 단계별 가장 큰 공개 파일(공식 57.95·58.85보다 크다): Q4_K_M 62,841,713,344 B · Q8_0 63,387,347,520 B(= ggml-org MXFP4)
+  assert.equal(+q4.param.toFixed(2), 58.53); // 2.21.4: 66.55
+  assert.equal(+q8.param.toFixed(2), 59.03); // 2.21.4: 115.59
   assert.equal(q4.verdict, 'yes');
-  assert.equal(+q4.used.toFixed(2), 71.83); // 2.21.4: 80.43
+  assert.equal(+q4.used.toFixed(2), 72.41); // 2.21.4: 80.43
   assert.equal(q8.verdict, 'yes'); // 2.21.4: no (129.47 of 128)
-  assert.equal(+q8.used.toFixed(2), 72.73);
+  assert.equal(+q8.used.toFixed(2), 72.92);
   assert.equal(calcMaxContext(m, spark, { weightBpw: tier('Q8_0'), kvBits: 16 }), m.maxContext); // 128K 전부
   const fp16 = simulate(m, spark, 131072, { weightBpw: tier('FP16'), kvBits: 16 });
   assert.equal(fp16.verdict, 'yes');
@@ -91,12 +109,13 @@ test('16 GB GPU: gpt-oss-20b fits at Q4_K_M and Q8_0 (8K), F16 still does not; 2
     const q4 = simulate(m, d, 8192, { weightBpw: tier('Q4_K_M'), kvBits: 16 });
     const q8 = simulate(m, d, 8192, { weightBpw: tier('Q8_0'), kvBits: 16 });
     const f16 = simulate(m, d, 8192, { weightBpw: tier('FP16'), kvBits: 16 });
-    assert.equal(+q4.param.toFixed(2), 10.47); // 2.21.4: 11.91 — 실파일 10.83
+    assert.equal(+q4.param.toFixed(2), 10.87); // 2.21.4: 11.91 — bartowski Q4_K_M 11,673,418,816 B
     assert.equal(q4.verdict, 'yes', name); // 2.21.4: tight (15.80 of 16)
-    assert.equal(+q4.used.toFixed(2), 14.2);
-    assert.equal(+q8.param.toFixed(2), 11.23); // 2.21.4: 20.68 — 실파일 11.28
+    assert.equal(+q4.used.toFixed(2), 14.64);
+    assert.equal(+q8.param.toFixed(2), 11.28); // 2.21.4: 20.68 — unsloth Q8_0 12,109,567,168 B
     assert.equal(q8.verdict, 'yes', name); // 2.21.4: no (25.63)
-    assert.equal(f16.verdict, 'no', name); // F16 실파일 12.85 GiB + 12% + Windows reserve 2.0 → 16.79
+    assert.equal(+q8.used.toFixed(2), 15.1);
+    assert.equal(f16.verdict, 'no', name); // F16 파일 12.85 GiB + 12% + Windows reserve 2.0 → 16.85
     assert.ok(calcMaxContext(m, d, { weightBpw: tier('Q4_K_M'), kvBits: 16 }) > 16384);
   }
 });
@@ -140,9 +159,9 @@ test('FP8 releases stay on the tier formula: their published Q8_0 / BF16 GGUFs r
     const w = weightBytes(m, tier(t), d);
     assert.ok(Math.abs(w - file) / file < 0.002, `${m.name} ${t}: ${(w / GIB).toFixed(1)} vs ${(file / GIB).toFixed(1)} GiB`);
   }
-  // FP8 출시본 바이트(GLM-5.3 755,632,050,320 · Nex 407,130,522,144)는 Q8_0 GGUF보다 5–6% 작다 — 상한으로 쓰면 거짓 fits 방향
-  assert.ok(755632050320 < 801357677216 * 0.95);
-  assert.ok(407130522144 < 421576669344 * 0.97);
+  // FP8 출시본 바이트(GLM-5.3 755,632,050,320 · Nex 407,130,522,144)는 Q8_0 GGUF보다 5.71% · 3.43% 작다 — 상한으로 쓰면 거짓 fits 방향
+  assert.equal(+((1 - 755632050320 / 801357677216) * 100).toFixed(2), 5.71);
+  assert.equal(+((1 - 407130522144 / 421576669344) * 100).toFixed(2), 3.43);
 });
 
 test('DeepSeek-V4: FP4 experts at their shipped size — V4-Flash Q4_K_M matches the published UD-Q4_K_XL within 0.1%; Q8_0 halves vs 2.21.4', () => {
@@ -176,10 +195,15 @@ const evidence120b = (parameters = { BF16: 2167371072, U8: 114661785600 }) => ({
 test('HF live parse reads the FP4 count only when the shard bytes are explained by it; otherwise no cap (counts everything at the tier, the larger answer)', () => {
   const parsed = parseHfConfig('openai/gpt-oss-120b', gptOss120bConfig, RELEASE_BYTES['gpt-oss-120b'], evidence120b());
   assert.equal(parsed.nativeFp4Params, byName('gpt-oss-120b').nativeFp4Params);
+  // FP4 수·형상이 같으면 GGUF 단계 파일 크기도 같다 — 카탈로그 행의 공개 크기를 하한으로 물려받는다(복사본)
+  assert.deepEqual(parsed.ggufFileBytes, byName('gpt-oss-120b').ggufFileBytes);
+  assert.notEqual(parsed.ggufFileBytes, byName('gpt-oss-120b').ggufFileBytes);
+  assert.equal(calcParamMemory(parsed, tier('Q4_K_M')).totalGB, calcParamMemory(byName('gpt-oss-120b'), tier('Q4_K_M')).totalGB);
   assert.ok(structuralAssumptions(parsed, gpu('DGX Spark 128GB')).some((a) => a.id === 'native-fp4-expert-weights'));
   // 바이트가 FP4 4.25 bit로 설명되지 않으면(100 MB 초과 차이) 상한을 두지 않는다
   const off = parseHfConfig('x/gpt-oss-120b', gptOss120bConfig, RELEASE_BYTES['gpt-oss-120b'] + 100_000_000, evidence120b());
   assert.equal(off.nativeFp4Params, undefined);
+  assert.equal(off.ggufFileBytes, undefined);
   assert.ok(calcParamMemory(off, tier('Q8_0')).totalGB > calcParamMemory(parsed, tier('Q8_0')).totalGB * 1.9);
   // 선언 없는 U8(예: 다른 packed 형식)은 FP4로 읽지 않는다
   const noDecl = { ...gptOss120bConfig, quantization_config: { quant_method: 'bitsandbytes', bits: 4 } };
@@ -193,10 +217,43 @@ test('CLI: the seller-card case answers FITS — gpt-oss-120b on one DGX Spark a
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const j = JSON.parse(r.stdout);
   assert.equal(j.verdict, 'yes');
-  assert.equal(j.usedGB, 72.73);
+  assert.equal(j.usedGB, 72.92);
   assert.deepEqual(j.structuralAssumptions.map((a) => a.id), ['native-fp4-expert-weights', 'gb10-unified-memory-reserve']);
   // 맥 64GB는 여전히 안 들어간다(README 예시 그대로)
   const mac = spawnSync(process.execPath, [BIN, 'gpt-oss-120b', '--mac', '64'], { encoding: 'utf8' });
   assert.equal(mac.status, 1, mac.stdout);
   assert.ok(Object.values(MACBOOK_RAM_GROUPS).flat().includes(64));
+});
+
+test('Codex R1: a verified PLE model never also takes the FP4 discount — no negative or double-deducted weights', () => {
+  // E4B 형상 + mxfp4 선언 + U8 7.8B·BF16 0.196B — 샤드 바이트가 FP4 4.25 bit로 정확히 설명되는 합성 입력(4,536,062,980 B)
+  // text_config에서 현재 구조 키 정책이 거부하는 키만 뺀 부분집합(ple-parser-fail-closed.test.mjs의 subset과 같다)
+  const rejected = ['attention_k_eq_v', 'enable_moe_block', 'expert_intermediate_size', 'num_global_key_value_heads',
+    'num_kv_shared_layers', 'top_k_experts', 'use_bidirectional_attention'];
+  const text = JSON.parse(readFileSync(new URL('./fixtures/google__gemma-4-E4B-it.config.json', import.meta.url), 'utf8')).text_config;
+  const cfg = { ...Object.fromEntries(Object.entries(text).filter(([k]) => !rejected.includes(k))), quantization_config: { quant_method: 'mxfp4' } };
+  const parameters = { U8: 7800000000, BF16: 196156490 };
+  const bytes = 7800000000 * 4.25 / 8 + 196156490 * 2;
+  assert.equal(bytes, 4536062980);
+  const m = parseHfConfig('x/e4b-mxfp4', cfg, bytes, {
+    revision: 'b'.repeat(40), safetensorsParameters: parameters, safetensorsTotal: 7996156490,
+  });
+  const d = gpu('RTX 3060 8GB');
+  for (const q of GPU_QUANTS) {
+    const w = calcParamMemory(m, q.bpw, d).totalGB;
+    assert.ok(w > 0, `${q.tier} ${w}`);
+    if (m.pleOffloadVerified) {
+      // PLE를 뺀 상주분 전체를 선택 정밀도로 센다 — FP4 몫을 따로 빼지 않는다
+      assert.equal(w, ((m.totalParams - m.pleParams) * 1e9 * q.bpw / 8) / GIB, q.tier);
+    }
+  }
+  assert.notEqual(simulate(m, d, 131072, { weightBpw: tier('FP16'), kvBits: 16 }).verdict, 'yes');
+});
+
+test('Codex R1: ten gpt-oss-20b Q6_K instances on one GB10 add up to the public file sizes — no', () => {
+  const m = byName('gpt-oss-20b');
+  const stack = simulateStack(Array.from({ length: 10 }, () => ({ model: m, ctx: 8192, weightBpw: tier('Q6_K'), kvBits: 16 })), gpu('DGX Spark 128GB'));
+  assert.equal(+stack.param.toFixed(2), +((10 * 12041000128) / GIB).toFixed(2));
+  assert.equal(stack.verdict, 'no');
+  assert.equal(+stack.used.toFixed(2), 130.1);
 });

@@ -352,7 +352,7 @@
       "weightBpw": 4.8944,
       "kvBits": 16,
       "expect": "yes",
-      "note": "GB10 unified memory, one unit: weights 114.6617856e9*4.25/8 + 2.1382144e9*4.8944/8 = 57.95 GiB (the 114.6617856e9 shipped MXFP4 expert weights stay at their 4.25-bit storage (4-bit E2M1 + one E8M0 scale per 32) at any tier above 4.25 bits, as in every public GGUF of the model; unsloth Q4_K_M file 58.46 GiB; no extra weight percentage on one GB10 since 2.21.4) + KV 0.29 + overhead 0.15*KV 0.04 + 8192*0.00003 0.25 + reserve 13.31 (128-121.69 OS-visible + 5.0 idle DGX OS + 2.0 runtime) = 71.83 of 128; headroom 20% = 25.6. Until 2.21.4 all 116.8e9 weights took the tier average (66.55 -> 80.43)"
+      "note": "GB10 unified memory, one unit: weights = max(114.6617856e9*4.25/8 + 2.1382144e9*4.8944/8 = 57.95, largest public Q4_K_M file 62,841,713,344 B = 58.53) = 58.53 GiB (the 114.6617856e9 shipped MXFP4 expert weights stay at their 4.25-bit storage (4-bit E2M1 + one E8M0 scale per 32) above 4.25 bits, and the weights are never counted below the largest public GGUF of that tier; no extra weight percentage on one GB10 since 2.21.4) + KV 0.29 + overhead 0.15*KV 0.04 + 8192*0.00003 0.25 + reserve 13.31 (128-121.69 OS-visible + 5.0 idle DGX OS + 2.0 runtime) = 72.41 of 128; headroom 20% = 25.6. Until 2.21.4 all 116.8e9 weights took the tier average (66.55 -> 80.43)"
     },
     {
       "id": "v-gptoss120b-dgxspark128-q6k-32k",
@@ -366,7 +366,7 @@
       "weightBpw": 6.5633,
       "kvBits": 16,
       "expect": "yes",
-      "note": "weights 114.6617856e9*4.25/8 + 2.1382144e9*6.5633/8 = 58.36 GiB (MXFP4 experts at their shipped 4.25 bits; unsloth Q6_K file 58.94 GiB) + KV 1.13 + overhead (0.15*KV 0.17 + 32768*0.00003 0.98) 1.15 + reserve 13.31 = 73.96 -> free 54.04 >= 25.6 headroom. Until 2.21.4 the whole 116.8e9 took the Q6_K average (89.24 -> 104.84, free 23.16 -> tight); a port that does so still says tight"
+      "note": "weights = max(114.6617856e9*4.25/8 + 2.1382144e9*6.5633/8 = 58.36, largest public Q6_K file 63,284,496,960 B = 58.94) = 58.94 GiB + KV 1.13 + overhead (0.15*KV 0.17 + 32768*0.00003 0.98) 1.15 + reserve 13.31 = 74.53 -> free 53.47 >= 25.6 headroom. Until 2.21.4 the whole 116.8e9 took the Q6_K average (89.24 -> 104.84, free 23.16 -> tight); a port that does so still says tight"
     },
     {
       "id": "v-lagunas-dgxspark128-q6k-256k",
@@ -394,7 +394,7 @@
       "weightBpw": 8.5008,
       "kvBits": 16,
       "expect": "yes",
-      "note": "GB10 cluster, 2 units, tensor parallel 2: weights 114.6617856e9*4.25/8 + 2.1382144e9*8.5008/8 = 58.85 GiB (MXFP4 experts at their shipped 4.25 bits) + KV 0.29 (8 KV heads >= 2 units, no replication) + overhead 0.12*w 7.06 + 0.15*KV 0.04 + 8192*0.00003*2 units 0.49 + reserve 2*13.31 = 93.35 of 256 -> free 162.65 >= 51.2 headroom. One unit alone is also 'yes' now (72.73 of 128, vector v-gptoss120b-dgxspark128-q8-8k); with the Q8_0 average on all 116.8e9 weights it was 'no' (129.47 of 128)"
+      "note": "GB10 cluster, 2 units, tensor parallel 2: weights = largest public Q8_0 file 63,387,347,520 B = 59.03 GiB (above 114.6617856e9*4.25/8 + 2.1382144e9*8.5008/8 = 58.85; MXFP4 experts at their shipped 4.25 bits) + KV 0.29 (8 KV heads >= 2 units, no replication) + overhead 0.12*w 7.08 + 0.15*KV 0.04 + 8192*0.00003*2 units 0.49 + reserve 2*13.31 = 93.56 of 256 -> free 162.44 >= 51.2 headroom. One unit alone is also 'yes' now (72.92 of 128, vector v-gptoss120b-dgxspark128-q8-8k); with the Q8_0 average on all 116.8e9 weights it was 'no' (129.47 of 128)"
     },
     {
       "id": "v-nexpro-4xdgxspark128-q8-128k",
@@ -509,7 +509,7 @@
       "weightBpw": 8.5008,
       "kvBits": 16,
       "expect": "yes",
-      "note": "one GB10, Q8_0: weights 114.6617856e9*4.25/8 + 2.1382144e9*8.5008/8 = 58.85 GiB (the 114.6617856e9 shipped MXFP4 expert weights stay at their 4.25-bit storage (4-bit E2M1 + one E8M0 scale per 32) at any tier above 4.25 bits, as in every public GGUF of the model; unsloth Q8_0 and ggml-org MXFP4 files are 59.03 GiB) + KV 0.29 + overhead 0.15*KV 0.04 + 8192*0.00003 0.25 + reserve 13.31 = 72.73 of 128 -> free 55.27 >= 25.6. A port that gives all 116.8e9 weights the Q8_0 average (115.59) says no (129.47 of 128)"
+      "note": "one GB10, Q8_0: weights = max(114.6617856e9*4.25/8 + 2.1382144e9*8.5008/8 = 58.85, largest public Q8_0 file 63,387,347,520 B = 59.03) = 59.03 GiB (the 114.6617856e9 shipped MXFP4 expert weights stay at their 4.25-bit storage (4-bit E2M1 + one E8M0 scale per 32) above 4.25 bits, and the weights are never counted below the largest public GGUF of that tier; the ggml-org MXFP4 file is the same 59.03) + KV 0.29 + overhead 0.15*KV 0.04 + 8192*0.00003 0.25 + reserve 13.31 = 72.92 of 128 -> free 55.08 >= 25.6. A port that gives all 116.8e9 weights the Q8_0 average (115.59) says no (129.47 of 128)"
     },
     {
       "id": "v-lagunas-dgxspark128-q6k-8k",

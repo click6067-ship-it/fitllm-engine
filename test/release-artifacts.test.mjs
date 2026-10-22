@@ -20,7 +20,7 @@ const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).dige
 // 2.21.4: GB10 한 대 판정 3개의 note를 새 손계산으로 고치고, Laguna S 256K의 기대값이 'no' → 'tight'(가중치 12% 몫 제거). 1.9.0 → 1.10.0.
 // (2.21.0: DeepSeek-V4·Muse 앵커 8개, 2.20.0: GB10 클러스터 판정 2개, 2.19.0: GB10 3개, 2.16.0: 신규 3모델 kv 3개).
 // 러너(run.mjs) 바이트는 2.14.1 이후 불변이다(아래 SHA) — 벡터가 늘어도 검증 코드는 안 바뀐다는 게 요점.
-const VECTORS_JSON_SHA256 = '686ce0cdb6a36751d6f0850efdae2991d336020c478484b6efb182c8a80ee6cd';
+const VECTORS_JSON_SHA256 = '858dc6ca9053d1d721482c5be92f1ad1b5bf65f7473e8b4dc498d70b6dc6418b';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
 test('release version surfaces agree on 2.21.4 and the package contract is unchanged', () => {

@@ -16,12 +16,12 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 | M4 Max 128GB | 128GB | **Laguna S 2.1** (117.562B) — free 57.93GB, up to ~399K ctx |
 | M3 Ultra 512GB | 512GB | **GLM-5.2** (753B) — free 110.25GB, up to ~70K ctx |
 | RTX 3060 12GB | 12GB | **Gemma 4 12b** (11.95B) — free 1.63GB, up to ~30K ctx |
-| RTX 4060 Ti 16GB | 16GB | **gpt-oss-20b** (20.9B) — free 1.8GB, up to ~26K ctx |
+| RTX 4060 Ti 16GB | 16GB | **gpt-oss-20b** (20.9B) — free 1.36GB, up to ~18K ctx |
 | RTX 4090 | 24GB | **GLM-4.7-Flash** (31.2B) — free 1.37GB, up to ~10K ctx |
 | RTX 5090 | 32GB | **Nex-N2.5-mini** (35.107B) — free 7.11GB, up to ~114K ctx |
 | RX 7900 XTX | 24GB | **GLM-4.7-Flash** (31.2B) — free 1.37GB, up to ~10K ctx |
 | RTX PRO 6000 Blackwell | 96GB | **Laguna S 2.1** (117.562B) — free 18.22GB, up to ~171K ctx |
-| A100 80GB | 80GB | **gpt-oss-120b** (116.8B) — free 12.52GB, up to ~131K ctx |
+| A100 80GB | 80GB | **gpt-oss-120b** (116.8B) — free 11.88GB, up to ~122K ctx |
 | H200 141GB | 141GB | **Laguna S 2.1** (117.562B) — free 63.22GB, up to ~688K ctx |
 
 ## Smallest device that runs each model (~4-bit, 8K ctx)

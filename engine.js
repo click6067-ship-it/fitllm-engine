@@ -52,16 +52,24 @@ export const MODELS = [
   //   https://huggingface.co/api/models/ggml-org/gpt-oss-120b-GGUF/revision/7200b74bea78b0a2964ef9f3897eefa401e890ff?blobs=true
   //   https://huggingface.co/api/models/unsloth/gpt-oss-20b-GGUF/revision/d449b42d93e1c2c7bda5312f5c25c8fb91dfa9b4?blobs=true
   //   https://huggingface.co/api/models/ggml-org/gpt-oss-20b-GGUF/revision/15dcfc7e7c608c6161507211ed43c5b590801b4b?blobs=true
+  //   https://huggingface.co/api/models/bartowski/openai_gpt-oss-120b-GGUF/revision/8d64014efc314685c68ad448590f905fcb20e534?blobs=true
+  //   https://huggingface.co/api/models/bartowski/openai_gpt-oss-20b-GGUF/revision/e39ba3aa000c47c83dacdc9e1ca2c9dd0808c205?blobs=true
+  //  ggufFileBytes = 단계별 공개 GGUF 중 가장 큰 파일(unsloth·bartowski·ggml-org) — 가중치는 이 크기보다 작게 세지 않는다(weightBytes).
+  //   hidden 2880이 K-quant 블록 256의 배수가 아니라 llama.cpp가 2880폭 텐서를 Q8_0 등으로 대체해, 비전문가 몫은 단계 평균보다 크다
+  //   (bartowski Q4_K_M 120b 62,841,713,344 · 20b 11,673,418,816 · Q5_K_M 20b 11,728,415,296; bf16 120b 65,369,016,768 · 20b 13,792,637,760).
+  //   F16 GGUF는 1차원 텐서·바이어스를 F32로 담아 원본 safetensors보다 120 MB(120b)·31 MB(20b) 크다 — 실제로 내려받는 파일이라 그대로 쓴다.
   //  2.21.4까지는 전부 선택 단계 평균 bit로 세서 120b Q8_0이 115.6 GiB(실파일 59.0), Q4_K_M이 66.6 GiB(실파일 58.5)였다.
   { name: 'gpt-oss-20b', group: 'gpt-oss', added: '2026-07-09', tags: ['moe'],
     totalParams: 20.9, activeParams: 3.6, layerCount: 24, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
     numExperts: 32, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 12, benchmarks: null,
     nativeFp4Params: 19.1102976, // 19,110,297,600 = 24층 × 32 전문가 × (2880×5760 + 2880×2880)
+    ggufFileBytes: { Q4_K_M: 11673418816, Q5_K_M: 11728415296, Q6_K: 12041000128, Q8_0: 12109567168, FP16: 13792639168 },
     desc: 'MoE · 20.9B / 3.6B active · 32 experts(top-4) · 슬라이딩128(full 12/24) · 최대 128K' }, // config.json: openai/gpt-oss-20b @ 6cee5e8
   { name: 'gpt-oss-120b', group: 'gpt-oss', added: '2026-07-09', tags: ['moe'],
     totalParams: 116.8, activeParams: 5.1, layerCount: 36, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
     numExperts: 128, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 18, benchmarks: null,
     nativeFp4Params: 114.6617856, // 114,661,785,600 = 36층 × 128 전문가 × (2880×5760 + 2880×2880)
+    ggufFileBytes: { Q4_K_M: 62841713344, Q5_K_M: 62889522272, Q6_K: 63284496960, Q8_0: 63387347520, FP16: 65369017728 },
     desc: 'MoE · 116.8B / 5.1B active · 128 experts(top-4) · 슬라이딩128(full 18/36) · 최대 128K' }, // config.json: openai/gpt-oss-120b @ b5c939d
 
   // === Qwen 3.6 27B (dense, 하이브리드 linear+full attn ~3:1) — HF config.json ===
@@ -1345,7 +1353,7 @@ const STRUCTURAL_ASSUMPTIONS = Object.freeze({
   }),
   nativeFp4: Object.freeze({
     id: 'native-fp4-expert-weights',
-    statement: 'This release ships its expert weights in FP4 (4-bit E2M1 values plus one E8M0 scale per 32, 4.25 bits — the MXFP4 layout). At any weight precision above 4.25 bits they are counted at that shipped size, because llama.cpp GGUF builds (native MXFP4 type) and MLX MXFP4 builds keep them as released; only the other weights follow the chosen quantization. Builds that re-expand the experts to 8 or 16 bits are larger without adding precision and are not what this counts; below 4.25 bits the experts are counted at the chosen precision.',
+    statement: 'This release ships its expert weights in FP4 (4-bit E2M1 values plus one E8M0 scale per 32, 4.25 bits — the MXFP4 layout). At any weight precision above 4.25 bits they are counted at that shipped size, because llama.cpp GGUF builds (native MXFP4 type) and MLX MXFP4 builds keep them as released; only the other weights follow the chosen quantization. Where the public GGUF files of the model are known (gpt-oss), the weights are never counted below the largest of them at the chosen tier. Builds that re-expand the experts to 8 or 16 bits are larger without adding precision and are not what this counts; below 4.25 bits the experts are counted at the chosen precision.',
   }),
   mtp: Object.freeze({
     id: 'mtp-ordinary-generation',
@@ -1418,18 +1426,28 @@ function precisionFloorBytes(model, bits) {
 // FP8(E4M3)은 이 부류가 아니다: GGUF에 FP8 타입이 없어 Q8_0(8.5 bit)·BF16으로 다시 쓴다 — GLM-5.3 FP8 출시 755,632,050,320 B인데
 // unsloth/GLM-5.3-GGUF Q8_0 801,357,677,216 B · BF16 1,507,988,027,936 B(@346b359)라 종래 단계별 계산이 공개 파일과 맞는다.
 const FP4_STORAGE_BPW = 4 + 8 / 32;
+// 검증된 PLE 차감과는 함께 쓰지 않는다 — 두 몫이 겹치지 않는다는 증거가 없으면 이중 차감으로 가중치가 음수까지 내려간다
+// (Codex 검수: E4B 형상 + mxfp4 선언 + U8 7.8B 합성 입력에서 FP16 −1.0 GiB). 카탈로그에 둘 다 가진 행은 없다.
 function nativeFp4ParamsB(model) {
   const p = model.nativeFp4Params;
-  return p > 0 && p < model.totalParams ? p : 0;
+  return p > 0 && p < model.totalParams && !guardedPleParamsB(model) ? p : 0;
+}
+// 공개 GGUF 단계 파일 크기(ggufFileBytes, 행 주석에 출처) — 알려진 단계에서는 가중치를 이보다 작게 세지 않는다.
+// 키는 GPU_QUANTS 단계 이름이고, 그 단계의 bpw와 정확히 같은 요청에만 쓴다(Mac 4·8·16bit는 해당 없음).
+function publishedGgufBytes(model, bits) {
+  if (!model.ggufFileBytes) return 0;
+  const q = GPU_QUANTS.find((x) => x.bpw === bits);
+  const b = q ? model.ggufFileBytes[q.tier] : 0;
+  return Number.isSafeInteger(b) && b > 0 ? b : 0;
 }
 // 가중치 바이트의 단일 진실원 — calcParamMemory·calcMaxContext가 같은 식을 쓴다(인라인 중복 금지).
 function weightBytes(model, bits, device) {
   const resident = residentParamsB(model, device);
-  const fp4 = bits > FP4_STORAGE_BPW ? nativeFp4ParamsB(model) : 0;
+  const fp4 = bits > FP4_STORAGE_BPW ? Math.min(nativeFp4ParamsB(model), resident) : 0;
   const bytes = fp4
     ? (resident - fp4) * 1e9 * (bits / 8) + fp4 * 1e9 * (FP4_STORAGE_BPW / 8)
     : resident * 1e9 * (bits / 8);
-  return bytes + precisionFloorBytes(model, bits);
+  return Math.max(bytes + precisionFloorBytes(model, bits), publishedGgufBytes(model, bits));
 }
 
 export function calcParamMemory(model, bits, device) {
@@ -2619,6 +2637,12 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
       extraBytes: ds?.engramParams ? (ds.engramParams * 1e9) / 32 : 0, // V4.1 Engram FP8 표의 E8M0 스케일(파라미터 수에 안 잡힌다)
     })
     : undefined;
+  // GGUF 단계 파일 크기는 텐서 형상·형식에만 달려 있다 — FP4 수와 형상이 카탈로그 행과 정확히 같은 체크포인트(공식 레포·바이트 동일
+  // 미러·같은 형상의 파인튜닝)는 그 행의 공개 단계 크기(ggufFileBytes)를 하한으로 물려받는다. 하한이라 더 크게 세는 쪽으로만 움직인다.
+  const ggufTwin = nativeFp4Params
+    ? MODELS.find((m) => m.ggufFileBytes && m.nativeFp4Params === nativeFp4Params && m.totalParams === +totalParams.toFixed(1) &&
+      m.layerCount === layerCount && m.hiddenSize === c.hidden_size && m.numExperts === numExperts && m.kvHeads === kvHeads)
+    : undefined;
 
   return {
     name: id.split('/').pop(),
@@ -2645,6 +2669,7 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     compressedKv,
     engramParams: ds?.engramParams,
     nativeFp4Params,
+    ggufFileBytes: ggufTwin ? { ...ggufTwin.ggufFileBytes } : undefined,
     mtpLayerCount,
     pleParams: pleParams ? +pleParams.toFixed(3) : undefined,
     pleOffloadVerified,

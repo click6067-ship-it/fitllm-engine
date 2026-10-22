@@ -92,10 +92,10 @@ test('simulate: used = weights + KV×복제 + 선형상태 + 동적(활성화×�
   assert.ok(Math.abs(s.rtDyn - rtDyn) < 1e-9);
   assert.ok(Math.abs(s.used - (s.param + kv + s.linearState + rtDyn + PER_UNIT_RESERVE * 4)) < 1e-9);
   // 클러스터는 가중치 12% 몫을 유지하고(위 rtDyn), 한 대는 2.21.4부터 0이다(GGUF 파일 크기 그대로 — 공개 GB10 실측):
-  //   가중치 = 출시 MXFP4 전문가 114.6617856e9 × 4.25/8 + 나머지 2.1382144e9 × 4.8944/8 = 57.95 GiB(unsloth Q4_K_M 실파일 58.46)
-  //   + KV 0.29 + 0.15×KV 0.04 + 8192×0.00003 0.25 + reserve 13.31 = 71.83 (2.21.4: 단계 평균 bit 66.55 GiB로 80.43 · 2.19.0–2.21.3: 88.42)
+  //   가중치 = 가장 큰 공개 Q4_K_M 파일 62,841,713,344 B = 58.53 GiB(출시 MXFP4 전문가 4.25 bit 공식 57.95보다 크다)
+  //   + KV 0.29 + 0.15×KV 0.04 + 8192×0.00003 0.25 + reserve 13.31 = 72.41 (2.21.4: 단계 평균 bit 66.55 GiB로 80.43 · 2.19.0–2.21.3: 88.42)
   const one = simulate(model('gpt-oss-120b'), gpuDevice(spark), 8192, { weightBpw: 4.8944, kvBits: 16 });
-  assert.equal(+one.used.toFixed(2), 71.83);
+  assert.equal(+one.used.toFixed(2), 72.41);
 });
 
 test('calcMaxContext는 같은 복제·활성화 규칙을 쓴다 (경계에서 simulate와 일치)', () => {
