@@ -76,7 +76,9 @@ test('test_pinned_config_parses_exact_fields', () => {
   assert.equal(m.globalAttnLayers, 9);
   assert.equal(m.slidingPattern, '3:1');
   assert.equal(m.maxContext, 1048576);
-  assert.equal(m.totalParams, 4.1); // 4,112,079,360 → parseHfConfig 관례(소수 1자리)
+  // 4,112,079,360 — 카탈로그 행과 텐서 목록이 같아 공개 GGUF 하한을 물려받는 쌍이라 내림 반올림(4.1) 대신 0.001B(4.112, 카탈로그와 같다)
+  assert.equal(m.totalParams, 4.112);
+  assert.deepEqual(m.ggufFileBytes, spark().ggufFileBytes);
   assert.equal(m.parameterSource, 'hf-safetensors-parameters');
   assert.deepEqual(m.tags, ['dense']);
   for (const absent of ['fullAttnLayers', 'linearAttn', 'mlaKvLoraRank', 'mlaRopeDim', 'pleParams', 'mtpLayerCount', 'numExperts', 'globalHeadDim']) {

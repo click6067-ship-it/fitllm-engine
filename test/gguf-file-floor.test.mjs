@@ -136,3 +136,50 @@ test('every floored row carries the tensor list its files were measured on; gate
     assert.ok(weightBytes(m, tier('Q4_K_M'), gpu('RTX 4060 Ti 8GB')) >= byName(name).ggufFileBytes.Q4_K_M, name);
   }
 });
+
+test('Codex R2: a twin parsed from HF stays within 1% of every reference file on all five tiers, also when the config omits derivable keys', () => {
+  const load = (f) => JSON.parse(readFileSync(new URL(`./fixtures/${f}.config.json`, import.meta.url), 'utf8'));
+  const parse = (id, cfg, n) => parseHfConfig(id, cfg, n * 2, { revision: 'f'.repeat(40), safetensorsParameters: { BF16: n }, safetensorsTotal: n });
+  const cases = [
+    ['unsloth/Llama-3.2-1B-Instruct', load('unsloth__Llama-3.2-1B-Instruct'), 'Llama-3.2-1B-Instruct'],
+    ['unsloth/Llama-3.2-3B-Instruct', load('unsloth__Llama-3.2-3B-Instruct'), 'Llama-3.2-3B-Instruct'],
+    ['Qwen/Qwen3-0.6B', load('Qwen__Qwen3-0.6B'), 'Qwen3-0.6B'],
+    ['Qwen/Qwen3.6-27B', load('Qwen__Qwen3.6-27B'), 'Qwen 3.6 27B'],
+  ];
+  for (const [id, cfg, name] of cases) {
+    const n = byName(name).ggufFileSource.parameters.BF16;
+    const variants = [cfg];
+    // 파서가 계산하는 키를 지운 같은 체크포인트(head_dim = hidden / heads, 묶임 여부는 정확한 수가 가른다)
+    const inner = cfg.text_config ? 'text_config' : null;
+    const strip = (keys) => {
+      const copy = structuredClone(cfg);
+      for (const k of keys) { delete copy[k]; if (inner) delete copy[inner][k]; }
+      return copy;
+    };
+    const body = inner ? cfg[inner] : cfg;
+    if (body.head_dim === body.hidden_size / body.num_attention_heads) variants.push(strip(['head_dim']));
+    variants.push(strip(['tie_word_embeddings']));
+    for (const v of variants) {
+      const m = parse(id, v, n);
+      assert.ok(m.ggufFileBytes, `${id}: inherits`);
+      for (const [t, { bytes, source }] of Object.entries(FIX.largestReferenceFile[name])) {
+        const w = weightBytes(m, tier(t), SPARK);
+        assert.ok(w * TOLERANCE >= bytes, `${id} ${t}: parsed ${(w / GIB).toFixed(3)} GiB vs ${source} ${(bytes / GIB).toFixed(3)}`);
+      }
+    }
+  }
+  // FP4 행은 엄격한 대조를 유지한다 — 물려받은 GGUF 하한이 출시본 하한을 대신하므로, 키 하나라도 빠지면 물려받지 않는다
+  const gptOss120b = {
+    architectures: ['GptOssForCausalLM'], experts_per_token: 4, head_dim: 64, hidden_size: 2880, intermediate_size: 2880,
+    layer_types: Array.from({ length: 36 }, (_, i) => (i % 2 === 0 ? 'sliding_attention' : 'full_attention')),
+    max_position_embeddings: 131072, model_type: 'gpt_oss', num_attention_heads: 64, num_experts_per_tok: 4, num_hidden_layers: 36,
+    num_key_value_heads: 8, num_local_experts: 128, quantization_config: { quant_method: 'mxfp4' },
+    sliding_window: 128, tie_word_embeddings: false, vocab_size: 201088,
+  };
+  const ev = { revision: 'b'.repeat(40), safetensorsParameters: { BF16: 2167371072, U8: 114661785600 }, safetensorsTotal: 116829156672 };
+  assert.deepEqual(parseHfConfig('openai/gpt-oss-120b', gptOss120b, 65248893184, ev).ggufFileBytes, byName('gpt-oss-120b').ggufFileBytes);
+  const { tie_word_embeddings: _omit, ...noTie } = gptOss120b;
+  const strict = parseHfConfig('x/gpt-oss-120b', noTie, 65248893184, ev);
+  assert.equal(strict.ggufFileBytes, undefined);
+  assert.equal(strict.totalParams, 116.8); // FP4 쌍은 종래 0.1B 반올림 그대로
+});

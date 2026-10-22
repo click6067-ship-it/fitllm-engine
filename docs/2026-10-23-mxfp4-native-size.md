@@ -78,3 +78,82 @@ gpt-oss Mac 8·16bit도 출시본(120b 60.77 · 20b 12.82)이 하한이다. Mac 
    - vitest → PR → 머지.
 8. 사이트 배포(수동): 머지된 master에서 분리한 작업 트리에서 `vercel pull --yes --environment=production` → `TZ=UTC vercel build --prod` → `vercel deploy --prebuilt --prod`. 확인할 것: `/api/check?model=gpt-oss-120b&gpu=DGX%20Spark&quant=Q8_0` → yes, 계산기 화면, `/data` 표.
 9. HF Space·Dataset 올리기(사용자 몫, 토큰 필요): fitllm-v2의 `docs/launch/hf-space-fitllm/engine.js`, `docs/launch/hf-dataset-fitllm-census/`.
+
+---
+
+# 추가: 공개 GGUF가 엔진보다 큰 행 — 거짓 "들어감" 막기 (W2-L10, 2026-10-23)
+
+**상태:** 같은 로컬 가지에 커밋 2개(b2cd794 · d6a41ec). push·태그·npm·사이트는 하지 않았다.
+**검증:** `npm test` 419/419 · 벡터 49/49 · `census:check` byte-identical · Codex gpt-6-astra high 새 맥락 검수(1차 REVISE 1건 → 고침, 2차 결과는 아래).
+
+## 결론
+- 카탈로그 34개 × GGUF 5단계를 HF 공개 파일과 전수 대조했다. **22개 모델 61개 단계**에서 공개 파일이 엔진 가중치보다 1% 넘게 컸다(최대 +33%). Nex-N2.5-Pro만의 일이 아니었다.
+- 고친 뒤 기준 배포자의 같은 이름 단계 파일은 모두 엔진의 1.01배 이하다. 판정은 **"안 들어감·빠듯" 쪽으로만** 바뀌었다(33,428조합 중 130개, 반대 방향 0).
+- FP4 규칙(W2-L8)은 그대로다. FP4 행의 비트 단위 결과도 같다.
+
+## 찾은 행 (엔진 GiB → 가장 큰 기준 파일 GiB, GB10·통합 메모리 기준)
+| 모델 | 단계별 | 파일 배포자 |
+|---|---|---|
+| Nex-N2.5-Pro | Q4 226.09→233.61(+3.3%) · Q5 263.47→284.62(+8.0%) · Q6 303.18→325.78(+7.5%) | bartowski |
+| Nex-N2.5-mini | Q4 20.00→20.79 · Q5 23.31→25.13(+7.8%) · Q6 26.82→27.36 | bartowski |
+| Qwen 3.6 27B / Qwen 3.8 27B | Q4 15.50/15.83→17.78(+14.8%/+12.3%) · Q5 →19.53 · Q6 →22.22 | ggml-org, bartowski |
+| Qwen 3.6 35B-A3B | Q4 +4.1% · Q5 +3.8% · Q6 26.74→28.82(+7.8%) · Q8 +1.7% · FP16 +1.5% | bartowski |
+| Gemma 4 26b A4B | Q4 14.53→15.87(+9.2%) · Q5 +6.3% · Q6 19.48→21.29(+9.3%) | bartowski |
+| Gemma 4 31b | Q4 17.49→18.25(+4.3%) · Q5 +3.3% · Q6 23.46→24.89(+6.1%) | bartowski |
+| Gemma 4 12b | Q4 +4.8% · Q5 +3.0% · Q6 +4.4% | bartowski |
+| Gemma 4 e2b · e4b (GB10만) | Q4 +11.0% · +10.4% · Q6 +7.6% · +7.8% (e4b Q5 +2.1%) | bartowski, unsloth |
+| Laguna S 2.1 | Q4 66.98→89.44(+33.5%, 공식 poolside) · Q6 89.83→94.70(+5.4%) · Q8 +3.1% | poolside, bartowski |
+| Laguna XS 2.1 · Hy3 · Granite-4.2-30B | Q6 +5.8% · Q6 228.30→239.58(+4.9%) · Q6 +2.0% | bartowski |
+| Qwen3-0.6B · Qwen3-1.7B | 전 단계 +27–33% · +18–22% | mradermacher(bartowski·ggml-org·lmstudio 같은 크기) |
+| Gemma-3-1B · Llama-3.2-1B · 3B · MiniCPM5-1B · 2B · Spark-X2.5-4B | Q4 +32% · +6.8% · +3.1% · +4.0% · +4.9% · +3.4% (Q5·Q6 일부 +1.6–19%) | mradermacher, bartowski |
+
+## 원인 (GGUF 헤더를 HTTP range로 읽어 텐서별 형식을 확인)
+1. **배포자 설정(가장 큼).** 같은 Qwen3.6-27B Q4_K_M이 lmstudio 15.40 · bartowski 16.74 · ggml-org 17.77 GiB다. ggml-org는 어텐션·linear 어텐션 텐서를 Q8_0으로 둔다. bartowski는 어텐션을 Q6_K·Q8_0으로 올리고 MTP 층을 담는다. Nex-N2.5-Pro bartowski Q5_K_M은 전문가 up·down을 Q8_0으로 둔다(1번 조각 6층에서 확인). poolside Laguna-S Q4_K_M은 전문가 8층이 BF16이다.
+2. **K-quant 블록(256)으로 안 나눠지는 행은 더 큰 형식으로 대체된다.** Gemma 4 26B 전문가 down(704) → Q6_K 단계에서도 Q8_0. Gemma-3-1B는 hidden 1152라 거의 전부 대체된다.
+3. **묶인 임베딩은 출력 형식(Q6_K)으로 저장된다.** 어휘가 큰 소형 모델(Gemma 262K, Llama-3.2 128K)일수록 몫이 크다.
+4. **묶인 lm_head를 따로 담은 GGUF.** Qwen3-0.6B·1.7B는 공식·unsloth GGUF만 임베딩 1회다. 나머지는 output을 따로 담는다(헤더 실측 751.6M).
+- 엔진은 Llama-3.1-8B에서 잰 단계 평균 bpw 하나를 모든 모델에 곱했다. 1·2·3·4가 모델마다 달라 최대 33% 작게 셌다.
+
+## 고친 것
+- **공개 파일 하한.** 기준 배포자(unsloth · bartowski · ggml-org · lmstudio-community · mradermacher · 모델 공식 조직)의 같은 이름 단계 파일 중 가장 큰 것이 공식보다 1% 넘게 크면, 그 크기를 행에 둔다(`ggufFileBytes`, 레포@리비전 주석). 가중치 = max(공식, 그 파일). 그 단계 bpw에만 쓰고, Mac(MLX) 비트에는 쓰지 않는다.
+- **공식 대신 실측을 쓴 이유:** 가장 큰 원인(1)은 config로 예측할 수 없다. 같은 가중치·같은 단계 이름이 배포자마다 15% 다르다. 설정을 덮는 공식을 만들면 이미 맞던 모델(Llama-3.1-8B 등)까지 부풀린다.
+- **PLE(Gemma 4 e2b·e4b):** 디스크리트 GPU에서는 하한을 쓰지 않는다. 헤더에서 per_layer_token_embd를 뺀 상주 몫이 모든 기준 파일에서 공식보다 작다(시험으로 고정). GB10은 같은 풀이라 파일 전체가 하한이다.
+- **HF 즉석 파싱:** 텐서 목록(dtype별 수 + 형상 config)이 행과 정확히 같을 때만 하한을 물려받는다. 같은 목록인 행이 여럿이면 단계마다 큰 쪽을 쓴다(Qwen 3.6 27B·3.8 27B는 같은 목록이라 하한도 같다). Codex 1차 지적: config가 gated인 Llama-3.2-1B·3B·Gemma-3-1B에도 목록을 넣었다(공개 미러 config, 같은 수).
+- 벡터 1.11.0(미출시): Laguna S Q6_K 한 대 256K tight → no(공개 파일 94.70 GiB). 한 대 GB10 12% 몫·디스크리트 셈 확인은 8K 대신 128K(tight)로 옮겼다. 개수는 49 그대로다.
+- 시험: `test/gguf-file-floor.test.mjs` 9개 + 픽스처(`test/fixtures/gguf-file-sizes-2026-10-23.json`, 128개 단계의 최대 파일과 PLE 상주 몫).
+
+## 전후 (W2-L8 가지 끝 de1d851 → 지금)
+- 34개 모델 × (GPU 47종 × GGUF 5단계 + Mac 13종 × 4·8·16bit) × 문맥(8K·32K·128K·최대) = **33,428조합**. 사용량이 바뀐 9,351개는 전부 하한을 둔 22개 모델의 그 단계다(Mac·다른 단계 0). 판정 변화 130개: 들어감→빠듯 53 · 빠듯→안 들어감 65 · 들어감→안 들어감 12. **들어감 쪽 0.**
+- census 13,804행: 2,647행 수치 변경, 판정 47개(전부 빠듯·안 들어감 쪽).
+- 흔한 메모리 크기(8·12·16·24·32·48·64·80·96·128GB, DGX Spark)에서 바뀐 판정 116개. 대표:
+
+| 경우 (KV F16) | 전 | 후 |
+|---|---|---|
+| Gemma 4 31B · RTX 4090/3090/7900 XTX 24GB · Q4_K_M · 8K | 빠듯 23.45 | 안 들어감 24.31 |
+| Qwen 3.6 27B · 24GB · Q4_K_M · 32K | 들어감 22.79 | 안 들어감 25.35 |
+| Gemma 4 26B-A4B · 24GB · Q5_K_M · 8K / 32K | 들어감 / 빠듯 | 빠듯 22.80 / 안 들어감 24.08 |
+| Laguna S · RTX PRO 6000 96GB · Q4_K_M · 8K | 들어감 77.78 | 안 들어감 102.93 |
+| Laguna S · A100/H100 80GB · Q4_K_M · 8K | 빠듯 | 안 들어감 |
+| Laguna S · DGX Spark 1대 · Q4_K_M · 8K | 들어감 81.05 | 빠듯 103.50 |
+| Nex-N2.5-Pro · DGX Spark 4대 · Q6_K · 8K | 들어감 394.51 | 빠듯 419.82 |
+| Qwen 3.6 35B-A3B · A100/H100 80GB · FP16 · 8K | 들어감 75.50 | 빠듯 76.61 |
+| Qwen3-1.7B · 12GB · FP16 · 40K | 빠듯 11.85 | 안 들어감 12.51 |
+- GB10 실측(Ollama Qwen3.6-35B-A3B BF16, 로그 파일 65.62 GiB): 엔진 가중치 65.19 → 66.19 GiB. 실측보다 작던 값이 0.9% 위로 올라갔다.
+
+## 남은 차이·위험
+- **기준 밖 업로더는 아직 클 수 있다:** vultr(내려받기 66–122회) Nex-N2.5-Pro Q4_K_M 246.28 vs 엔진 233.61(+5.4%) · Q5_K_M +1.4%, Granite Q4·Q5 +7.3·8.9%, Qwen-AgentWorld Q4·Q5 +9.6·9.9%. AtomicChat Hy3 Q4_K_M +1.0%.
+- **FP4 전문가를 다시 편 빌드(W2-L8 규칙상 기준 아님):** mradermacher gpt-oss-20b Q8_0 20.73 vs 11.28 · DevQuasar gpt-oss-120b Q8_0 115.76 vs 59.03 · DevQuasar·batiai DeepSeek-V4-Pro Q4_K_M 885.6–885.9 vs 805.33 · teamblobfish V4-Flash·Pro Q8_0 281.5·1,557.0. 이 파일을 받으면 엔진 답보다 더 든다. 바꾸려면 FP4 규칙 자체를 다시 정해야 한다(사용자 결정).
+- **Laguna S Q4_K_M은 Q5_K_M(78.06)보다 크다(89.44).** 공식 poolside 파일이 전문가 8층을 BF16으로 둔 혼합 빌드라서다. 이 레포는 Laguna S GGUF 중 내려받기 1위(47.7만, 2위의 2.6배)라 기준에 넣었다. bartowski·lmstudio Q4_K_M(66.3–66.8)을 쓰는 사람에게는 보수적인 답이다.
+- **bartowski가 대개 최대다.** 그래서 lmstudio·unsloth 파일로는 들어가는 조합도 "안 들어감"이 된다(예: Gemma 4 31B 4090 Q4_K_M 8K — lmstudio 17.40 GiB면 23.4/24로 빠듯하게 들어간다).
+- **카탈로그 밖 HF 모델**(텐서 목록이 행과 다른 파인튜닝·새 모델)은 여전히 단계 평균 공식만 쓴다. 원인 2·3은 config로 계산할 수 있지만 원인 1은 안 된다.
+- 하한은 2026-10-23 파일 기준이다. 배포자가 파일을 다시 올리면 낡는다. 새 모델을 넣을 때 같은 조사를 해야 한다.
+
+## 출처 (HF 파일 목록 `https://huggingface.co/api/models/<레포>/revision/<리비전>?blobs=true`, 2026-10-23 조회)
+- 단계별 하한 61개의 레포@전체 리비전·파일은 `engine.js` 각 행 주석, 전체 128개 단계 최대 파일은 `test/fixtures/gguf-file-sizes-2026-10-23.json`.
+- 요약: bartowski — Nex-N2.5-Pro@f7c3c07 · nex-agi_Nex-N2.5-mini@0048da1 · Qwen_Qwen3.6-27B@4612927 · Qwen_Qwen3.6-35B-A3B@5c2410d · Qwen3.8-27B@87410e7 · google_gemma-4-26B-A4B-it@10f3b41 · google_gemma-4-31B-it@619aca7 · gemma-4-12B-it@2ae7d41 · google_gemma-4-E2B-it@81012ba · google_gemma-4-E4B-it@029e941 · Laguna-S-2.1@66e90ac · Laguna-XS-2.1@8f7579d · Hy3@3ee5a3c · granite-4.2-30b@1847d3b · MiniCPM5-2B@31fee03 · Llama-3.2-1B-Instruct@067b946 · Llama-3.2-3B-Instruct@5ab33fa. ggml-org — Qwen3.6-27B@1132d03 · Qwen3.8-27B@a316ea5. unsloth — gemma-4-E2B-it@0314792 · gemma-4-E4B-it@bfc15c3. poolside — Laguna-S-2.1-GGUF@1903607. mradermacher — Qwen3-0.6B(-i1)@9f34677·@c78cc72 · Qwen3-1.7B(-i1)@e10adfd·@ca6ba10 · gemma-3-1b-it-i1@6a3a8b0 · MiniCPM5-1B-i1@f46773f · Spark-X2.5-4B-i1@b4a73b5.
+- GGUF 헤더 실측(텐서 형식): lmstudio·bartowski·ggml-org Qwen3.6-27B Q4_K_M, lmstudio Gemma-4-26B-A4B Q6_K, bartowski Qwen3-0.6B Q8_0, poolside Laguna-S Q4_K_M, bartowski Nex-N2.5-Pro Q5_K_M 1번 조각, Gemma 4 e2b·e4b 기준 파일 45개.
+- llama.cpp 대체 규칙: `src/llama-quant.cpp`(행 길이가 블록 배수가 아니면 Q4_K→Q5_0, Q6_K→Q8_0; 출력 텐서·묶인 임베딩은 Q6_K).
+
+## 릴리스 체크리스트에 더할 것
+- 4번 변경 기록에 한 문장: `GGUF weights are never counted below the largest public file of the tier from unsloth, bartowski, ggml-org, lmstudio-community, mradermacher or the official org (61 tiers in 22 models, e.g. Nex-N2.5-Pro Q5_K_M 263.5 → 284.6 GiB); verdicts move only toward tight/won't fit.`
+- 6번 확인에 추가: `npx -y fitllm@2.21.5 "Gemma 4 31b" --gpu "RTX 4090"` → WON'T FIT 24.31/24.

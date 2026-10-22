@@ -2792,10 +2792,17 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
   const evidenceParams = parameterEvidence?.safetensorsParameters;
   const sameCounts = (want) => evidenceParams && Object.keys(evidenceParams).length === Object.keys(want).length &&
     Object.entries(want).every(([dtype, n]) => evidenceParams[dtype] === n);
+  // 형상 키는 파서가 계산에 쓰는 정규화 값으로 비교한다 — config가 head_dim·num_key_value_heads를 생략해도 계산 값이 같으면 같은 목록이다
+  // (Codex R2: head_dim만 지운 Llama-3.2-1B 미러가 하한을 잃었다). FP4가 아닌 행은 하한을 더할 뿐이라 놓치는 쪽이 위험하다 — 그래서
+  // tie_word_embeddings가 없으면 비교하지 않는다(기본값이 계열마다 다르고, 묶임 여부는 이미 dtype별 정확한 수가 가른다).
+  const normalizedShape = { num_hidden_layers: layerCount, num_attention_heads: attnHeads, num_key_value_heads: kvHeads, head_dim: headDim };
+  const sameShape = (want) => Object.entries(want).every(([k, v]) => {
+    const got = k in normalizedShape ? normalizedShape[k] : (c[k] ?? raw[k]);
+    return got === v || (k === 'tie_word_embeddings' && got === undefined && !nativeFp4Params);
+  });
   const ggufTwins = MODELS.filter((m) => m.ggufFileBytes && m.ggufFileSource &&
     (m.nativeFp4Params || undefined) === (nativeFp4Params || undefined) &&
-    sameCounts(m.ggufFileSource.parameters) &&
-    Object.entries(m.ggufFileSource.config).every(([k, v]) => (c[k] ?? raw[k]) === v));
+    sameCounts(m.ggufFileSource.parameters) && sameShape(m.ggufFileSource.config));
   const ggufFileBytes = ggufTwins.length
     ? ggufTwins.reduce((acc, m) => {
       for (const [tier, bytes] of Object.entries(m.ggufFileBytes)) acc[tier] = Math.max(acc[tier] || 0, bytes);
@@ -2810,7 +2817,12 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     sourceId: id,
     parameterSource,
     tags: isMoe ? ['moe'] : ['dense'],
-    totalParams: totalParams ? +totalParams.toFixed(1) : null,
+    // 0.1B 반올림은 카탈로그 행과 판정을 맞추려는 것이다(gpt-oss). 하한을 물려받은 FP4 아닌 체크포인트는 하한이 없는 단계에서도
+    // 공개 파일과 1% 안이어야 해서 내림으로 반올림하지 않는다 — 0.1B와 0.001B 반올림 중 큰 쪽(Codex R2: Llama-3.2-1B 1.2358 → 1.2면
+    // Q6_K가 파일보다 3.8% 작다 → 1.236). 올림이던 행(Gemma 4 e4b 7.996 → 8.0)은 종래 값 그대로다.
+    totalParams: totalParams
+      ? (ggufTwins.length && !nativeFp4Params ? Math.max(+totalParams.toFixed(1), +totalParams.toFixed(3)) : +totalParams.toFixed(1))
+      : null,
     activeParams: null, // MoE 활성 파라미터는 config로 정확 산출 어려움 → 속도만 근사
     layerCount,
     fullAttnLayers,
