@@ -379,8 +379,8 @@
       "ctx": 262144,
       "weightBpw": 6.5633,
       "kvBits": 16,
-      "expect": "tight",
-      "note": "117.562e9*6.5633/8 = 89.83 + KV(12 global x 2*8*128*2B*262144 + 36 sliding x 512) 12.07 + overhead (0.15*KV 1.81 + 262144*0.00003 7.86) 9.67 + reserve 13.31 = 124.88 of 128 -> free 3.12 < 25.6 headroom -> tight. Until 2.21.3 a further 12% of the weights (10.78) made it 135.66 -> no; public GB10 llama.cpp/Ollama allocation logs (fixtures/measured.json) show GGUF weights load at their file size, so one GB10 adds no weight percentage. A port that keeps it still says no"
+      "expect": "no",
+      "note": "weights = max(117.562e9*6.5633/8 = 89.83, largest public Q6_K GGUF bartowski/Laguna-S-2.1-GGUF@66e90ac 101,678,758,400 B = 94.70) = 94.70 + KV(12 global x 2*8*128*2B*262144 + 36 sliding x 512) 12.07 + overhead (0.15*KV 1.81 + 262144*0.00003 7.86) 9.67 + reserve 13.31 = 129.75 of 128 -> no. Through 1.10.0 the tier average alone gave 124.88 -> tight; a port that ignores the published GGUF floor still says tight. The one-GB10 weight-percentage check moved to v-lagunas-dgxspark128-q6k-128k"
     },
     {
       "id": "v-gptoss120b-2xdgxspark128-q8-8k",
@@ -512,18 +512,18 @@
       "note": "one GB10, Q8_0: weights = max(114.6617856e9*4.25/8 + 2.1382144e9*8.5008/8 = 58.85, largest public Q8_0 file 63,387,347,520 B = 59.03) = 59.03 GiB (the 114.6617856e9 shipped MXFP4 expert weights stay at their 4.25-bit storage (4-bit E2M1 + one E8M0 scale per 32) above 4.25 bits, and the weights are never counted below the largest public GGUF of that tier; the ggml-org MXFP4 file is the same 59.03) + KV 0.29 + overhead 0.15*KV 0.04 + 8192*0.00003 0.25 + reserve 13.31 = 72.92 of 128 -> free 55.08 >= 25.6. A port that gives all 116.8e9 weights the Q8_0 average (115.59) says no (129.47 of 128)"
     },
     {
-      "id": "v-lagunas-dgxspark128-q6k-8k",
+      "id": "v-lagunas-dgxspark128-q6k-128k",
       "kind": "verdict",
       "model": "Laguna S 2.1",
       "device": {
         "type": "gpu",
         "gpu": "DGX Spark 128GB"
       },
-      "ctx": 8192,
+      "ctx": 131072,
       "weightBpw": 6.5633,
       "kvBits": 16,
       "expect": "tight",
-      "note": "117.562e9*6.5633/8 = 89.83 + KV(12 global x 2*8*128*2B*8192 + 36 sliding x 512) 0.45 + overhead (0.15*KV 0.07 + 8192*0.00003 0.25) 0.31 + reserve 13.31 = 103.89 of 128 -> free 24.11 < 25.6 headroom -> tight. A port that treats GB10 as a discrete card (12% weight share 10.78, 0.6 reserve, 5% headroom 6.4) says yes (101.96, free 26.04). Takes over this check from v-gptoss120b-dgxspark128-q6k-32k, whose MXFP4 weights no longer reach the headroom"
+      "note": "weights = max(117.562e9*6.5633/8 = 89.83, largest public Q6_K GGUF bartowski/Laguna-S-2.1-GGUF@66e90ac 101,678,758,400 B = 94.70) = 94.70 + KV(12 global x 2*8*128*2B*131072 + 36 sliding x 512) 6.07 + overhead (0.15*KV 0.91 + 131072*0.00003 3.93) 4.84 + reserve 13.31 = 118.92 of 128 -> free 9.08 < 25.6 headroom -> tight. A port that keeps the 12% weight share on one GB10 says no (130.28); one that treats GB10 as a discrete card (12% weight share 11.36, 0.6 reserve, 5% headroom 6.4) says yes (117.57, free 10.43). Replaces the 8K case (keeping the 12% share did not change its answer) and takes the 12% check over from v-lagunas-dgxspark128-q6k-256k, which is no on the published file"
     },
     {
       "id": "v-dsv4flash-2xdgxspark128-q8-144k",

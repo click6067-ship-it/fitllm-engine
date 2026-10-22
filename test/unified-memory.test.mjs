@@ -186,7 +186,10 @@ test('census: GB10 행은 PLE를 차감하지 않고, README 공개 문구도 �
   const readme = readFileSync(new URL('../census/README.md', import.meta.url), 'utf8');
   const e2b = model('Gemma 4 e2b');
   const row = census.data.find((r) => r.model === 'Gemma 4 e2b' && r.device === 'DGX Spark 128GB' && r.quant === 'Q4_K_M');
-  assert.ok(Math.abs(row.predicted_param_gb - (e2b.totalParams * 1e9 * (4.8944 / 8)) / 1024 ** 3) < 0.01);
+  // PLE를 빼지 않은 전체 가중치 — 공식(5.1e9 × 4.8944/8)과 공개 Q4_K_M 파일 전체(PLE 포함, ggufFileBytes) 중 큰 쪽
+  const full = Math.max(e2b.totalParams * 1e9 * (4.8944 / 8), e2b.ggufFileBytes.Q4_K_M) / 1024 ** 3;
+  assert.ok(Math.abs(row.predicted_param_gb - full) < 0.01);
+  assert.ok(row.predicted_param_gb >= (e2b.totalParams * 1e9 * (4.8944 / 8)) / 1024 ** 3);
   const line = readme.split('\n').find((l) => l.includes('`ple-llamacpp-non-gpu-residency`'));
   assert.ok(line.includes('every discrete-GPU row for'));
   assert.ok(line.includes('the GB10 unified-memory rows (DGX Spark 128GB, 2× DGX Spark 128GB, 4× DGX Spark 128GB) and the Mac rows (Apple unified memory) count the full weights'));

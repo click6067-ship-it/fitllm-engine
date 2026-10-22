@@ -61,6 +61,8 @@ export const MODELS = [
   //   (bartowski Q4_K_M 120b 62,841,713,344 · 20b 11,673,418,816 · Q5_K_M 20b 11,728,415,296; bf16 120b 65,369,016,768 · 20b 13,792,637,760).
   //   F16 GGUF는 1차원 텐서·바이어스를 F32로 담아 원본 safetensors보다 120 MB(120b)·31 MB(20b) 크다 — 실제로 내려받는 파일이라 그대로 쓴다.
   //  2.21.4까지는 전부 선택 단계 평균 bit로 세서 120b Q8_0이 115.6 GiB(실파일 59.0), Q4_K_M이 66.6 GiB(실파일 58.5)였다.
+  //  MXFP4 전문가를 K-quant·Q8_0으로 다시 편 빌드는 기준이 아니다(FP4_STORAGE_BPW 주석, 2026-10-23 조회): mradermacher/gpt-oss-20b-GGUF@07fca4b
+  //   Q4_K_M 15,805,136,896 · Q8_0 22,261,912,576 · DevQuasar/openai.gpt-oss-120b-GGUF@05ec54f Q4_K_M 87,850,986,112 · Q8_0 124,301,418,400.
   { name: 'gpt-oss-20b', group: 'gpt-oss', added: '2026-07-09', tags: ['moe'],
     totalParams: 20.9, activeParams: 3.6, layerCount: 24, kvHeads: 8, kvHeadDim: 64, attnHeads: 64, hiddenSize: 2880,
     numExperts: 32, expertsPerToken: 4, maxContext: 131072, slidingWindow: 128, globalAttnLayers: 12, benchmarks: null,
@@ -96,6 +98,12 @@ export const MODELS = [
     hiddenSize: 5120,
     maxContext: 262144,
     benchmarks: { GPQA: 0.878, 'MMLU-Pro': 0.817, 'SWE-Bench': 0.772 },
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M ggml-org/Qwen3.6-27B-GGUF@1132d03976d88e30a09ab0ddbf1531d5e1b46e7c · Q5_K_M bartowski/Qwen_Qwen3.6-27B-GGUF@4612927928b49982f8319dc3e2e6f62b9b73b192
+    //   · Q6_K bartowski/Qwen3.8-27B-GGUF@87410e7b9a5c21e6ca70c0c9cc5237de909fe621 — Qwen 3.8 27B와 텐서 목록(ggufFileSource)이 같아 단계마다 두 행의 큰 쪽을 함께 쓴다
+    //   (이 모델 자체 Q6_K 최대 23,675,466,240 B)
+    ggufFileBytes: { Q4_K_M: 19095766304, Q5_K_M: 20965122560, Q6_K: 23860565728 },
+    ggufFileSource: { parameters: { BF16: 27781427952 }, config: { num_hidden_layers: 64, hidden_size: 5120, intermediate_size: 17408, num_attention_heads: 24, num_key_value_heads: 4, head_dim: 256, vocab_size: 248320, tie_word_embeddings: false } }, // Qwen/Qwen3.6-27B@6a9e13b
     desc: 'Dense · 64레이어(풀어텐션 16 + linear 48, 1:3) · KV는 16레이어만 · 최대 256K',
   },
   // === Qwen 3.6 35B-A3B (MoE) — HF config.json (qwen3_5_moe) ===
@@ -118,6 +126,10 @@ export const MODELS = [
     expertsPerToken: 8,
     maxContext: 262144,
     benchmarks: { GPQA: 0.86, 'MMLU-Pro': 0.852, 'SWE-Bench': null },
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K·Q8_0·FP16 bartowski/Qwen_Qwen3.6-35B-A3B-GGUF@5c2410d71524f4f72b023ce8daf7a80528226d5f
+    ggufFileBytes: { Q4_K_M: 22285080192, Q5_K_M: 25913185920, Q6_K: 30947309184, Q8_0: 37812647552, FP16: 71065941536 },
+    ggufFileSource: { parameters: { BF16: 35951822704 }, config: { num_hidden_layers: 40, hidden_size: 2048, moe_intermediate_size: 512, num_experts: 256, num_attention_heads: 16, num_key_value_heads: 2, head_dim: 256, vocab_size: 248320, tie_word_embeddings: false } }, // Qwen/Qwen3.6-35B-A3B@995ad96
     desc: 'MoE · ~35B total / ~3B active · 256 experts · 풀어텐션 10/40(linear 30) · 최대 256K',
   },
   // --- Qwen3.5 하이브리드 linear (AgentWorld) — 40레이어 중 full 10 + linear 30(DeltaNet), KV는 full 10만 ---
@@ -150,6 +162,10 @@ export const MODELS = [
     slidingPattern: '4:1', // layer_types 실측: sliding 28 : full 7 (google/gemma-4-E2B-it config.json — 구 '5:1'은 글로벌 6층 오계산, 2026-07-11 정정)
     globalAttnLayers: 7,
     benchmarks: { GPQA: 0.3, 'MMLU-Pro': 0.68, 'SWE-Bench': null },
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M bartowski/google_gemma-4-E2B-it-GGUF@81012ba3538e061d5ee003f11f25335b17f82e2d · Q6_K unsloth/gemma-4-E2B-it-GGUF@0314792d7f1f7e229411f620751375812bb9faf2
+    ggufFileBytes: { Q4_K_M: 3462680032, Q6_K: 4501721184 },
+    ggufFileSource: { parameters: { BF16: 5123178051 }, config: { num_hidden_layers: 35, hidden_size: 1536, intermediate_size: 6144, num_attention_heads: 8, num_key_value_heads: 1, head_dim: 256, vocab_size: 262144, tie_word_embeddings: true } }, // google/gemma-4-E2B-it@3e22461
     desc: 'Dense+PLE · 5.1B raw / 2.3B 유효 · 슬라이딩윈도우 512(4:1) · 최대 128K · 벤치 근사치',
   },
   // === Gemma 4 E4B (Dense + PLE) — HF config.json ===
@@ -174,6 +190,10 @@ export const MODELS = [
     slidingPattern: '5:1',
     globalAttnLayers: 7, // layer_types 실측: sliding 35 : full 7 (google/gemma-4-E4B-it config.json — 패턴 유도값과 일치, 명시 고정 2026-07-11)
     benchmarks: { GPQA: 0.586, 'MMLU-Pro': 0.694, 'SWE-Bench': null },
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M bartowski/google_gemma-4-E4B-it-GGUF@029e94146666900b08caf49a3b47b413dfa8ec66 · Q6_K unsloth/gemma-4-E4B-it-GGUF@bfc15c382204943c3a8fff0c750b94ae2364d7a3
+    ggufFileBytes: { Q4_K_M: 5405170144, Q5_K_M: 5820883424, Q6_K: 7074929792 },
+    ggufFileSource: { parameters: { BF16: 7996156490 }, config: { num_hidden_layers: 42, hidden_size: 2560, intermediate_size: 10240, num_attention_heads: 8, num_key_value_heads: 2, head_dim: 256, vocab_size: 262144, tie_word_embeddings: true } }, // google/gemma-4-E4B-it@ee0ef60
     desc: 'Dense+PLE · 8B raw / 4.5B 유효 · 슬라이딩윈도우 512(5:1) · 최대 128K',
   },
   // === Gemma 4 12B Unified (dense) — https://huggingface.co/google/gemma-4-12B-it/blob/main/config.json ===
@@ -195,6 +215,10 @@ export const MODELS = [
     slidingWindow: 1024,
     slidingPattern: '5:1', // layer_types 실측 카운트: sliding_attention 40 : full_attention 8 (full @ 5,11,…,47)
     benchmarks: { GPQA: 0.788, 'MMLU-Pro': 0.772, 'SWE-Bench': null }, // README 공식 벤치표(GPQA Diamond·MMLU Pro)
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K bartowski/gemma-4-12B-it-GGUF@2ae7d41be21ca62de00a2d320ee9cec50daa3aa6
+    ggufFileBytes: { Q4_K_M: 7662533088, Q5_K_M: 8774965728, Q6_K: 10239326688 },
+    ggufFileSource: { parameters: { BF16: 11959730224 }, config: { num_hidden_layers: 48, hidden_size: 3840, intermediate_size: 15360, num_attention_heads: 16, num_key_value_heads: 8, head_dim: 256, vocab_size: 262144, tie_word_embeddings: true } }, // google/gemma-4-12B-it@707f0a3
     desc: 'Dense · 11.95B · 48레이어 · 슬라이딩윈도우 1024(5:1, 글로벌 8레이어 head_dim 512×1KV) · Unified 멀티모달 · 최대 256K',
   },
   // === Gemma 4 26B A4B (true MoE) — HF config.json ===
@@ -218,6 +242,10 @@ export const MODELS = [
     slidingWindow: 1024,
     slidingPattern: '5:1',
     benchmarks: { GPQA: 0.823, 'MMLU-Pro': 0.826, 'SWE-Bench': null },
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K bartowski/google_gemma-4-26B-A4B-it-GGUF@10f3b41bcf8d3047f4e136e7197ffc2dd1654c9d
+    ggufFileBytes: { Q4_K_M: 17035039872, Q5_K_M: 19319198848, Q6_K: 22862577280 },
+    ggufFileSource: { parameters: { BF16: 25805936206 }, config: { num_hidden_layers: 30, hidden_size: 2816, intermediate_size: 2112, moe_intermediate_size: 704, num_experts: 128, num_attention_heads: 16, num_key_value_heads: 8, head_dim: 256, vocab_size: 262144, tie_word_embeddings: true } }, // google/gemma-4-26B-A4B-it@4d7ae49
     desc: 'MoE · ~26B total / ~4B active · 128 experts · 슬라이딩윈도우 1024(5:1, 글로벌 head_dim 512) · 최대 256K',
   },
   // === Gemma 4 31B (dense) — HF config.json ===
@@ -239,12 +267,19 @@ export const MODELS = [
     slidingWindow: 1024,
     slidingPattern: '5:1',
     benchmarks: { GPQA: 0.843, 'MMLU-Pro': 0.852, 'SWE-Bench': null },
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K bartowski/google_gemma-4-31B-it-GGUF@619aca7589c72be65dd968de8602ad23d68b5c14
+    ggufFileBytes: { Q4_K_M: 19598489952, Q5_K_M: 22608877920, Q6_K: 26726721888 },
+    ggufFileSource: { parameters: { BF16: 31273088876 }, config: { num_hidden_layers: 60, hidden_size: 5376, intermediate_size: 21504, num_attention_heads: 32, num_key_value_heads: 16, head_dim: 256, vocab_size: 262144, tie_word_embeddings: true } }, // google/gemma-4-31B-it@842da37
     desc: 'Dense · 30.7B · 60레이어 · 슬라이딩윈도우 1024(5:1, 글로벌 10레이어 head_dim 512) · 최대 256K',
   },
   // --- Llama (Meta) — 별개 생태계 기준점(유지). 공식 config gated(401), unsloth·NousResearch 미러 교차검증(동일) ---
   { name: 'Llama-3.2-3B-Instruct', group: 'Llama', added: '2026-07-09', tags: ['dense'],
     totalParams: 3.2, activeParams: 3.2, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 24, hiddenSize: 3072,
     maxContext: 131072, benchmarks: null,
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M bartowski/Llama-3.2-3B-Instruct-GGUF@5ab33fa94d1d04e903623ae72c95d1696f09f9e8
+    ggufFileBytes: { Q4_K_M: 2019377696, Q5_K_M: 2322154016 },
     desc: 'Dense · 3.2B · 28레이어 · GQA(24/8) · 최대 128K' }, // meta-llama/Llama-3.2-3B-Instruct (gated) ↔ unsloth 미러
   { name: 'Llama-3.1-8B-Instruct', group: 'Llama', added: '2026-07-09', tags: ['dense'],
     totalParams: 8.0, activeParams: 8.0, layerCount: 32, kvHeads: 8, kvHeadDim: 128, attnHeads: 32, hiddenSize: 4096,
@@ -256,27 +291,47 @@ export const MODELS = [
     totalParams: 1.081, activeParams: 1.081, layerCount: 24, kvHeads: 2, kvHeadDim: 128, attnHeads: 16, hiddenSize: 1536,
     maxContext: 131072, benchmarks: null,
     // openbmb/MiniCPM5-1B config.json(model_type=llama·tie_word_embeddings=false). 2독립출처 파라미터: safetensors.index total_size 2,161,265,664B ÷ 2(bf16) = 1,080,632,832 == config-dim 손계산(embed 130560×1536 + 미tied lm_head + 24층×(attn 7,077,888 + mlp 21,233,664)) = 1,080,632,832 정확 일치
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M mradermacher/MiniCPM5-1B-i1-GGUF@f46773fa9ecce4c841197d8235812c4b4d7c4f3d
+    ggufFileBytes: { Q4_K_M: 688067840, Q5_K_M: 786863360 },
+    ggufFileSource: { parameters: { BF16: 1080632832 }, config: { num_hidden_layers: 24, hidden_size: 1536, intermediate_size: 4608, num_attention_heads: 16, num_key_value_heads: 2, head_dim: 128, vocab_size: 130560, tie_word_embeddings: false } }, // openbmb/MiniCPM5-1B@87179e5
     desc: 'Dense · 1.1B · GQA(16/2) · on-device/edge · 최대 128K' },
 
   // --- Draft 소형모델 — Stack 탭(speculative decoding draft+target · IDE 자동완성) 페어용. 플래그십 아님(카탈로그 최신순 정리와 별개 기능군) ---
   // ⚠️ Qwen3 2종 totalParams = GGUF/디스크 기준(임베딩 1회): safetensors 카운트(751.6M/2031.7M)는 tied lm_head 중복 저장 포함 — 사용 금지.
   //    검증(2026-07-09 verifier): Qwen3-0.6B-Q8_0.gguf 실측 639,446,688B = 596.0M×Q8_0+메타 ✓ / 1.7B GGUF 1,834,426,016B ✓ (2출처+GGUF 실측)
+  //    단, 그건 공식 Qwen GGUF·unsloth 빌드다. bartowski·ggml-org·lmstudio·mradermacher GGUF는 lm_head를 output으로 따로 담는다
+  //    (bartowski Q8_0 헤더 실측 751.6M = token_embd 155.6M + output 155.6M + 본체, 2026-10-23) — 그 파일 크기를 하한(ggufFileBytes)으로 둔다.
   { name: 'Qwen3-0.6B', group: 'Draft', added: '2026-07-09', tags: ['dense', 'draft'],
     totalParams: 0.596, activeParams: 0.596, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 16, hiddenSize: 1024,
     maxContext: 40960, benchmarks: null, // config max_position_embeddings 40960 (모델카드 공표 native 32K — config 기준 원칙)
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K mradermacher/Qwen3-0.6B-i1-GGUF@9f346773450b3b1799c69b0bc592fef664bc5a08 · Q8_0·FP16 mradermacher/Qwen3-0.6B-GGUF@c78cc72f00bd0d5f2d5d61085874f6c99e683f26
+    ggufFileBytes: { Q4_K_M: 484220672, Q5_K_M: 551378688, Q6_K: 622734080, Q8_0: 804753952, FP16: 1509347872 },
+    ggufFileSource: { parameters: { BF16: 751632384 }, config: { num_hidden_layers: 28, hidden_size: 1024, intermediate_size: 3072, num_attention_heads: 16, num_key_value_heads: 8, head_dim: 128, vocab_size: 151936, tie_word_embeddings: true } }, // Qwen/Qwen3-0.6B@c1899de
     desc: 'Dense · 0.6B · vLLM 표준 draft — Qwen 계열 타깃 페어 (vocab 151936 호환)' }, // Qwen/Qwen3-0.6B config.json + HF API + GGUF 실측
   { name: 'Qwen3-1.7B', group: 'Draft', added: '2026-07-09', tags: ['dense', 'draft'],
     totalParams: 1.721, activeParams: 1.721, layerCount: 28, kvHeads: 8, kvHeadDim: 128, attnHeads: 16, hiddenSize: 2048,
     maxContext: 40960, benchmarks: null,
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K mradermacher/Qwen3-1.7B-i1-GGUF@e10adfdeab9376bfc72d0df8a86c98f4a6fa8ab1 · Q8_0·FP16 mradermacher/Qwen3-1.7B-GGUF@ca6ba1095f054bcecb6580972236774694b6cdb6
+    ggufFileBytes: { Q4_K_M: 1282439936, Q5_K_M: 1471806208, Q6_K: 1673007872, Q8_0: 2165039648, FP16: 4069679648 },
+    ggufFileSource: { parameters: { BF16: 2031739904 }, config: { num_hidden_layers: 28, hidden_size: 2048, intermediate_size: 6144, num_attention_heads: 16, num_key_value_heads: 8, head_dim: 128, vocab_size: 151936, tie_word_embeddings: true } }, // Qwen/Qwen3-1.7B@70d244c
     desc: 'Dense · 1.7B · 30B급 타깃엔 0.6B보다 스루풋 우위(vLLM 벤치) — Qwen 계열 draft' }, // Qwen/Qwen3-1.7B config.json + HF API + GGUF 실측
   { name: 'Llama-3.2-1B-Instruct', group: 'Draft', added: '2026-07-09', tags: ['dense', 'draft'],
     totalParams: 1.236, activeParams: 1.236, layerCount: 16, kvHeads: 8, kvHeadDim: 64, attnHeads: 32, hiddenSize: 2048,
     maxContext: 131072, benchmarks: null, // params 1,235,814,400 = 분석 카운트 바이트단위 일치(tied·lm_head 미저장 — 그대로 디스크 기준)
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M bartowski/Llama-3.2-1B-Instruct-GGUF@067b946cf014b7c697f3654f621d577a3e3afd1c
+    ggufFileBytes: { Q4_K_M: 807694464, Q5_K_M: 911503488 },
     desc: 'Dense · 1.2B · Llama 3.x 타깃 표준 draft (vocab 128256 호환) · 최대 128K' }, // meta-llama(gated) ↔ unsloth·NousResearch 미러 2종 일치
   { name: 'Gemma-3-1B-it', group: 'Draft', added: '2026-07-09', tags: ['dense', 'draft'],
     totalParams: 1.0, activeParams: 1.0, layerCount: 26, kvHeads: 1, kvHeadDim: 256, attnHeads: 4, hiddenSize: 1152,
     maxContext: 32768, slidingWindow: 512, globalAttnLayers: 4, // transformers gemma3 + google/gemma_pytorch 2출처: 26층 중 full-attention 4(레이어 6·12·18·24), 나머지 22층 window 512
     benchmarks: null,
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K mradermacher/gemma-3-1b-it-i1-GGUF@6a3a8b02e7dcf533d2d1bb4fb8b73df87c4cb133
+    ggufFileBytes: { Q4_K_M: 806058912, Q5_K_M: 851346336, Q6_K: 1011739296 },
     desc: 'Dense · 1.0B · MQA(4/1) · 슬라이딩 512(글로벌 4레이어) — Gemma 계열 draft · 최대 32K' }, // google/gemma-3-1b-it(gated) ↔ unsloth·mlx 미러 + gemma_pytorch
 
   // === Claude Opus 4.7 — Cloud (벤치마크 기준점, 메모리 시뮬 제외) ===
@@ -327,6 +382,10 @@ export const MODELS = [
     expertsPerToken: 8,
     maxContext: 262144, // config max_position_embeddings, rope_type default(스케일링 없음) — 모델카드 "256K"
     benchmarks: { GPQA: 0.904, 'MMLU-Pro': null, 'SWE-Bench': 0.78 }, // 모델카드 공식: GPQA Diamond 90.4 / SWE-Bench Verified 78 / MMLU-Pro 미공표
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q6_K bartowski/Hy3-GGUF@3ee5a3c4d76226edd9cdaec017969d24b589b64e
+    ggufFileBytes: { Q6_K: 257246623936 },
+    ggufFileSource: { parameters: { BF16: 298786140416, F32: 15360 }, config: { num_hidden_layers: 80, hidden_size: 4096, intermediate_size: 13312, moe_intermediate_size: 1536, num_experts: 192, num_attention_heads: 64, num_key_value_heads: 8, head_dim: 128, vocab_size: 120832, tie_word_embeddings: false } }, // tencent/Hy3@a960ebc
     desc: 'MoE · 295B(+3.8B MTP) / 21B active · 표준 GQA(8KV×128) 전층 풀어텐션 · 최대 256K · Apache 2.0',
   },
 
@@ -354,6 +413,12 @@ export const MODELS = [
     linearAttn: { layers: 48, numKHeads: 16, numVHeads: 48, headKDim: 128, headVDim: 128, convKernel: 4 }, // 모델카드 "48 for V, 16 for QK, Head Dim 128"
     maxContext: 262144, // config max_position_embeddings — 모델카드 "262,144 natively"(1M은 호스티드 확장)
     benchmarks: { GPQA: 0.892, 'MMLU-Pro': null, 'SWE-Bench': null }, // 모델카드 GPQA Diamond 89.2. MMLU-Pro 미공표, SWE는 Pro만 공표(Verified 아님 → 미기입)
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M ggml-org/Qwen3.6-27B-GGUF@1132d03976d88e30a09ab0ddbf1531d5e1b46e7c · Q5_K_M bartowski/Qwen_Qwen3.6-27B-GGUF@4612927928b49982f8319dc3e2e6f62b9b73b192
+    //   · Q6_K bartowski/Qwen3.8-27B-GGUF@87410e7b9a5c21e6ca70c0c9cc5237de909fe621 — Qwen 3.6 27B와 텐서 목록(ggufFileSource)이 같아 단계마다 두 행의 큰 쪽을 함께 쓴다
+    //   (이 모델 자체 최대: ggml-org/Qwen3.8-27B-GGUF@a316ea527fde32c12487be7574e2db5ac2ad2a7e Q4_K_M 18,973,870,528 · bartowski Q5_K_M 20,923,877,088 B)
+    ggufFileBytes: { Q4_K_M: 19095766304, Q5_K_M: 20965122560, Q6_K: 23860565728 },
+    ggufFileSource: { parameters: { BF16: 27781427952 }, config: { num_hidden_layers: 64, hidden_size: 5120, intermediate_size: 17408, num_attention_heads: 24, num_key_value_heads: 4, head_dim: 256, vocab_size: 248320, tie_word_embeddings: false } }, // Qwen/Qwen3.8-27B@1d4bf0f
     desc: 'Dense · 27.8B(비전 인코더 포함) · 64레이어(풀어텐션 16 + DeltaNet 48) · KV는 16레이어만 · 최대 256K',
   },
   {
@@ -402,6 +467,10 @@ export const MODELS = [
     expertsPerToken: 8,
     maxContext: 262144,
     benchmarks: { GPQA: null, 'MMLU-Pro': null, 'SWE-Bench': 0.709 }, // 모델카드 SWE-bench Verified 70.9%(pass@1 4회 평균). GPQA·MMLU-Pro 미공표
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q6_K bartowski/Laguna-XS-2.1-GGUF@8f7579d6ab7d3122716100116cf1a62f490ab6f3
+    ggufFileBytes: { Q6_K: 29036854144 },
+    ggufFileSource: { parameters: { BF16: 33442617088 }, config: { num_hidden_layers: 40, hidden_size: 2048, intermediate_size: 8192, moe_intermediate_size: 512, num_experts: 256, num_attention_heads: 48, num_key_value_heads: 8, head_dim: 128, vocab_size: 100352, tie_word_embeddings: false } }, // poolside/Laguna-XS-2.1@c5f3626
     desc: 'MoE · 33.4B / 3B active · 256 experts(top-8) · 슬라이딩512(full 10/40) · 최대 256K · OpenMDW-1.1',
   },
   {
@@ -423,6 +492,10 @@ export const MODELS = [
     expertsPerToken: 10,
     maxContext: 1048576, // config max_position_embeddings
     benchmarks: null,    // 카드 벤치표에 SWE-bench Verified·GPQA·MMLU-Pro 없음(Multilingual/Pro/Terminal만) → 미기입
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q8_0 poolside/Laguna-S-2.1-GGUF@19036076775e9ba6758595f78af99cb976ef8ff0 · Q6_K bartowski/Laguna-S-2.1-GGUF@66e90acc3ff8d007a084c0360ae6ffcd3ede66e7
+    ggufFileBytes: { Q4_K_M: 96031829760, Q6_K: 101678758400, Q8_0: 128750823168 },
+    ggufFileSource: { parameters: { BF16: 117561977600 }, config: { num_hidden_layers: 48, hidden_size: 3072, intermediate_size: 12288, moe_intermediate_size: 1024, num_experts: 256, num_attention_heads: 48, num_key_value_heads: 8, head_dim: 128, vocab_size: 100352, tie_word_embeddings: false } }, // poolside/Laguna-S-2.1@0f57314
     desc: 'MoE · 117.6B / 8B active · 256 experts(top-10) · 슬라이딩512(full 12/48) · 최대 1M · OpenMDW-1.1',
   },
 
@@ -457,6 +530,10 @@ export const MODELS = [
     hiddenSize: 2560,
     maxContext: 1048576, // config max_position_embeddings — 모델카드 "native context windows of up to 1M tokens"
     benchmarks: null,    // 카드 표의 "GPQA"는 Diamond 명시·체크포인트 귀속이 없고 MMLU-Pro 미공표 → 미기입(엔진 원칙: 공개·검증된 것만)
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M mradermacher/Spark-X2.5-4B-i1-GGUF@b4a73b579b524ec744a80ae6eb277d7c40e78ce4
+    ggufFileBytes: { Q4_K_M: 2600224736, Q5_K_M: 2977896416 },
+    ggufFileSource: { parameters: { BF16: 4112079360 }, config: { num_hidden_layers: 36, hidden_size: 2560, intermediate_size: 10240, num_attention_heads: 16, num_key_value_heads: 4, head_dim: 256, vocab_size: 131072, tie_word_embeddings: true } }, // XHToken/Spark-X2.5-4B@0bcb356
     desc: 'Dense · 4.1B · 36레이어 · GQA(16/4, head_dim 256) · 슬라이딩512(3:1, full 9/36) · 최대 1M · Apache 2.0',
   },
   // ==========================================================================
@@ -493,6 +570,10 @@ export const MODELS = [
     hiddenSize: 4096,
     maxContext: 131072,
     benchmarks: null, // 카드 표의 "GPQA"는 Diamond 명시가 없고 체크포인트(thinking 모드) 귀속이 불명 → 미기입(엔진 원칙: 공개·검증된 것만)
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q6_K bartowski/granite-4.2-30b-GGUF@1847d3b70241af9d656f382a4cf29d5c6573e584
+    ggufFileBytes: { Q6_K: 24508953632 },
+    ggufFileSource: { parameters: { BF16: 29276770304 }, config: { num_hidden_layers: 64, hidden_size: 4096, intermediate_size: 32768, num_attention_heads: 32, num_key_value_heads: 8, vocab_size: 100352, tie_word_embeddings: false } }, // ibm-granite/granite-4.2-30b@9e668ce
     desc: 'Dense · 29.3B · 64레이어 · GQA(32/8, head_dim 128) · 최대 128K · Apache 2.0',
   },
 
@@ -537,6 +618,10 @@ export const MODELS = [
     totalParams: 2.517, activeParams: 2.517, layerCount: 42, kvHeads: 2, kvHeadDim: 128, attnHeads: 16, hiddenSize: 2048,
     officialParams: 2.517, // 모델카드 "Number of Parameters: 2,516,756,480" — https://huggingface.co/openbmb/MiniCPM5-2B/blob/12a3808a956f869c767195e9266b59c4d21d92e2/README.md (= 위 3중 교차검증 값)
     maxContext: 131072, benchmarks: null,
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K bartowski/MiniCPM5-2B-GGUF@31fee0334c4ed9f1e079afe586ba30cb83e0f883
+    ggufFileBytes: { Q4_K_M: 1615826144, Q5_K_M: 1920175328, Q6_K: 2107305184 },
+    ggufFileSource: { parameters: { BF16: 2516756480 }, config: { num_hidden_layers: 42, hidden_size: 2048, intermediate_size: 6144, num_attention_heads: 16, num_key_value_heads: 2, head_dim: 128, vocab_size: 130560, tie_word_embeddings: false } }, // openbmb/MiniCPM5-2B@f974000
     desc: 'Dense · 2.5B · 42레이어 · GQA(16/2) · on-device/edge · 최대 128K · Apache 2.0' },
 
   // ==========================================================================
@@ -600,6 +685,10 @@ export const MODELS = [
     expertsPerToken: 8,
     maxContext: 262144,
     benchmarks: null, // 카드 벤치표에 GPQA Diamond·MMLU-Pro·SWE-Bench Verified 귀속 표기 없음
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K bartowski/nex-agi_Nex-N2.5-mini-GGUF@0048da1ad2ad33fdcf8b24bc12185cdebfe459d6
+    ggufFileBytes: { Q4_K_M: 22318512256, Q5_K_M: 26984675456, Q6_K: 29373331584 },
+    ggufFileSource: { parameters: { BF16: 35107181936 }, config: { num_hidden_layers: 40, hidden_size: 2048, moe_intermediate_size: 512, num_experts: 256, num_attention_heads: 16, num_key_value_heads: 2, head_dim: 256, vocab_size: 248320, tie_word_embeddings: false } }, // nex-agi/Nex-N2.5-mini@8742028
     desc: 'MoE · 35.1B(비전 인코더 포함) · 256 experts(top-8) · 풀어텐션 10/40(DeltaNet 30) · 최대 256K · Apache 2.0',
   },
   {
@@ -626,6 +715,10 @@ export const MODELS = [
     expertsPerToken: 10,
     maxContext: 262144,
     benchmarks: null,
+    // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
+    //   Q4_K_M·Q5_K_M·Q6_K bartowski/Nex-N2.5-Pro-GGUF@f7c3c07945cf420f149226c010e10b1343f5d149
+    ggufFileBytes: { Q4_K_M: 250834941920, Q5_K_M: 305612552288, Q6_K: 349803739360 },
+    ggufFileSource: { parameters: { BF16: 10255304176, F8_E4M3: 386547056640 }, config: { num_hidden_layers: 60, hidden_size: 4096, moe_intermediate_size: 1024, num_experts: 512, num_attention_heads: 32, num_key_value_heads: 2, head_dim: 256, vocab_size: 248320, tie_word_embeddings: false } }, // nex-agi/Nex-N2.5-Pro@99842a1
     desc: 'MoE · 396.8B(FP8 배포·논리 파라미터) · 512 experts(top-10) · 풀어텐션 15/60(DeltaNet 45) · 최대 256K · Apache 2.0',
   },
 
@@ -665,7 +758,8 @@ export const MODELS = [
     //   + Engram E8M0 스케일(196.6138496e9 / 32) = 510,278,795,096 B vs 샤드 합 510,296,708,312 B(차 17.9 MB = 헤더·FP8 블록 스케일).
     //   공개 GGUF unsloth/DeepSeek-V4.1-Flash-1017-GGUF@60ad365(2026-10-23 조회): UD-Q4_K_XL 500,707,576,573 · UD-Q8_K_XL 508,376,763,197
     //   (+ DSpark Q8_0 7,976,914,240 · mmproj BF16 972,208,288 별도 파일) — FP4 전문가를 그대로 둔다. UD-IQ1_S 232,979,608,475는 다시 양자화한 빌드.
-    //   같은 이름 단계(Q4_K_M~Q8_0)의 공개 파일은 없어 4.25 bit 위 단계는 출시본(fp4ReleaseBytes) 아래로 세지 않는다(fp4FloorBytes).
+    //   같은 이름 단계 파일 mrfakename/DeepSeek-V4.1-Flash-1017-GGUF@1df54e7(2026-10-23 조회) Q4_K_M 444,737,572,416 · Q8_0 507,954,227,008도
+    //   출시본보다 작다 — 4.25 bit 위 단계는 출시본(fp4ReleaseBytes) 아래로 세지 않는다(fp4ReleaseFloorBytes).
     nativeFp4Params: 557.17134336,
     fp4ReleaseBytes: 510296708312, // 출시 safetensors 샤드 합
     desc: 'MoE · 763.2B(Engram 196.6B·비전·DSpark 포함) / 16B active · 384 experts(top-6) · CSA2 KV 공유(소스 4/40층) · 최대 1M · MIT',
@@ -677,7 +771,9 @@ export const MODELS = [
     // KV: CSA(ratio 4) 21층 512 + 인덱서 128 · HCA(ratio 128) 20층 512 · 앞 2층은 창만 → 토큰당 3,440원소.
     // nativeFp4Params = I8(FP4 전문가). I8 × 4.25/8 + 나머지 dtype 바이트 = 159,609,118,280 B vs 샤드 합 159,617,149,040 B(차 8.0 MB).
     //   공개 GGUF unsloth/DeepSeek-V4-Flash-GGUF@e3aa0d6(2026-10-23 조회): UD-Q4_K_XL 155,095,240,320 · UD-Q8_K_XL 161,869,614,720 B
-    //   (bartowski/DeepSeek-V4-Flash-GGUF@f9815d7 MXFP4 156,004,658,464) — 같은 이름 단계 파일이 없어 출시본이 하한이다(fp4FloorBytes).
+    //   (bartowski/DeepSeek-V4-Flash-GGUF@f9815d7 MXFP4 156,004,658,464 · bullerwins/DeepSeek-V4-Flash-GGUF@2be25f6 Q8_0 156,378,344,544 — 출시본보다
+    //   작다) — 출시본이 하한이다(fp4ReleaseFloorBytes). teamblobfish/DeepSeek-V4-Flash-GGUF@b281094 Q8_0 302,267,624,448은 FP4 전문가를
+    //   Q8_0으로 다시 편 빌드라 기준이 아니다(FP4_STORAGE_BPW 주석).
     name: 'DeepSeek-V4-Flash', group: 'DeepSeek', added: '2026-10-18', tags: ['moe'],
     aliases: ['deepseek-ai/DeepSeek-V4-Flash'],
     totalParams: 290.9, activeParams: 13, layerCount: 43, kvHeads: 1, kvHeadDim: 512, attnHeads: 64, hiddenSize: 4096,
@@ -700,6 +796,9 @@ export const MODELS = [
     // KV: CSA 30층 + HCA 31층(앞 2층 포함) → 토큰당 4,924원소.
     // nativeFp4Params = I8(FP4 전문가). I8 × 4.25/8 + 나머지 dtype 바이트 = 864,703,378,552 B vs 샤드 합 864,721,029,744 B(차 17.7 MB).
     //   공개 GGUF는 후속 체크포인트 빌드만 있다: unsloth/DeepSeek-V4-Pro-0813-GGUF@6d05361 UD-Q4_K_XL 849,683,927,055 · UD-Q8_K_XL 873,445,601,295 B.
+    //   같은 이름 단계 파일(2026-10-23 조회)은 FP4 전문가를 다시 편 빌드뿐이라 기준이 아니다: DevQuasar/deepseek-ai.DeepSeek-V4-Pro-GGUF@eba2672
+    //   Q4_K_M 950,879,579,072 · Q5_K_M 1,115,575,760,000 · batiai/DeepSeek-V4-Pro-GGUF@1906527 Q4_K_M 951,215,373,728 ·
+    //   teamblobfish/DeepSeek-V4-Pro-GGUF@4c14720 Q8_0 1,671,820,586,208.
     name: 'DeepSeek-V4-Pro', group: 'DeepSeek', added: '2026-10-18', tags: ['moe'],
     aliases: ['deepseek-ai/DeepSeek-V4-Pro'],
     totalParams: 1598.8, activeParams: 49, layerCount: 61, kvHeads: 1, kvHeadDim: 512, attnHeads: 128, hiddenSize: 7168,
@@ -1443,29 +1542,54 @@ function nativeFp4ParamsB(model) {
   const p = model.nativeFp4Params;
   return p > 0 && p < model.totalParams && !guardedPleParamsB(model) ? p : 0;
 }
+// 공개 GGUF 하한(ggufFileBytes) — 단계 평균 bpw 공식은 실제 파일보다 작을 수 있다. 같은 이름 단계라도 텐서마다 형식이 다르고
+// (llama-quantize 기본 규칙 + 배포자 설정), 그 몫이 Llama-3.1-8B(GPU_QUANTS 기준 모델)와 다르기 때문이다. 2026-10-23 전수 조사
+// (카탈로그 34개 × 5단계, HF 파일 목록 + GGUF 헤더)에서 공개 파일이 공식보다 1% 넘게 큰 원인은 네 가지였다:
+//  ① 배포자 설정 — ggml-org는 Qwen3.5/3.6 계열의 어텐션·linear 어텐션 텐서를 Q4_K_M에서도 Q8_0으로 두고, bartowski는 어텐션을
+//     Q6_K·Q8_0으로 올리고 MTP 층을 함께 담는다(Qwen3.6-27B Q4_K_M: lmstudio 15.40 · bartowski 16.74 · ggml-org 17.77 GiB).
+//     poolside는 Laguna-S Q4_K_M에서 전문가 8층을 BF16으로 둔다(89.4 GiB, 다른 배포자 Q5_K_M 78.2보다 크다).
+//  ② 행 길이가 K-quant 블록 256의 배수가 아닌 텐서는 더 큰 형식으로 대체된다(Q4_K→Q5_0, Q6_K→Q8_0) — Gemma-4-26B-A4B 전문가
+//     down(704), Gemma-3-1B 전체(1152), gpt-oss(2880).
+//  ③ 묶인(tied) 임베딩은 출력 자리라 Q6_K 이상으로 저장된다 — 어휘가 큰 소형 모델(Gemma 262K, Llama-3.2 128K)은 그 몫이 크다.
+//  ④ 묶인 lm_head를 따로 담은 GGUF — Qwen3-0.6B·1.7B는 공식 GGUF만 임베딩 1회이고 bartowski·ggml-org·lmstudio·mradermacher는
+//     output을 따로 담아 26–33% 크다.
+// ①은 아키텍처 config로 예측할 수 없어(같은 파일도 배포자마다 15% 차이) 공식 대신 실제 파일 크기를 하한으로 쓴다.
+// 기준 파일 = 같은 이름 단계(UD-·_L·-XL·MTP 전용 제외)의 unsloth · bartowski · ggml-org · lmstudio-community · mradermacher ·
+// 모델 공식 조직 파일 중 가장 큰 것. 공식보다 1% 넘게 클 때만 행에 넣는다(허용 오차 1% — 넣지 않은 단계의 기준 파일은 공식의
+// 1.01배 이하다, test/gguf-file-floor.test.mjs). 출처(레포@리비전·파일)는 행 주석에 있다.
+// 키는 GPU_QUANTS 단계 이름이고, 그 단계의 bpw와 정확히 같은 요청에만 쓴다(Mac 4·8·16bit는 MLX라 해당 없음).
+// PLE를 host에 두는 경로(디스크리트 GPU)에서는 쓰지 않는다 — 파일에는 per_layer_token_embd가 들어 있고, 그 텐서를 뺀 상주 몫은
+// 모든 기준 파일에서 공식보다 작다(Gemma 4 e2b·e4b 헤더 실측, 같은 시험이 고정).
+function ggufFileFloorBytes(model, bits, device) {
+  const q = GPU_QUANTS.find((x) => x.bpw === bits);
+  const published = q && model.ggufFileBytes ? model.ggufFileBytes[q.tier] : 0;
+  if (!(Number.isSafeInteger(published) && published > 0)) return 0;
+  return pleDeductionApplies(device) && guardedPleParamsB(model) ? 0 : published;
+}
 // FP4 할인을 쓰는 단계의 하한 — 위 공식은 비전문가 몫을 단계 평균으로 세서 실제 파일보다 작을 수 있다(gpt-oss 0.1–3.7%:
 // hidden 2880이 K-quant 블록 256으로 나눠지지 않아 llama.cpp가 일부 텐서를 Q8_0으로 둔다). 그래서
-//  ① 그 단계의 공개 GGUF 크기가 알려져 있으면(ggufFileBytes, 행 주석에 출처) 그보다 작게 세지 않고,
+//  ① 그 단계의 공개 GGUF 크기가 알려져 있으면(ggufFileBytes, 위 하한) 그보다 작게 세지 않고,
 //  ② 모르면 출시 체크포인트 크기(fp4ReleaseBytes)보다 작게 세지 않는다 — 공개 파일 없이는 출시본이 확인된 유일한 바이트다.
 //     GGUF F16 단계는 출시본보다 조금 크다: 1차원 텐서·바이어스를 F32로 담는다(gpt-oss F16 GGUF / 출시본 = 1.0018 · 1.0023,
 //     행 주석의 바이트). 그래서 F16 단계의 ②에는 0.25%를 더한다.
-// 키는 GPU_QUANTS 단계 이름이고, 그 단계의 bpw와 정확히 같은 요청에만 쓴다(Mac 4·8·16bit는 ②만 해당).
+// FP4 행의 기준 파일은 출시 FP4 텐서를 그대로 둔 빌드다 — 전문가를 8·16bit·K-quant로 다시 편 빌드(DevQuasar·mradermacher gpt-oss,
+// teamblobfish·DevQuasar·batiai DeepSeek-V4)는 기준으로 삼지 않는다(nativeFp4 전제 문구).
 const GGUF_F16_SMALL_TENSOR_ALLOWANCE = 1.0025;
-function fp4FloorBytes(model, bits) {
-  const q = GPU_QUANTS.find((x) => x.bpw === bits);
-  const published = q && model.ggufFileBytes ? model.ggufFileBytes[q.tier] : 0;
-  if (Number.isSafeInteger(published) && published > 0) return published;
+function fp4ReleaseFloorBytes(model, bits) {
   const release = model.fp4ReleaseBytes;
   if (!(Number.isSafeInteger(release) && release > 0)) return 0;
+  const q = GPU_QUANTS.find((x) => x.bpw === bits);
   return q?.tier === 'FP16' ? release * GGUF_F16_SMALL_TENSOR_ALLOWANCE : release;
 }
 // 가중치 바이트의 단일 진실원 — calcParamMemory·calcMaxContext가 같은 식을 쓴다(인라인 중복 금지).
 function weightBytes(model, bits, device) {
   const resident = residentParamsB(model, device);
   const fp4 = bits > FP4_STORAGE_BPW ? Math.min(nativeFp4ParamsB(model), resident) : 0;
-  if (!fp4) return resident * 1e9 * (bits / 8) + precisionFloorBytes(model, bits);
-  const bytes = (resident - fp4) * 1e9 * (bits / 8) + fp4 * 1e9 * (FP4_STORAGE_BPW / 8) + precisionFloorBytes(model, bits);
-  return Math.max(bytes, fp4FloorBytes(model, bits));
+  const bytes = fp4
+    ? (resident - fp4) * 1e9 * (bits / 8) + fp4 * 1e9 * (FP4_STORAGE_BPW / 8) + precisionFloorBytes(model, bits)
+    : resident * 1e9 * (bits / 8) + precisionFloorBytes(model, bits);
+  const published = ggufFileFloorBytes(model, bits, device);
+  return Math.max(bytes, published, fp4 && !published ? fp4ReleaseFloorBytes(model, bits) : 0);
 }
 
 export function calcParamMemory(model, bits, device) {
@@ -2660,14 +2784,20 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     : undefined;
   // GGUF 단계 파일 크기는 텐서 형상·형식에만 달려 있다 — 텐서 목록이 카탈로그 행의 ggufFileSource와 정확히 같은 체크포인트(공식 레포·
   // 미러·같은 형상의 파인튜닝)는 그 행의 공개 단계 크기(ggufFileBytes)를 물려받는다: dtype별 수가 반올림 없이 같고, 형상을 정하는
-  // config 값이 모두 같아야 한다. 하나라도 다르면 물려받지 않는다(그때는 FP4 공식만 — 공개 파일이 없는 체크포인트와 같다).
+  // config 값이 모두 같고, 출시 FP4 수도 같아야 한다(둘 다 없거나 같은 값). 하나라도 다르면 물려받지 않는다(그때는 공식만 — FP4면
+  // 출시본 하한까지, 공개 파일이 없는 체크포인트와 같다). 같은 텐서 목록인 행이 여럿이면(Qwen3.6-27B · Qwen3.8-27B) 단계마다 큰 쪽을 쓴다.
   const evidenceParams = parameterEvidence?.safetensorsParameters;
   const sameCounts = (want) => evidenceParams && Object.keys(evidenceParams).length === Object.keys(want).length &&
     Object.entries(want).every(([dtype, n]) => evidenceParams[dtype] === n);
-  const ggufTwin = nativeFp4Params
-    ? MODELS.find((m) => m.ggufFileBytes && m.ggufFileSource && m.nativeFp4Params === nativeFp4Params &&
-      sameCounts(m.ggufFileSource.parameters) &&
-      Object.entries(m.ggufFileSource.config).every(([k, v]) => (c[k] ?? raw[k]) === v))
+  const ggufTwins = MODELS.filter((m) => m.ggufFileBytes && m.ggufFileSource &&
+    (m.nativeFp4Params || undefined) === (nativeFp4Params || undefined) &&
+    sameCounts(m.ggufFileSource.parameters) &&
+    Object.entries(m.ggufFileSource.config).every(([k, v]) => (c[k] ?? raw[k]) === v));
+  const ggufFileBytes = ggufTwins.length
+    ? ggufTwins.reduce((acc, m) => {
+      for (const [tier, bytes] of Object.entries(m.ggufFileBytes)) acc[tier] = Math.max(acc[tier] || 0, bytes);
+      return acc;
+    }, {})
     : undefined;
 
   return {
@@ -2696,7 +2826,7 @@ export function parseHfConfig(id, raw, totalSize, parameterEvidence) {
     engramParams: ds?.engramParams,
     nativeFp4Params,
     fp4ReleaseBytes: nativeFp4Params ? totalSize : undefined, // nativeFp4FromEvidence가 이 바이트로 등식을 확인했다
-    ggufFileBytes: ggufTwin ? { ...ggufTwin.ggufFileBytes } : undefined,
+    ggufFileBytes,
     mtpLayerCount,
     pleParams: pleParams ? +pleParams.toFixed(3) : undefined,
     pleOffloadVerified,

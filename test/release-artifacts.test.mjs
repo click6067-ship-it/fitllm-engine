@@ -15,12 +15,13 @@ const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).dige
 
 // vectors 바이트 — 1.11.0(2026-10-23): 출시 FP4 전문가(gpt-oss MXFP4 · DeepSeek-V4 FP4)는 4.25 bit 위로 세지 않는다.
 // 기대값 2개가 바뀌고(gpt-oss-120b 한 대 Q6_K 32K tight → yes, V4-Flash 4대 Q8_0 224K tight → yes) note 5개를 새 손계산으로 고친다.
-// 3개 추가(46 → 49): gpt-oss-120b 한 대 Q8_0 8K yes(평균 bit로 세는 구현은 no) · Laguna S 한 대 Q6_K 8K tight(GB10을 디스크리트로
-// 보는 구현은 yes — q6k-32k 벡터가 하던 확인을 넘겨받는다) · V4-Flash 2대 Q8_0 144K tight(KV를 한 번만 세면 yes — KV 복제 경계).
+// 3개 추가(46 → 49): gpt-oss-120b 한 대 Q8_0 8K yes(평균 bit로 세는 구현은 no) · Laguna S 한 대 Q6_K 128K tight(GB10을 디스크리트로
+// 보는 구현은 yes, 한 대에 12% 몫을 남긴 구현은 no — q6k-32k 벡터가 하던 확인을 넘겨받는다) · V4-Flash 2대 Q8_0 144K tight(KV를 한 번만
+// 세면 yes — KV 복제 경계). 같은 1.11.0에 공개 GGUF 하한(ggufFileBytes)이 들어가 Laguna S Q6_K 256K는 tight → no(공개 파일 94.70 GiB).
 // 2.21.4: GB10 한 대 판정 3개의 note를 새 손계산으로 고치고, Laguna S 256K의 기대값이 'no' → 'tight'(가중치 12% 몫 제거). 1.9.0 → 1.10.0.
 // (2.21.0: DeepSeek-V4·Muse 앵커 8개, 2.20.0: GB10 클러스터 판정 2개, 2.19.0: GB10 3개, 2.16.0: 신규 3모델 kv 3개).
 // 러너(run.mjs) 바이트는 2.14.1 이후 불변이다(아래 SHA) — 벡터가 늘어도 검증 코드는 안 바뀐다는 게 요점.
-const VECTORS_JSON_SHA256 = '85dc61a88b9943c73c93e1e1e99866a8756ab03b639d0fedc07fb7a1fa110a88';
+const VECTORS_JSON_SHA256 = 'df9ae4f06df1055ad8bf66febfea4a795b7b0b7d6cab1619aa7e750e2fafe7f4';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
 test('release version surfaces agree on 2.21.4 and the package contract is unchanged', () => {
@@ -71,10 +72,11 @@ test('the 49 conformance vectors keep 18/5/4/22 kinds; 1.11.0 counts shipped FP4
   assert.ok(vectors.some((v) => v.id === 'v-dsv4flash-4xdgxspark128-q8-224k' && v.expect === 'yes'));
   // 2026-10-16 append 된 3개 — GB10 reserve(128 − 121.69 + 5.0 + 2.0)와 공유 풀 headroom을 고정한다. 손계산은 note에.
   // 2.21.4: 한 대는 가중치 12% 몫이 없다 → yes · tight · tight (Laguna S 256K는 2.21.3까지 no)
-  // 1.11.0: gpt-oss-120b Q6_K 32K는 출시 MXFP4 크기로 yes가 되고, GB10≠디스크리트 확인은 Laguna S 8K(tight)가 넘겨받는다
+  // 1.11.0: gpt-oss-120b Q6_K 32K는 출시 MXFP4 크기로 yes가 된다. Laguna S Q6_K는 공개 GGUF 하한(94.70 GiB)으로 256K가 no가 되고,
+  //   한 대 GB10의 12% 몫·디스크리트 셈 확인은 128K(tight)가 넘겨받는다
   const gb10Expect = {
-    'v-gptoss120b-dgxspark128-q4-8k': 'yes', 'v-gptoss120b-dgxspark128-q6k-32k': 'yes', 'v-lagunas-dgxspark128-q6k-256k': 'tight',
-    'v-gptoss120b-dgxspark128-q8-8k': 'yes', 'v-lagunas-dgxspark128-q6k-8k': 'tight',
+    'v-gptoss120b-dgxspark128-q4-8k': 'yes', 'v-gptoss120b-dgxspark128-q6k-32k': 'yes', 'v-lagunas-dgxspark128-q6k-256k': 'no',
+    'v-gptoss120b-dgxspark128-q8-8k': 'yes', 'v-lagunas-dgxspark128-q6k-128k': 'tight',
   };
   for (const [id, expect] of Object.entries(gb10Expect)) {
     assert.ok(vectors.some((v) => v.id === id && v.device.gpu === 'DGX Spark 128GB' && v.expect === expect), `missing vector: ${id} (${expect})`);

@@ -15,14 +15,14 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 | M5 Max 64GB | 64GB | **Nex-N2.5-mini** (35.107B) — free 37.2GB, up to ~262K ctx |
 | M4 Max 128GB | 128GB | **Laguna S 2.1** (117.562B) — free 57.93GB, up to ~399K ctx |
 | M3 Ultra 512GB | 512GB | **GLM-5.2** (753B) — free 110.25GB, up to ~70K ctx |
-| RTX 3060 12GB | 12GB | **Gemma 4 12b** (11.95B) — free 1.63GB, up to ~30K ctx |
+| RTX 3060 12GB | 12GB | **Gemma 4 12b** (11.95B) — free 1.26GB, up to ~22K ctx |
 | RTX 4060 Ti 16GB | 16GB | **gpt-oss-20b** (20.9B) — free 1.36GB, up to ~18K ctx |
 | RTX 4090 | 24GB | **GLM-4.7-Flash** (31.2B) — free 1.37GB, up to ~10K ctx |
-| RTX 5090 | 32GB | **Nex-N2.5-mini** (35.107B) — free 7.11GB, up to ~114K ctx |
+| RTX 5090 | 32GB | **Nex-N2.5-mini** (35.107B) — free 6.23GB, up to ~97K ctx |
 | RX 7900 XTX | 24GB | **GLM-4.7-Flash** (31.2B) — free 1.37GB, up to ~10K ctx |
-| RTX PRO 6000 Blackwell | 96GB | **Laguna S 2.1** (117.562B) — free 18.22GB, up to ~171K ctx |
+| RTX PRO 6000 Blackwell | 96GB | **gpt-oss-120b** (116.8B) — free 27.88GB, up to ~131K ctx |
 | A100 80GB | 80GB | **gpt-oss-120b** (116.8B) — free 11.88GB, up to ~122K ctx |
-| H200 141GB | 141GB | **Laguna S 2.1** (117.562B) — free 63.22GB, up to ~688K ctx |
+| H200 141GB | 141GB | **Laguna S 2.1** (117.562B) — free 38.07GB, up to ~384K ctx |
 
 ## Smallest device that runs each model (~4-bit, 8K ctx)
 
@@ -38,8 +38,8 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 | Gemma 4 e2b | 5.1B | RTX 4060 Ti 8GB | M6 16GB |
 | Gemma 4 e4b | 8B | RTX 4060 Ti 8GB | M6 16GB |
 | Gemma 4 12b | 11.95B | RTX 2080 Ti | M6 16GB |
-| Gemma 4 26b A4B | 25.5B | RX 7900 XT | M6 32GB |
-| Gemma 4 31b | 30.7B | RTX 4090 | M6 32GB |
+| Gemma 4 26b A4B | 25.5B | RTX 4090 | M6 32GB |
+| Gemma 4 31b | 30.7B | RTX 5090 | M6 32GB |
 | Llama-3.2-3B-Instruct | 3.2B | RTX 4060 Ti 8GB | M6 16GB |
 | Llama-3.1-8B-Instruct | 8B | RTX 3080 10GB | M6 16GB |
 | MiniCPM5-1B | 1.081B | RTX 4060 Ti 8GB | M6 16GB |
@@ -51,7 +51,7 @@ Assumptions: context = min(8K, model max) · KV cache F16 · platform reserve/he
 | Qwen 3.8 27B | 27.781B | RTX 4090 | M6 32GB |
 | Qwen 3.8 2.4T-A95B | 2446.183B | — | — |
 | Laguna XS 2.1 | 33.443B | RTX 5090 | M6 32GB |
-| Laguna S 2.1 | 117.562B | A100 80GB | M5 Ultra 96GB |
+| Laguna S 2.1 | 117.562B | DGX Spark 128GB | M5 Ultra 96GB |
 | Spark-X2.5-4B | 4.112B | RTX 4060 Ti 8GB | M6 16GB |
 | Granite-4.2-30B | 29.277B | RTX 4090 | M6 32GB |
 | GLM-5.3 | 753B | — | M3 Ultra 512GB |

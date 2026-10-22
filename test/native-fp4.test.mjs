@@ -120,7 +120,7 @@ test('16 GB GPU: gpt-oss-20b fits at Q4_K_M and Q8_0 (8K), F16 still does not; 2
   }
 });
 
-test('rows without nativeFp4Params keep the 2.21.4 weight formula bit-for-bit on every device kind and tier', () => {
+test('rows without nativeFp4Params keep the 2.21.4 weight formula bit-for-bit on every device kind and tier, except the published GGUF floor of that exact tier', () => {
   const multiplier = { 'Gemma 4 e2b': { 16: 1.0, 8: 1.15, 4: 1.39 }, 'Gemma 4 e4b': { 16: 1.0, 8: 1.11, 4: 1.29 }, 'Gemma 4 31b': { 16: 1.02, 8: 1.1, 4: 1.2 }, 'Gemma 4 26b A4B': { 16: 1.01, 8: 1.1, 4: 1.2 } };
   const devices = [gpu('RTX 4090'), gpu('DGX Spark 128GB'), gpu('4× DGX Spark 128GB'), appleDevice(64), undefined];
   const bitsList = [...GPU_QUANTS.map((q) => q.bpw), 4, 8, 16];
@@ -131,7 +131,10 @@ test('rows without nativeFp4Params keep the 2.21.4 weight formula bit-for-bit on
         // 2.21.4 calcParamMemory 원문 식(PLE 차감 · Engram 하한 · quantAdjust 포함)
         const ple = d && d.type === 'gpu' && !d.unifiedMemory && m.pleOffloadVerified === true && m.pleParams && m.pleParams < m.totalParams ? m.pleParams : 0;
         const floor = m.engramParams ? m.engramParams * 1e9 * Math.max(0, 8.25 - bits) / 8 : 0;
-        const expected = (((m.totalParams - ple) * 1e9 * (bits / 8) + floor) / GIB) * ((multiplier[m.name] && multiplier[m.name][bits]) || 1.0);
+        // 공개 GGUF 하한(gguf-file-floor.test.mjs) — 그 단계 bpw 요청에만, PLE를 host에 두는 경로는 제외
+        const q = GPU_QUANTS.find((x) => x.bpw === bits);
+        const published = q && m.ggufFileBytes && !ple ? m.ggufFileBytes[q.tier] || 0 : 0;
+        const expected = (Math.max((m.totalParams - ple) * 1e9 * (bits / 8) + floor, published) / GIB) * ((multiplier[m.name] && multiplier[m.name][bits]) || 1.0);
         assert.equal(calcParamMemory(m, bits, d).totalGB, expected, `${m.name} ${bits} ${d?.type}`);
         checked++;
       }
