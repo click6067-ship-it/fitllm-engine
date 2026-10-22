@@ -121,3 +121,18 @@ test('HF live parse inherits the floors only for the exact tensor list, and merg
   assert.deepEqual(p27.ggufFileBytes, byName('Qwen 3.8 27B').ggufFileBytes);
   assert.equal(calcParamMemory(p27, tier('Q4_K_M'), SPARK).totalGB, calcParamMemory(byName('Qwen 3.6 27B'), tier('Q4_K_M'), SPARK).totalGB);
 });
+
+test('every floored row carries the tensor list its files were measured on; gated originals use a same-count public mirror config', () => {
+  for (const m of LOCAL_MODELS.filter((x) => x.ggufFileBytes && !x.nativeFp4Params)) {
+    assert.ok(m.ggufFileSource && Object.keys(m.ggufFileSource.parameters).length && Object.keys(m.ggufFileSource.config).length, m.name);
+  }
+  // Codex R1: Llama-3.2-1B/3B·Gemma-3-1B는 원본 config가 gated라 빠져 있었다 — 같은 형상의 공개 미러가 하한을 못 물려받았다
+  //   (Llama-3.2-1B Q4_K_M 공식 734,160,000 B vs 공개 파일 807,694,464 B, RTX 4060 Ti 8GB · 79,232 ctx에서 tight ↔ no)
+  for (const [file, name] of [['unsloth__Llama-3.2-1B-Instruct', 'Llama-3.2-1B-Instruct'], ['unsloth__Llama-3.2-3B-Instruct', 'Llama-3.2-3B-Instruct']]) {
+    const cfg = JSON.parse(readFileSync(new URL(`./fixtures/${file}.config.json`, import.meta.url), 'utf8'));
+    const n = byName(name).ggufFileSource.parameters.BF16;
+    const m = parseHfConfig(`unsloth/${name}`, cfg, n * 2, { revision: 'e'.repeat(40), safetensorsParameters: { BF16: n }, safetensorsTotal: n });
+    assert.deepEqual(m.ggufFileBytes, byName(name).ggufFileBytes, name);
+    assert.ok(weightBytes(m, tier('Q4_K_M'), gpu('RTX 4060 Ti 8GB')) >= byName(name).ggufFileBytes.Q4_K_M, name);
+  }
+});

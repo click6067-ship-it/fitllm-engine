@@ -280,6 +280,7 @@ export const MODELS = [
     // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
     //   Q4_K_M·Q5_K_M bartowski/Llama-3.2-3B-Instruct-GGUF@5ab33fa94d1d04e903623ae72c95d1696f09f9e8
     ggufFileBytes: { Q4_K_M: 2019377696, Q5_K_M: 2322154016 },
+    ggufFileSource: { parameters: { BF16: 3212749824 }, config: { num_hidden_layers: 28, hidden_size: 3072, intermediate_size: 8192, num_attention_heads: 24, num_key_value_heads: 8, head_dim: 128, vocab_size: 128256, tie_word_embeddings: true } }, // meta-llama/Llama-3.2-3B-Instruct@0cb88a4 수 · config는 gated라 unsloth/Llama-3.2-3B-Instruct@006f5dc 미러(같은 수)
     desc: 'Dense · 3.2B · 28레이어 · GQA(24/8) · 최대 128K' }, // meta-llama/Llama-3.2-3B-Instruct (gated) ↔ unsloth 미러
   { name: 'Llama-3.1-8B-Instruct', group: 'Llama', added: '2026-07-09', tags: ['dense'],
     totalParams: 8.0, activeParams: 8.0, layerCount: 32, kvHeads: 8, kvHeadDim: 128, attnHeads: 32, hiddenSize: 4096,
@@ -324,6 +325,7 @@ export const MODELS = [
     // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
     //   Q4_K_M·Q5_K_M bartowski/Llama-3.2-1B-Instruct-GGUF@067b946cf014b7c697f3654f621d577a3e3afd1c
     ggufFileBytes: { Q4_K_M: 807694464, Q5_K_M: 911503488 },
+    ggufFileSource: { parameters: { BF16: 1235814400 }, config: { num_hidden_layers: 16, hidden_size: 2048, intermediate_size: 8192, num_attention_heads: 32, num_key_value_heads: 8, head_dim: 64, vocab_size: 128256, tie_word_embeddings: true } }, // meta-llama/Llama-3.2-1B-Instruct@9213176 수 · config는 gated라 unsloth/Llama-3.2-1B-Instruct@5a8abab 미러(같은 수)
     desc: 'Dense · 1.2B · Llama 3.x 타깃 표준 draft (vocab 128256 호환) · 최대 128K' }, // meta-llama(gated) ↔ unsloth·NousResearch 미러 2종 일치
   { name: 'Gemma-3-1B-it', group: 'Draft', added: '2026-07-09', tags: ['dense', 'draft'],
     totalParams: 1.0, activeParams: 1.0, layerCount: 26, kvHeads: 1, kvHeadDim: 256, attnHeads: 4, hiddenSize: 1152,
@@ -332,6 +334,7 @@ export const MODELS = [
     // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
     //   Q4_K_M·Q5_K_M·Q6_K mradermacher/gemma-3-1b-it-i1-GGUF@6a3a8b02e7dcf533d2d1bb4fb8b73df87c4cb133
     ggufFileBytes: { Q4_K_M: 806058912, Q5_K_M: 851346336, Q6_K: 1011739296 },
+    ggufFileSource: { parameters: { BF16: 999885952 }, config: { num_hidden_layers: 26, hidden_size: 1152, intermediate_size: 6912, num_attention_heads: 4, num_key_value_heads: 1, head_dim: 256, vocab_size: 262144 } }, // google/gemma-3-1b-it@dcc83ea 수 · config는 gated라 unsloth/gemma-3-1b-it@5b11413 미러(같은 수)
     desc: 'Dense · 1.0B · MQA(4/1) · 슬라이딩 512(글로벌 4레이어) — Gemma 계열 draft · 최대 32K' }, // google/gemma-3-1b-it(gated) ↔ unsloth·mlx 미러 + gemma_pytorch
 
   // === Claude Opus 4.7 — Cloud (벤치마크 기준점, 메모리 시뮬 제외) ===
