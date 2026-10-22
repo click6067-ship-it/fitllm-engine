@@ -15,8 +15,8 @@
   "source": "https://github.com/click6067-ship-it/fitllm-engine/tree/master/census"
  },
  "sha256": {
-  "census-v1.json": "90a20c4c549080c488577da56764096a2075bba6683fd44660e79ff02b5c1b70",
-  "census-v1.csv": "10b126ef5cc673e22770ad4f336b629d86558b63075a004532987fdafa1b9f35"
+  "census-v1.json": "20602443d366cde76be09f6ffcaf7ebd5f8533f57efc9de8fb1020f565e2aae2",
+  "census-v1.csv": "a7fe15a4920e913ab68e5b6986f27fdfd505212b0962f2643dac4a684b080e13"
  },
  "engine": {
   "name": "fitllm-engine",

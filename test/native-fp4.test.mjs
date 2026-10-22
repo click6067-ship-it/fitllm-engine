@@ -74,8 +74,8 @@ test('gpt-oss: each GGUF tier counts the largest public file of that tier; only 
       else assert.ok(file <= RELEASE_BYTES[name], `${name} ${t} file above the release`);
       over.push(m.totalParams * 1e9 * tier(t) / 8 / file - 1); // 2.21.4: 전부 단계 평균 bit
     }
-    // Mac 8·16bit도 출시 크기를 넘지 않는다(4bit는 4.25 미만이라 종래 그대로)
-    for (const bits of [8, 16]) assert.ok(weightBytes(m, bits, appleDevice(128)) <= RELEASE_BYTES[name], `${name} mac ${bits}`);
+    // Mac 8·16bit는 GGUF 단계가 아니라 출시본이 하한이다(4bit는 4.25 미만이라 종래 그대로)
+    for (const bits of [8, 16]) assert.equal(weightBytes(m, bits, appleDevice(128)), RELEASE_BYTES[name], `${name} mac ${bits}`);
     assert.equal(calcParamMemory(m, 4, appleDevice(128)).totalGB, (m.totalParams * 1e9 * 0.5) / GIB);
   }
   assert.equal(+(Math.min(...over) * 100).toFixed(2), 9.54); // 20b Q4_K_M
@@ -164,16 +164,16 @@ test('FP8 releases stay on the tier formula: their published Q8_0 / BF16 GGUFs r
   assert.equal(+((1 - 407130522144 / 421576669344) * 100).toFixed(2), 3.43);
 });
 
-test('DeepSeek-V4: FP4 experts at their shipped size — V4-Flash Q4_K_M matches the published UD-Q4_K_XL within 0.1%; Q8_0 halves vs 2.21.4', () => {
+test('DeepSeek-V4: no same-tier public GGUF is known, so Q4_K_M–Q8_0 count the release itself (148.66 GiB; 2.21.4: 165.75–287.88); FP16 counts the FP8 share at 16 bits', () => {
   const f = byName('DeepSeek-V4-Flash');
   const d = gpu('4× DGX Spark 128GB');
-  const q4 = weightBytes(f, tier('Q4_K_M'), d);
-  assert.ok(Math.abs(q4 - 155095240320) / 155095240320 < 0.001, `${q4 / GIB}`); // unsloth UD-Q4_K_XL 144.44 GiB
-  const q8 = weightBytes(f, tier('Q8_0'), d);
-  assert.ok(q8 <= 159617149040, 'V4-Flash Q8_0 within the 148.66 GiB release'); // 출시 샤드 합
-  assert.equal(+(q8 / GIB).toFixed(2), 147.61); // 2.21.4: 287.88
+  for (const t of ['Q4_K_M', 'Q5_K_M', 'Q6_K', 'Q8_0']) assert.equal(weightBytes(f, tier(t), d), 159617149040, t); // 출시 샤드 합
+  // 공식(FP4 4.25 bit + 나머지 단계 bpw)은 Q4_K_M 144.48 GiB로 unsloth UD-Q4_K_XL(155,095,240,320 B = 144.44)과 맞지만, UD-Q8_K_XL
+  // (161,869,614,720 B = 150.75)은 출시본보다도 크다 — 같은 이름 단계의 파일이 없으니 확인된 바이트(출시본)를 하한으로 둔다
+  const formulaQ4 = (f.totalParams - f.nativeFp4Params) * 1e9 * tier('Q4_K_M') / 8 + f.nativeFp4Params * 1e9 * 4.25 / 8;
+  assert.ok(Math.abs(formulaQ4 - 155095240320) / 155095240320 < 0.001);
   // FP8·BF16 몫은 단계를 따른다(GGUF에 FP8 타입 없음) — FP16 단계는 그 몫만큼 출시본보다 크다
-  assert.ok(weightBytes(f, tier('FP16'), d) > 159617149040);
+  assert.equal(+(weightBytes(f, tier('FP16'), d) / GIB).toFixed(2), 154.09);
   // 4.25 bit 미만(Mac 4bit)은 다시 양자화한 빌드라 선택 정밀도 그대로
   assert.equal(calcParamMemory(f, 4, appleDevice(256)).totalGB, (f.totalParams * 1e9 * 0.5) / GIB);
 });
@@ -256,4 +256,48 @@ test('Codex R1: ten gpt-oss-20b Q6_K instances on one GB10 add up to the public 
   assert.equal(+stack.param.toFixed(2), +((10 * 12041000128) / GIB).toFixed(2));
   assert.equal(stack.verdict, 'no');
   assert.equal(+stack.used.toFixed(2), 130.1);
+});
+
+// gpt-oss-20b 공식 config(필요한 키) — Codex 2차 검수 재현용
+const gptOss20bConfig = Object.freeze({
+  ...gptOss120bConfig, num_hidden_layers: 24, num_local_experts: 32,
+  layer_types: Array.from({ length: 24 }, (_, i) => (i % 2 === 0 ? 'sliding_attention' : 'full_attention')),
+});
+
+test('Codex R2: a vocab-extended gpt-oss-20b derivative does not inherit the original file sizes; it falls back to its own release bytes', () => {
+  // 어휘 +5,000 → BF16 +28,800,000(embed·lm_head 2 × 5,000 × 2,880), 샤드 +57,600,000 B
+  const cfg = { ...gptOss20bConfig, vocab_size: 201088 + 5000 };
+  const parameters = { BF16: 1804459584 + 28800000, U8: 19110297600 };
+  const bytes = RELEASE_BYTES['gpt-oss-20b'] + 57600000;
+  const m = parseHfConfig('x/gpt-oss-20b-ext', cfg, bytes, {
+    revision: 'c'.repeat(40), safetensorsParameters: parameters, safetensorsTotal: parameters.BF16 + parameters.U8,
+  });
+  assert.equal(m.nativeFp4Params, byName('gpt-oss-20b').nativeFp4Params);
+  assert.equal(m.totalParams, 20.9); // 반올림하면 원본과 같다 — 그래서 반올림 값으로는 쌍을 판정하지 않는다
+  assert.equal(m.ggufFileBytes, undefined);
+  assert.equal(m.fp4ReleaseBytes, bytes);
+  for (const q of GPU_QUANTS) {
+    const w = weightBytes(m, q.bpw, gpu('RTX 4090'));
+    // 원본 공개 파일 + 늘어난 임베딩 바이트(그 단계에서 원소당 많아야 2 B)보다 작게 세지 않는다
+    const lower = byName('gpt-oss-20b').ggufFileBytes[q.tier] + 2 * 5000 * 2880 * 2;
+    assert.ok(w >= lower, `${q.tier} ${w} < ${lower}`);
+  }
+  // 재현: GB10 한 대에 F16 8개 · 25,459 ctx — 공개 파일 기준으로 안 들어가면 엔진도 안 들어간다고 한다
+  const stack = simulateStack(Array.from({ length: 8 }, () => ({ model: m, ctx: 25459, weightBpw: tier('FP16'), kvBits: 16 })), gpu('DGX Spark 128GB'));
+  assert.equal(stack.verdict, 'no');
+});
+
+test('Codex R2: evidence that a one-byte reading also explains (small U8 share inside the header slack) gets no FP4 discount', () => {
+  const parameters = { U8: 100000000, BF16: 6900000000 };
+  const bytes = 13900000000; // U8을 원소당 1바이트로 저장한 크기 그대로 — FP4로 읽어도 차이 46,875,000 B가 64 MB 여유 안에 든다
+  const m = parseHfConfig('x/ambiguous-mxfp4', gptOss20bConfig, bytes, {
+    revision: 'd'.repeat(40), safetensorsParameters: parameters, safetensorsTotal: 7000000000,
+  });
+  assert.equal(m.nativeFp4Params, undefined);
+  assert.equal(m.fp4ReleaseBytes, undefined);
+  assert.ok(weightBytes(m, tier('FP16'), gpu('RTX 5090')) >= bytes);
+  // 공식 gpt-oss는 1바이트 해석과 53.7 GB 차이라 그대로 인정된다
+  assert.equal(parseHfConfig('openai/gpt-oss-20b', gptOss20bConfig, RELEASE_BYTES['gpt-oss-20b'], {
+    revision: '6cee5e81ee83917806bbde320786a8fb61efebee', safetensorsParameters: { BF16: 1804459584, U8: 19110297600 }, safetensorsTotal: 20914757184,
+  }).nativeFp4Params, byName('gpt-oss-20b').nativeFp4Params);
 });

@@ -127,7 +127,7 @@ test('Engram tables are never counted below their FP8 + scale storage (8.25 bit)
   const gib = (b) => b / 1024 ** 3;
   // 4bit < 4.25: FP4 전문가도 선택한 4bit로(다시 양자화한 빌드) — Engram만 8.25 하한
   assert.equal(calcParamMemory(v41, 4).totalGB, gib((763.2e9 - engram) * 0.5 + engram * 8.25 / 8));
-  // 16-bit: Engram은 하한보다 높아 그대로, FP4 전문가는 출시 크기 4.25 bit (2.21.4까지 763.2e9 × 2 = 1421.57 GiB)
+  // 16-bit: Engram은 하한보다 높아 그대로, FP4 전문가는 출시 크기 4.25 bit (2.21.4까지 763.2e9 × 2 = 1421.57 GiB) — 출시본(475.25)보다 커서 그 하한은 안 걸린다
   assert.ok(Math.abs(calcParamMemory(v41, 16).totalGB - gib((763.2e9 - fp4) * 2 + fp4 * 4.25 / 8)) < 1e-9);
   // Mac 512GB 4bit: 하한 적용 시 안 맞음(515.85), Engram도 4bit로 깎으면 맞는다고 잘못 말한다(406.89)
   const mac = simulate(v41, 512, 8192, 4);
@@ -142,10 +142,11 @@ test('4× DGX Spark: V4.1-Flash-1017 does not fit at Q4_K_M; KV is replicated pe
   const v41 = byName('DeepSeek-V4.1-Flash-1017');
   const s = simulate(v41, spark4, 8192, { weightBpw: 4.8944, kvBits: 16 });
   assert.equal(s.verdict, 'no');
-  // 가중치 = FP4 전문가 557.17134336e9 × 4.25/8 + 나머지 206.02865664e9 × 4.8944/8 + Engram 196.61e9 × (8.25 − 4.8944)/8
-  //   = 504.52e9 B = 469.87 GiB (2.21.4: 전부 4.8944 bit → 511.67 GiB, used 629.72)
-  assert.equal(+s.param.toFixed(2), 469.87);
-  assert.equal(+s.used.toFixed(2), 582.91);
+  // 가중치 = max(공식, 출시 체크포인트 510,296,708,312 B = 475.25 GiB) — 공식은 FP4 전문가 557.17134336e9 × 4.25/8 + 나머지
+  //   206.02865664e9 × 4.8944/8 + Engram 196.61e9 × (8.25 − 4.8944)/8 = 469.87 GiB이고, 공개 Q4_K_M 파일이 없어 출시본 아래로 세지 않는다
+  //   (2.21.4: 전부 4.8944 bit → 511.67 GiB, used 629.72)
+  assert.equal(+s.param.toFixed(2), 475.25);
+  assert.equal(+s.used.toFixed(2), 588.94);
   // TP 4: 단일 KV 헤드의 창·압축 캐시·인덱서 K를 대마다 둔다
   assert.equal(calcKVCache({ ...v41, compressedKv: { ...v41.compressedKv, replicas: 4 } }, 8192, 16).totalBytes,
     4 * calcKVCache(v41, 8192, 16).totalBytes);
@@ -154,7 +155,7 @@ test('4× DGX Spark: V4.1-Flash-1017 does not fit at Q4_K_M; KV is replicated pe
     assert.ok(s.structuralAssumptions.some((a) => a.id === id), id);
   }
   // calcMaxContext는 'yes'(free ≥ headroom)를 지키는 최대 ctx — 그 경계에서 simulate와 맞물린다.
-  // V4-Flash Q8_0 가중치가 출시 FP4 전문가 크기로 147.6 GiB라(2.21.4: 287.9) 4대에서는 1M까지 들어간다 → 경계는 2대에서 본다.
+  // V4-Flash Q8_0 가중치가 출시 FP4 크기(출시본 148.66 GiB 하한)라(2.21.4: 287.9) 4대에서는 1M까지 들어간다 → 경계는 2대에서 본다.
   const v4 = byName('DeepSeek-V4-Flash');
   const q = { weightBpw: 8.5008, kvBits: 16 };
   assert.equal(calcMaxContext(v4, spark4, q), v4.maxContext);
@@ -271,7 +272,7 @@ test('CLI: the reported command now answers — official ID via the pinned row, 
   assert.equal(j.verdict, 'no');
   assert.equal(j.modelSource.type, 'huggingface');
   assert.equal(j.modelSource.revision, '1bae0e1088993b9b82de08f59de5be5a34e42170');
-  assert.equal(j.usedGB, 582.91); // HF 즉석 파싱도 같은 FP4 전문가 수(I8, 바이트 등식 확인)를 읽어 카탈로그 행과 같다
+  assert.equal(j.usedGB, 588.94); // HF 즉석 파싱도 같은 FP4 전문가 수(I8, 바이트 등식 확인)와 출시 바이트 하한을 읽어 카탈로그 행과 같다
   assert.equal(j.basis.attention.kind, 'compressed-sparse');
   assert.equal(j.basis.attention.kvLayers, 4);
   assert.equal(j.basis.attention.compressedKv.cachedElementsPerToken, 1600);
