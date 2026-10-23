@@ -1,6 +1,6 @@
 {
-  "version": "1.10.0",
-  "generated": "2026-10-20",
+  "version": "1.11.0",
+  "generated": "2026-10-23",
   "source": "Derived independently from official HuggingFace config.json values; pinned by fitllm unit tests. An implementation conforms if every vector passes.",
   "vectors": [
     {
@@ -352,7 +352,7 @@
       "weightBpw": 4.8944,
       "kvBits": 16,
       "expect": "yes",
-      "note": "GB10 unified memory, one unit: weights 116.8e9*4.8944/8 = 66.55 GiB (GGUF file size, no extra weight percentage on one GB10 since 2.21.4) + KV 0.29 + overhead 0.15*KV 0.04 + 8192*0.00003 0.25 + reserve 13.31 (128-121.69 OS-visible + 5.0 idle DGX OS + 2.0 runtime) = 80.43 of 128; headroom 20% = 25.6"
+      "note": "GB10 unified memory, one unit: weights = max(114.6617856e9*4.25/8 + 2.1382144e9*4.8944/8 = 57.95, largest public Q4_K_M file 62,841,713,344 B = 58.53) = 58.53 GiB (the 114.6617856e9 shipped MXFP4 expert weights stay at their 4.25-bit storage (4-bit E2M1 + one E8M0 scale per 32) above 4.25 bits, and the weights are never counted below the largest public GGUF of that tier; no extra weight percentage on one GB10 since 2.21.4) + KV 0.29 + overhead 0.15*KV 0.04 + 8192*0.00003 0.25 + reserve 13.31 (128-121.69 OS-visible + 5.0 idle DGX OS + 2.0 runtime) = 72.41 of 128; headroom 20% = 25.6. Until 2.21.4 all 116.8e9 weights took the tier average (66.55 -> 80.43)"
     },
     {
       "id": "v-gptoss120b-dgxspark128-q6k-32k",
@@ -365,8 +365,8 @@
       "ctx": 32768,
       "weightBpw": 6.5633,
       "kvBits": 16,
-      "expect": "tight",
-      "note": "116.8e9*6.5633/8 = 89.24 + KV 1.13 + overhead (0.15*KV 0.17 + 32768*0.00003 0.98) 1.15 + reserve 13.31 = 104.84 -> free 23.16 < 25.6 headroom. A port that treats GB10 as a discrete card (0.6 reserve, 5% headroom) wrongly says yes"
+      "expect": "yes",
+      "note": "weights = max(114.6617856e9*4.25/8 + 2.1382144e9*6.5633/8 = 58.36, largest public Q6_K file 63,284,496,960 B = 58.94) = 58.94 GiB + KV 1.13 + overhead (0.15*KV 0.17 + 32768*0.00003 0.98) 1.15 + reserve 13.31 = 74.53 -> free 53.47 >= 25.6 headroom. Until 2.21.4 the whole 116.8e9 took the Q6_K average (89.24 -> 104.84, free 23.16 -> tight); a port that does so still says tight"
     },
     {
       "id": "v-lagunas-dgxspark128-q6k-256k",
@@ -379,8 +379,8 @@
       "ctx": 262144,
       "weightBpw": 6.5633,
       "kvBits": 16,
-      "expect": "tight",
-      "note": "117.562e9*6.5633/8 = 89.83 + KV(12 global x 2*8*128*2B*262144 + 36 sliding x 512) 12.07 + overhead (0.15*KV 1.81 + 262144*0.00003 7.86) 9.67 + reserve 13.31 = 124.88 of 128 -> free 3.12 < 25.6 headroom -> tight. Until 2.21.3 a further 12% of the weights (10.78) made it 135.66 -> no; public GB10 llama.cpp/Ollama allocation logs (fixtures/measured.json) show GGUF weights load at their file size, so one GB10 adds no weight percentage. A port that keeps it still says no"
+      "expect": "no",
+      "note": "weights = max(117.562e9*6.5633/8 = 89.83, largest public Q6_K GGUF bartowski/Laguna-S-2.1-GGUF@66e90ac 101,678,758,400 B = 94.70) = 94.70 + KV(12 global x 2*8*128*2B*262144 + 36 sliding x 512) 12.07 + overhead (0.15*KV 1.81 + 262144*0.00003 7.86) 9.67 + reserve 13.31 = 129.75 of 128 -> no. Through 1.10.0 the tier average alone gave 124.88 -> tight; a port that ignores the published GGUF floor still says tight. The one-GB10 weight-percentage check moved to v-lagunas-dgxspark128-q6k-128k"
     },
     {
       "id": "v-gptoss120b-2xdgxspark128-q8-8k",
@@ -394,7 +394,7 @@
       "weightBpw": 8.5008,
       "kvBits": 16,
       "expect": "yes",
-      "note": "GB10 cluster, 2 units, tensor parallel 2: weights 116.8e9*8.5008/8 = 115.64 GiB + KV 0.29 (8 KV heads >= 2 units, no replication) + overhead 0.12*w + 0.15*KV + 8192*0.00003*2 units + reserve 2*13.31 = 156.90 of 256 -> free 99.10 >= 51.2 headroom. One unit alone is 'no' (129.47 of 128 since 2.21.4: no 12% weight share on one unit; 143.34 before)"
+      "note": "GB10 cluster, 2 units, tensor parallel 2: weights = largest public Q8_0 file 63,387,347,520 B = 59.03 GiB (above 114.6617856e9*4.25/8 + 2.1382144e9*8.5008/8 = 58.85; MXFP4 experts at their shipped 4.25 bits) + KV 0.29 (8 KV heads >= 2 units, no replication) + overhead 0.12*w 7.08 + 0.15*KV 0.04 + 8192*0.00003*2 units 0.49 + reserve 2*13.31 = 93.56 of 256 -> free 162.44 >= 51.2 headroom. One unit alone is also 'yes' now (72.92 of 128, vector v-gptoss120b-dgxspark128-q8-8k); with the Q8_0 average on all 116.8e9 weights it was 'no' (129.47 of 128)"
     },
     {
       "id": "v-nexpro-4xdgxspark128-q8-128k",
@@ -467,7 +467,7 @@
       "weightBpw": 4.8944,
       "kvBits": 16,
       "expect": "no",
-      "note": "weights (763.2e9 - 196.6138496e9 Engram) x 4.8944 / 8 + 196.6138496e9 x 8.25 / 8 (Engram tables never below their FP8 + E8M0-scale storage) = 511.66 GiB (the whole checkpoint resident: 552B backbone + Engram + DSpark and vision weights) + KV 2.119 (one KV head, replicated on all 4 units, incl. 0.5 GiB indexer workspace each) + overhead (0.12 x weights + 0.15 x KV + 8192 x 0.00003 x 4 units) 62.70 + reserve 4 x 13.31 = 629.72 > 512. A port that sizes the weights from the 552B backbone figure says yes (408.92)."
+      "note": "weights = max(formula, released checkpoint 510,296,708,312 B = 475.25 GiB) = 475.25 GiB: the formula 557.17134336e9 shipped FP4 experts x 4.25 / 8 (never above their storage) + (763.2e9 - 557.17134336e9) x 4.8944 / 8 + Engram floor 196.6138496e9 x (8.25 - 4.8944) / 8 (Engram tables never below their FP8 + E8M0-scale storage) gives 469.87, and with no public Q4_K_M file known the weights are never counted below the release (the whole checkpoint resident: 552B backbone + Engram + DSpark and vision weights) + KV 2.119 (one KV head, replicated on all 4 units, incl. 0.5 GiB indexer workspace each) + overhead (0.12 x weights 57.03 + 0.15 x KV 0.32 + 8192 x 0.00003 x 4 units 0.98) 58.33 + reserve 4 x 13.31 = 588.94 > 512. A port that sizes the weights from the 552B backbone figure says yes"
     },
     {
       "id": "v-dsv4flash-4xdgxspark128-q8-224k",
@@ -480,8 +480,8 @@
       "ctx": 229376,
       "weightBpw": 8.5008,
       "kvBits": 16,
-      "expect": "tight",
-      "note": "weights 290.9e9 x 8.5008 / 8 = 287.88 GiB + KV 1.99 GiB per unit (incl. the 0.5 GiB indexer workspace) x 4 units (the single KV head, the compressed caches and the workspace are per tensor-parallel rank) = 7.95 + overhead 63.26 + reserve 53.24 = 412.33 -> free 99.67 < 102.4 headroom. Counting the KV once (1.99) gives free 106.52 -> yes."
+      "expect": "yes",
+      "note": "weights = max(283.467841536e9 shipped FP4 experts x 4.25 / 8 + (290.9e9 - 283.467841536e9) x 8.5008 / 8 = 147.61, released checkpoint 159,617,149,040 B = 148.66) = 148.66 GiB (no public Q8_0 file known) + KV 1.99 GiB per unit (incl. the 0.5 GiB indexer workspace) x 4 units = 7.95 + overhead 46.56 + reserve 53.24 = 256.40 -> free 255.60 >= 102.4 headroom. Until 2.21.4 all 290.9e9 weights took the Q8_0 average (287.88 -> 412.33, free 99.67 -> tight); a port that does so still says tight. The KV-replication boundary moved to two units: v-dsv4flash-2xdgxspark128-q8-144k"
     },
     {
       "id": "v-dsv41-1017-m3ultra512-4bit-8k",
@@ -496,6 +496,48 @@
       "kvBits": 16,
       "expect": "no",
       "note": "Mac 512GB, 4-bit: the 196.6B Engram tables stay at their FP8 + scale storage (8.25 bit): (763.2e9 - 196.6138496e9) x 0.5 + 196.6138496e9 x 1.03125 = 452.67 GiB weights + KV 0.53 + overhead 54.65 + macOS/runtime reserve 8.0 = 515.85 > 512. Quantizing the Engram tables to 4 bits as well (no runtime verified to do so) gives 406.89 -> yes."
+    },
+    {
+      "id": "v-gptoss120b-dgxspark128-q8-8k",
+      "kind": "verdict",
+      "model": "gpt-oss-120b",
+      "device": {
+        "type": "gpu",
+        "gpu": "DGX Spark 128GB"
+      },
+      "ctx": 8192,
+      "weightBpw": 8.5008,
+      "kvBits": 16,
+      "expect": "yes",
+      "note": "one GB10, Q8_0: weights = max(114.6617856e9*4.25/8 + 2.1382144e9*8.5008/8 = 58.85, largest public Q8_0 file 63,387,347,520 B = 59.03) = 59.03 GiB (the 114.6617856e9 shipped MXFP4 expert weights stay at their 4.25-bit storage (4-bit E2M1 + one E8M0 scale per 32) above 4.25 bits, and the weights are never counted below the largest public GGUF of that tier; the ggml-org MXFP4 file is the same 59.03) + KV 0.29 + overhead 0.15*KV 0.04 + 8192*0.00003 0.25 + reserve 13.31 = 72.92 of 128 -> free 55.08 >= 25.6. A port that gives all 116.8e9 weights the Q8_0 average (115.59) says no (129.47 of 128)"
+    },
+    {
+      "id": "v-lagunas-dgxspark128-q6k-128k",
+      "kind": "verdict",
+      "model": "Laguna S 2.1",
+      "device": {
+        "type": "gpu",
+        "gpu": "DGX Spark 128GB"
+      },
+      "ctx": 131072,
+      "weightBpw": 6.5633,
+      "kvBits": 16,
+      "expect": "tight",
+      "note": "weights = max(117.562e9*6.5633/8 = 89.83, largest public Q6_K GGUF bartowski/Laguna-S-2.1-GGUF@66e90ac 101,678,758,400 B = 94.70) = 94.70 + KV(12 global x 2*8*128*2B*131072 + 36 sliding x 512) 6.07 + overhead (0.15*KV 0.91 + 131072*0.00003 3.93) 4.84 + reserve 13.31 = 118.92 of 128 -> free 9.08 < 25.6 headroom -> tight. A port that keeps the 12% weight share on one GB10 says no (130.28); one that treats GB10 as a discrete card (12% weight share 11.36, 0.6 reserve, 5% headroom 6.4) says yes (117.57, free 10.43). Replaces the 8K case (keeping the 12% share did not change its answer) and takes the 12% check over from v-lagunas-dgxspark128-q6k-256k, which is no on the published file"
+    },
+    {
+      "id": "v-dsv4flash-2xdgxspark128-q8-144k",
+      "kind": "verdict",
+      "model": "DeepSeek-V4-Flash",
+      "device": {
+        "type": "gpu",
+        "gpu": "2× DGX Spark 128GB"
+      },
+      "ctx": 147456,
+      "weightBpw": 8.5008,
+      "kvBits": 16,
+      "expect": "tight",
+      "note": "weights = max(283.467841536e9 shipped FP4 experts x 4.25 / 8 + (290.9e9 - 283.467841536e9) x 8.5008 / 8 = 147.61, released checkpoint 159,617,149,040 B = 148.66) = 148.66 GiB + KV 1.4616 GiB per unit (incl. the 0.5 GiB indexer workspace) x 2 units (the single KV head, the compressed caches and the workspace are per tensor-parallel rank) = 2.92 + overhead (0.12 x weights 17.84 + 0.15 x KV 0.44 + 147456 x 0.00003 x 2 units 8.85) 27.12 + reserve 2 x 13.31 = 205.32 -> free 50.68 < 51.2 headroom -> tight. Counting the KV once gives free 52.36 -> yes; the Q8_0 average on all 290.9e9 weights gives no (361.26 of 256)"
     }
   ]
 }

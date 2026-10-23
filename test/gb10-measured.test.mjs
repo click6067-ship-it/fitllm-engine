@@ -63,12 +63,13 @@ test('가중치: 로그의 모델 버퍼(= GGUF 파일 크기)와 ±3% 안 — �
 test('손계산: GX10 · Qwen3.6-35B-A3B BF16 · 65,536 · KV 8비트', () => {
   const m = gb10.find((x) => x.caseId === 'gb10-qwen36-35b-a3b-bf16-ctx65536-kvq8');
   const { s, process } = predict(m);
-  // 가중치 35.0B(카탈로그) × 16.0005/8 = 65.195 GiB · KV 10층 × 2 × 2헤드 × 256 × 1 B × 65,536 = 0.625 GiB · 상태 0.060
-  // 런타임 = 0.15 × 0.625 + 65,536 × 0.00003 = 0.094 + 1.966 = 2.060 (가중치 몫 0) → 67.94 + 런타임 2.0 = 69.94 GiB
-  assert.equal(+s.param.toFixed(3), 65.195);
+  // 가중치 = 공개 BF16 GGUF 하한 bartowski/Qwen_Qwen3.6-35B-A3B-GGUF@5c2410d 71,065,941,536 B = 66.185 GiB(MTP 층 포함 — 로그 파일 65.62 GiB보다
+  //   0.9% 크다; 공식 35.0B × 16.0005/8 = 65.195는 그 파일보다 1.5% 작다) · KV 10층 × 2 × 2헤드 × 256 × 1 B × 65,536 = 0.625 GiB · 상태 0.060
+  // 런타임 = 0.15 × 0.625 + 65,536 × 0.00003 = 0.094 + 1.966 = 2.060 (가중치 몫 0) → 68.93 + 런타임 2.0 = 70.93 GiB
+  assert.equal(+s.param.toFixed(3), 66.185);
   assert.equal(+s.kv.toFixed(3), 0.625);
   assert.equal(+s.rtDyn.toFixed(3), 2.06);
-  assert.equal(+process.toFixed(2), 69.94); // 2.21.3: 77.76
+  assert.equal(+process.toFixed(2), 70.93); // 2.21.3: 77.76 · 2.21.4: 69.94
 });
 
 test('가중치 12% 몫: GB10 한 대만 0, 클러스터·디스크리트·맥은 그대로', () => {

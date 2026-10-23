@@ -32,6 +32,7 @@ const gptOssConfig = (layers, experts) => Object.freeze({
   hidden_size: 2880,
   initial_context_length: 4096,
   initializer_range: 0.02,
+  intermediate_size: 2880, // 2026-10-23: 공식 파일에 있는 키 — 빠져 있던 것을 채웠다(config sha256 위 주석과 같은 파일)
   layer_types: Array.from({ length: layers }, (_, i) => (i % 2 === 0 ? 'sliding_attention' : 'full_attention')),
   max_position_embeddings: 131072,
   model_type: 'gpt_oss',
@@ -132,6 +133,10 @@ for (const c of CASES) {
     assert.deepEqual(catalog.tags, ['moe']);
     // 카탈로그는 활성 파라미터를 모델카드 값(3.6/5.1)으로 유지한다 — 판정엔 들어가지 않는다.
     assert.equal(typeof catalog.activeParams, 'number');
+    // 출시 MXFP4 전문가 수·출시 바이트·공개 GGUF 단계 크기도 같다(즉석 파싱은 텐서 목록이 정확히 같을 때만 단계 크기를 물려받는다)
+    assert.equal(parsed.nativeFp4Params, catalog.nativeFp4Params);
+    assert.equal(parsed.fp4ReleaseBytes, catalog.fp4ReleaseBytes);
+    assert.deepEqual(parsed.ggufFileBytes, catalog.ggufFileBytes);
   });
 
   test(`${c.id} — 설명 문구가 총 파라미터를 모델카드 반올림(21B/117B)으로 단정하지 않는다`, () => {

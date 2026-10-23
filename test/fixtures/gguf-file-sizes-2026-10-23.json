@@ -1,0 +1,781 @@
+{
+ "date": "2026-10-23",
+ "method": "Largest same-name tier file (split parts summed; UD-/_L/-XL/MTP-only/mmproj excluded) among unsloth, bartowski, ggml-org, lmstudio-community, mradermacher and the model's official org, from https://huggingface.co/api/models/<repo>/revision/<sha>?blobs=true. Rows with shipped FP4 experts are covered by native-fp4.test.mjs.",
+ "largestReferenceFile": {
+  "GLM-4.7-Flash": {
+   "Q4_K_M": {
+    "bytes": 18474983296,
+    "source": "bartowski/zai-org_GLM-4.7-Flash-GGUF@464d07505b441959737cd04d900f047469614c8d",
+    "file": "zai-org_GLM-4.7-Flash-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 21566252928,
+    "source": "bartowski/zai-org_GLM-4.7-Flash-GGUF@464d07505b441959737cd04d900f047469614c8d",
+    "file": "zai-org_GLM-4.7-Flash-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 24825851776,
+    "source": "bartowski/zai-org_GLM-4.7-Flash-GGUF@464d07505b441959737cd04d900f047469614c8d",
+    "file": "zai-org_GLM-4.7-Flash-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 31842799968,
+    "source": "unsloth/GLM-4.7-Flash-GGUF@0d32489ecb9db6d2a4fc93bd27ef01519f95474d",
+    "file": "GLM-4.7-Flash-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 59908837696,
+    "source": "unsloth/GLM-4.7-Flash-GGUF@0d32489ecb9db6d2a4fc93bd27ef01519f95474d",
+    "file": "BF16/GLM-4.7-Flash-BF16.gguf"
+   }
+  },
+  "GLM-5.2": {
+   "Q8_0": {
+    "bytes": 801357672256,
+    "source": "unsloth/GLM-5.2-GGUF@abc55e72527792c6e77069c99b4cb7de16fa9f23",
+    "file": "Q8_0/GLM-5.2-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 1507988023008,
+    "source": "unsloth/GLM-5.2-GGUF@abc55e72527792c6e77069c99b4cb7de16fa9f23",
+    "file": "BF16/GLM-5.2-BF16.gguf"
+   }
+  },
+  "Qwen 3.6 27B": {
+   "Q4_K_M": {
+    "bytes": 19095766304,
+    "source": "ggml-org/Qwen3.6-27B-GGUF@1132d03976d88e30a09ab0ddbf1531d5e1b46e7c",
+    "file": "Qwen3.6-27B-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 20965122560,
+    "source": "bartowski/Qwen_Qwen3.6-27B-GGUF@4612927928b49982f8319dc3e2e6f62b9b73b192",
+    "file": "Qwen_Qwen3.6-27B-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 23675466240,
+    "source": "bartowski/Qwen_Qwen3.6-27B-GGUF@4612927928b49982f8319dc3e2e6f62b9b73b192",
+    "file": "Qwen_Qwen3.6-27B-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 29116387840,
+    "source": "bartowski/Qwen_Qwen3.6-27B-GGUF@4612927928b49982f8319dc3e2e6f62b9b73b192",
+    "file": "Qwen_Qwen3.6-27B-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 54657733056,
+    "source": "bartowski/Qwen_Qwen3.6-27B-GGUF@4612927928b49982f8319dc3e2e6f62b9b73b192",
+    "file": "Qwen_Qwen3.6-27B-bf16/Qwen_Qwen3.6-27B-bf16.gguf"
+   }
+  },
+  "Qwen 3.6 35B-A3B": {
+   "Q4_K_M": {
+    "bytes": 22285080192,
+    "source": "bartowski/Qwen_Qwen3.6-35B-A3B-GGUF@5c2410d71524f4f72b023ce8daf7a80528226d5f",
+    "file": "Qwen_Qwen3.6-35B-A3B-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 25913185920,
+    "source": "bartowski/Qwen_Qwen3.6-35B-A3B-GGUF@5c2410d71524f4f72b023ce8daf7a80528226d5f",
+    "file": "Qwen_Qwen3.6-35B-A3B-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 30947309184,
+    "source": "bartowski/Qwen_Qwen3.6-35B-A3B-GGUF@5c2410d71524f4f72b023ce8daf7a80528226d5f",
+    "file": "Qwen_Qwen3.6-35B-A3B-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 37812647552,
+    "source": "bartowski/Qwen_Qwen3.6-35B-A3B-GGUF@5c2410d71524f4f72b023ce8daf7a80528226d5f",
+    "file": "Qwen_Qwen3.6-35B-A3B-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 71065941536,
+    "source": "bartowski/Qwen_Qwen3.6-35B-A3B-GGUF@5c2410d71524f4f72b023ce8daf7a80528226d5f",
+    "file": "Qwen_Qwen3.6-35B-A3B-bf16/Qwen_Qwen3.6-35B-A3B-bf16.gguf"
+   }
+  },
+  "Qwen-AgentWorld-35B-A3B": {
+   "Q8_0": {
+    "bytes": 36903140608,
+    "source": "unsloth/Qwen-AgentWorld-35B-A3B-GGUF@3a305abf5cfd119ee999dfe929c433746edd8d63",
+    "file": "Qwen-AgentWorld-35B-A3B-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 69376638464,
+    "source": "unsloth/Qwen-AgentWorld-35B-A3B-GGUF@3a305abf5cfd119ee999dfe929c433746edd8d63",
+    "file": "BF16/Qwen-AgentWorld-35B-A3B-BF16.gguf"
+   }
+  },
+  "Gemma 4 e2b": {
+   "Q4_K_M": {
+    "bytes": 3462680032,
+    "source": "bartowski/google_gemma-4-E2B-it-GGUF@81012ba3538e061d5ee003f11f25335b17f82e2d",
+    "file": "google_gemma-4-E2B-it-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 3658384864,
+    "source": "bartowski/google_gemma-4-E2B-it-GGUF@81012ba3538e061d5ee003f11f25335b17f82e2d",
+    "file": "google_gemma-4-E2B-it-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 4501721184,
+    "source": "unsloth/gemma-4-E2B-it-GGUF@0314792d7f1f7e229411f620751375812bb9faf2",
+    "file": "gemma-4-E2B-it-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 5048352864,
+    "source": "unsloth/gemma-4-E2B-it-GGUF@0314792d7f1f7e229411f620751375812bb9faf2",
+    "file": "gemma-4-E2B-it-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 9311305568,
+    "source": "unsloth/gemma-4-E2B-it-GGUF@0314792d7f1f7e229411f620751375812bb9faf2",
+    "file": "gemma-4-E2B-it-BF16.gguf"
+   }
+  },
+  "Gemma 4 e4b": {
+   "Q4_K_M": {
+    "bytes": 5405170144,
+    "source": "bartowski/google_gemma-4-E4B-it-GGUF@029e94146666900b08caf49a3b47b413dfa8ec66",
+    "file": "google_gemma-4-E4B-it-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 5820883424,
+    "source": "bartowski/google_gemma-4-E4B-it-GGUF@029e94146666900b08caf49a3b47b413dfa8ec66",
+    "file": "google_gemma-4-E4B-it-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 7074929792,
+    "source": "unsloth/gemma-4-E4B-it-GGUF@bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+    "file": "gemma-4-E4B-it-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 8192953472,
+    "source": "unsloth/gemma-4-E4B-it-GGUF@bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+    "file": "gemma-4-E4B-it-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 15053097856,
+    "source": "unsloth/gemma-4-E4B-it-GGUF@bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+    "file": "gemma-4-E4B-it-BF16.gguf"
+   }
+  },
+  "Gemma 4 12b": {
+   "Q4_K_M": {
+    "bytes": 7662533088,
+    "source": "bartowski/gemma-4-12B-it-GGUF@2ae7d41be21ca62de00a2d320ee9cec50daa3aa6",
+    "file": "gemma-4-12B-it-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 8774965728,
+    "source": "bartowski/gemma-4-12B-it-GGUF@2ae7d41be21ca62de00a2d320ee9cec50daa3aa6",
+    "file": "gemma-4-12B-it-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 10239326688,
+    "source": "bartowski/gemma-4-12B-it-GGUF@2ae7d41be21ca62de00a2d320ee9cec50daa3aa6",
+    "file": "gemma-4-12B-it-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 12669648544,
+    "source": "lmstudio-community/gemma-4-12B-it-GGUF@40b870babe39398ce917bbf4b4ff9b5a1f12710e",
+    "file": "gemma-4-12B-it-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 23832066656,
+    "source": "unsloth/gemma-4-12b-it-GGUF@fc034cfff751157913579611efad8462ac1be606",
+    "file": "gemma-4-12b-it-BF16.gguf"
+   }
+  },
+  "Gemma 4 26b A4B": {
+   "Q4_K_M": {
+    "bytes": 17035039872,
+    "source": "bartowski/google_gemma-4-26B-A4B-it-GGUF@10f3b41bcf8d3047f4e136e7197ffc2dd1654c9d",
+    "file": "google_gemma-4-26B-A4B-it-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 19319198848,
+    "source": "bartowski/google_gemma-4-26B-A4B-it-GGUF@10f3b41bcf8d3047f4e136e7197ffc2dd1654c9d",
+    "file": "google_gemma-4-26B-A4B-it-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 22862577280,
+    "source": "bartowski/google_gemma-4-26B-A4B-it-GGUF@10f3b41bcf8d3047f4e136e7197ffc2dd1654c9d",
+    "file": "google_gemma-4-26B-A4B-it-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 26859861728,
+    "source": "unsloth/gemma-4-26B-A4B-it-GGUF@c099eb48e663fd284577b04978a94ffccb261841",
+    "file": "gemma-4-26B-A4B-it-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 50505137824,
+    "source": "unsloth/gemma-4-26B-A4B-it-GGUF@c099eb48e663fd284577b04978a94ffccb261841",
+    "file": "BF16/gemma-4-26B-A4B-it-BF16.gguf"
+   }
+  },
+  "Gemma 4 31b": {
+   "Q4_K_M": {
+    "bytes": 19598489952,
+    "source": "bartowski/google_gemma-4-31B-it-GGUF@619aca7589c72be65dd968de8602ad23d68b5c14",
+    "file": "google_gemma-4-31B-it-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 22608877920,
+    "source": "bartowski/google_gemma-4-31B-it-GGUF@619aca7589c72be65dd968de8602ad23d68b5c14",
+    "file": "google_gemma-4-31B-it-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 26726721888,
+    "source": "bartowski/google_gemma-4-31B-it-GGUF@619aca7589c72be65dd968de8602ad23d68b5c14",
+    "file": "google_gemma-4-31B-it-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 32635677632,
+    "source": "unsloth/gemma-4-31B-it-GGUF@c1ac76e99d5513b141e8adde7288b85c3f9c32ec",
+    "file": "gemma-4-31B-it-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 61413190528,
+    "source": "unsloth/gemma-4-31B-it-GGUF@c1ac76e99d5513b141e8adde7288b85c3f9c32ec",
+    "file": "BF16/gemma-4-31B-it-BF16.gguf"
+   }
+  },
+  "Llama-3.2-3B-Instruct": {
+   "Q4_K_M": {
+    "bytes": 2019377696,
+    "source": "bartowski/Llama-3.2-3B-Instruct-GGUF@5ab33fa94d1d04e903623ae72c95d1696f09f9e8",
+    "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 2322154016,
+    "source": "bartowski/Llama-3.2-3B-Instruct-GGUF@5ab33fa94d1d04e903623ae72c95d1696f09f9e8",
+    "file": "Llama-3.2-3B-Instruct-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 2643853856,
+    "source": "bartowski/Llama-3.2-3B-Instruct-GGUF@5ab33fa94d1d04e903623ae72c95d1696f09f9e8",
+    "file": "Llama-3.2-3B-Instruct-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 3421899296,
+    "source": "bartowski/Llama-3.2-3B-Instruct-GGUF@5ab33fa94d1d04e903623ae72c95d1696f09f9e8",
+    "file": "Llama-3.2-3B-Instruct-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 6433687840,
+    "source": "bartowski/Llama-3.2-3B-Instruct-GGUF@5ab33fa94d1d04e903623ae72c95d1696f09f9e8",
+    "file": "Llama-3.2-3B-Instruct-f16.gguf"
+   }
+  },
+  "Llama-3.1-8B-Instruct": {
+   "Q4_K_M": {
+    "bytes": 4920739232,
+    "source": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF@bf5b95e96dac0462e2a09145ec66cae9a3f12067",
+    "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 5732992416,
+    "source": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF@bf5b95e96dac0462e2a09145ec66cae9a3f12067",
+    "file": "Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 6596011424,
+    "source": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF@bf5b95e96dac0462e2a09145ec66cae9a3f12067",
+    "file": "Meta-Llama-3.1-8B-Instruct-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 8540775840,
+    "source": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF@bf5b95e96dac0462e2a09145ec66cae9a3f12067",
+    "file": "Meta-Llama-3.1-8B-Instruct-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 16068895872,
+    "source": "unsloth/Llama-3.1-8B-Instruct-GGUF@600b0020115fd6b17f0752848fe7b5a1be686bcd",
+    "file": "Llama-3.1-8B-Instruct-BF16.gguf"
+   }
+  },
+  "MiniCPM5-1B": {
+   "Q4_K_M": {
+    "bytes": 688067840,
+    "source": "mradermacher/MiniCPM5-1B-i1-GGUF@f46773fa9ecce4c841197d8235812c4b4d7c4f3d",
+    "file": "MiniCPM5-1B.i1-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 786863360,
+    "source": "mradermacher/MiniCPM5-1B-i1-GGUF@f46773fa9ecce4c841197d8235812c4b4d7c4f3d",
+    "file": "MiniCPM5-1B.i1-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 891833600,
+    "source": "mradermacher/MiniCPM5-1B-i1-GGUF@f46773fa9ecce4c841197d8235812c4b4d7c4f3d",
+    "file": "MiniCPM5-1B.i1-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 1153530880,
+    "source": "mradermacher/MiniCPM5-1B-GGUF@11c839fbffe2191051d7982ae35d4ced601b2df2",
+    "file": "MiniCPM5-1B.Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 2166553600,
+    "source": "mradermacher/MiniCPM5-1B-GGUF@11c839fbffe2191051d7982ae35d4ced601b2df2",
+    "file": "MiniCPM5-1B.f16.gguf"
+   }
+  },
+  "Qwen3-0.6B": {
+   "Q4_K_M": {
+    "bytes": 484220672,
+    "source": "mradermacher/Qwen3-0.6B-i1-GGUF@9f346773450b3b1799c69b0bc592fef664bc5a08",
+    "file": "Qwen3-0.6B.i1-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 551378688,
+    "source": "mradermacher/Qwen3-0.6B-i1-GGUF@9f346773450b3b1799c69b0bc592fef664bc5a08",
+    "file": "Qwen3-0.6B.i1-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 622734080,
+    "source": "mradermacher/Qwen3-0.6B-i1-GGUF@9f346773450b3b1799c69b0bc592fef664bc5a08",
+    "file": "Qwen3-0.6B.i1-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 804753952,
+    "source": "mradermacher/Qwen3-0.6B-GGUF@c78cc72f00bd0d5f2d5d61085874f6c99e683f26",
+    "file": "Qwen3-0.6B.Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 1509347872,
+    "source": "mradermacher/Qwen3-0.6B-GGUF@c78cc72f00bd0d5f2d5d61085874f6c99e683f26",
+    "file": "Qwen3-0.6B.f16.gguf"
+   }
+  },
+  "Qwen3-1.7B": {
+   "Q4_K_M": {
+    "bytes": 1282439936,
+    "source": "mradermacher/Qwen3-1.7B-i1-GGUF@e10adfdeab9376bfc72d0df8a86c98f4a6fa8ab1",
+    "file": "Qwen3-1.7B.i1-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 1471806208,
+    "source": "mradermacher/Qwen3-1.7B-i1-GGUF@e10adfdeab9376bfc72d0df8a86c98f4a6fa8ab1",
+    "file": "Qwen3-1.7B.i1-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 1673007872,
+    "source": "mradermacher/Qwen3-1.7B-i1-GGUF@e10adfdeab9376bfc72d0df8a86c98f4a6fa8ab1",
+    "file": "Qwen3-1.7B.i1-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 2165039648,
+    "source": "mradermacher/Qwen3-1.7B-GGUF@ca6ba1095f054bcecb6580972236774694b6cdb6",
+    "file": "Qwen3-1.7B.Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 4069679648,
+    "source": "mradermacher/Qwen3-1.7B-GGUF@ca6ba1095f054bcecb6580972236774694b6cdb6",
+    "file": "Qwen3-1.7B.f16.gguf"
+   }
+  },
+  "Llama-3.2-1B-Instruct": {
+   "Q4_K_M": {
+    "bytes": 807694464,
+    "source": "bartowski/Llama-3.2-1B-Instruct-GGUF@067b946cf014b7c697f3654f621d577a3e3afd1c",
+    "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 911503488,
+    "source": "bartowski/Llama-3.2-1B-Instruct-GGUF@067b946cf014b7c697f3654f621d577a3e3afd1c",
+    "file": "Llama-3.2-1B-Instruct-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 1021800576,
+    "source": "bartowski/Llama-3.2-1B-Instruct-GGUF@067b946cf014b7c697f3654f621d577a3e3afd1c",
+    "file": "Llama-3.2-1B-Instruct-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 1321083008,
+    "source": "bartowski/Llama-3.2-1B-Instruct-GGUF@067b946cf014b7c697f3654f621d577a3e3afd1c",
+    "file": "Llama-3.2-1B-Instruct-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 2479595360,
+    "source": "bartowski/Llama-3.2-1B-Instruct-GGUF@067b946cf014b7c697f3654f621d577a3e3afd1c",
+    "file": "Llama-3.2-1B-Instruct-f16.gguf"
+   }
+  },
+  "Gemma-3-1B-it": {
+   "Q4_K_M": {
+    "bytes": 806058912,
+    "source": "mradermacher/gemma-3-1b-it-i1-GGUF@6a3a8b02e7dcf533d2d1bb4fb8b73df87c4cb133",
+    "file": "gemma-3-1b-it.i1-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 851346336,
+    "source": "mradermacher/gemma-3-1b-it-i1-GGUF@6a3a8b02e7dcf533d2d1bb4fb8b73df87c4cb133",
+    "file": "gemma-3-1b-it.i1-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 1011739296,
+    "source": "mradermacher/gemma-3-1b-it-i1-GGUF@6a3a8b02e7dcf533d2d1bb4fb8b73df87c4cb133",
+    "file": "gemma-3-1b-it.i1-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 1069306816,
+    "source": "mradermacher/gemma-3-1b-it-GGUF@23c9bb1f93d3c0f224c2910886c111dd12b4d55e",
+    "file": "gemma-3-1b-it.Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 2006574016,
+    "source": "mradermacher/gemma-3-1b-it-GGUF@23c9bb1f93d3c0f224c2910886c111dd12b4d55e",
+    "file": "gemma-3-1b-it.f16.gguf"
+   }
+  },
+  "Hy3": {
+   "Q4_K_M": {
+    "bytes": 182328371648,
+    "source": "AngelSlim/Hy3-GGUF@31b453f4d9b647c74e4c4f5cba632eb512332c91",
+    "file": "Hy3-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 212837857344,
+    "source": "bartowski/Hy3-GGUF@3ee5a3c4d76226edd9cdaec017969d24b589b64e",
+    "file": "Hy3-Q5_K_M/Hy3-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 257246623936,
+    "source": "bartowski/Hy3-GGUF@3ee5a3c4d76226edd9cdaec017969d24b589b64e",
+    "file": "Hy3-Q6_K/Hy3-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 317652367776,
+    "source": "bartowski/Hy3-GGUF@3ee5a3c4d76226edd9cdaec017969d24b589b64e",
+    "file": "Hy3-Q8_0/Hy3-Q8_0.gguf"
+   }
+  },
+  "Qwen 3.8 27B": {
+   "Q4_K_M": {
+    "bytes": 18973870528,
+    "source": "ggml-org/Qwen3.8-27B-GGUF@a316ea527fde32c12487be7574e2db5ac2ad2a7e",
+    "file": "Qwen3.8-27B-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 20923877088,
+    "source": "bartowski/Qwen3.8-27B-GGUF@87410e7b9a5c21e6ca70c0c9cc5237de909fe621",
+    "file": "Qwen3.8-27B-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 23860565728,
+    "source": "bartowski/Qwen3.8-27B-GGUF@87410e7b9a5c21e6ca70c0c9cc5237de909fe621",
+    "file": "Qwen3.8-27B-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 29116388960,
+    "source": "bartowski/Qwen3.8-27B-GGUF@87410e7b9a5c21e6ca70c0c9cc5237de909fe621",
+    "file": "Qwen3.8-27B-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 54657735616,
+    "source": "unsloth/Qwen3.8-27B-GGUF@4ca720788d1e01f1bff70c033e0d0028fd02e502",
+    "file": "BF16/Qwen3.8-27B-BF16.gguf"
+   }
+  },
+  "Qwen 3.8 2.4T-A95B": {
+   "Q8_0": {
+    "bytes": 2600249563264,
+    "source": "unsloth/Qwen3.8-2.4T-A95B-GGUF@567d3e6ac26c5474b18311e619c04350fb9a5556",
+    "file": "Q8_0/Qwen3.8-2.4T-A95B-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 4893172677568,
+    "source": "unsloth/Qwen3.8-2.4T-A95B-GGUF@567d3e6ac26c5474b18311e619c04350fb9a5556",
+    "file": "BF16/Qwen3.8-2.4T-A95B-BF16.gguf"
+   }
+  },
+  "Laguna XS 2.1": {
+   "Q4_K_M": {
+    "bytes": 20548085120,
+    "source": "bartowski/Laguna-XS-2.1-GGUF@8f7579d6ab7d3122716100116cf1a62f490ab6f3",
+    "file": "Laguna-XS-2.1-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 24005035392,
+    "source": "bartowski/Laguna-XS-2.1-GGUF@8f7579d6ab7d3122716100116cf1a62f490ab6f3",
+    "file": "Laguna-XS-2.1-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 29036854144,
+    "source": "bartowski/Laguna-XS-2.1-GGUF@8f7579d6ab7d3122716100116cf1a62f490ab6f3",
+    "file": "Laguna-XS-2.1-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 35597116992,
+    "source": "mradermacher/Laguna-XS-2.1-GGUF@a01ff9c4872b6b0515835083317ae0f251304166",
+    "file": "Laguna-XS-2.1.Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 66930226496,
+    "source": "bartowski/Laguna-XS-2.1-GGUF@8f7579d6ab7d3122716100116cf1a62f490ab6f3",
+    "file": "Laguna-XS-2.1-bf16/Laguna-XS-2.1-bf16.gguf"
+   }
+  },
+  "Laguna S 2.1": {
+   "Q4_K_M": {
+    "bytes": 96031829760,
+    "source": "poolside/Laguna-S-2.1-GGUF@19036076775e9ba6758595f78af99cb976ef8ff0",
+    "file": "laguna-s-2.1-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 83984761120,
+    "source": "bartowski/Laguna-S-2.1-GGUF@66e90acc3ff8d007a084c0360ae6ffcd3ede66e7",
+    "file": "Laguna-S-2.1-Q5_K_M/Laguna-S-2.1-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 101678758400,
+    "source": "bartowski/Laguna-S-2.1-GGUF@66e90acc3ff8d007a084c0360ae6ffcd3ede66e7",
+    "file": "Laguna-S-2.1-Q6_K/Laguna-S-2.1-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 128750823168,
+    "source": "poolside/Laguna-S-2.1-GGUF@19036076775e9ba6758595f78af99cb976ef8ff0",
+    "file": "laguna-s-2.1-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 235202259648,
+    "source": "unsloth/Laguna-S-2.1-GGUF@750f92f90cf54159c4d7a610cb7b3e74498e75c6",
+    "file": "BF16/Laguna-S-2.1-BF16.gguf"
+   }
+  },
+  "Spark-X2.5-4B": {
+   "Q4_K_M": {
+    "bytes": 2600224736,
+    "source": "mradermacher/Spark-X2.5-4B-i1-GGUF@b4a73b579b524ec744a80ae6eb277d7c40e78ce4",
+    "file": "Spark-X2.5-4B.i1-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 2977896416,
+    "source": "mradermacher/Spark-X2.5-4B-i1-GGUF@b4a73b579b524ec744a80ae6eb277d7c40e78ce4",
+    "file": "Spark-X2.5-4B.i1-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 3379172576,
+    "source": "mradermacher/Spark-X2.5-4B-i1-GGUF@b4a73b579b524ec744a80ae6eb277d7c40e78ce4",
+    "file": "Spark-X2.5-4B.i1-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 4375021280,
+    "source": "mradermacher/Spark-X2.5-4B-GGUF@d1751e1278ac500e657ac9e37b4e0ffca5e8f796",
+    "file": "Spark-X2.5-4B.Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 8229920480,
+    "source": "mradermacher/Spark-X2.5-4B-GGUF@d1751e1278ac500e657ac9e37b4e0ffca5e8f796",
+    "file": "Spark-X2.5-4B.f16.gguf"
+   }
+  },
+  "Granite-4.2-30B": {
+   "Q4_K_M": {
+    "bytes": 18027639840,
+    "source": "bartowski/granite-4.2-30b-GGUF@1847d3b70241af9d656f382a4cf29d5c6573e584",
+    "file": "granite-4.2-30b-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 21025518624,
+    "source": "bartowski/granite-4.2-30b-GGUF@1847d3b70241af9d656f382a4cf29d5c6573e584",
+    "file": "granite-4.2-30b-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 24508953632,
+    "source": "bartowski/granite-4.2-30b-GGUF@1847d3b70241af9d656f382a4cf29d5c6573e584",
+    "file": "granite-4.2-30b-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 31111705760,
+    "source": "mradermacher/granite-4.2-30b-GGUF@e3203ef38d2bf33a0d5b2d984652afef6c3af936",
+    "file": "granite-4.2-30b.Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 58558182336,
+    "source": "ibm-granite/granite-4.2-30b-GGUF@27b350a791e81d9a4d1ddca1c49282e9ec533768",
+    "file": "granite-4.2-30b-bf16.gguf"
+   }
+  },
+  "GLM-5.3": {
+   "Q8_0": {
+    "bytes": 801357677216,
+    "source": "unsloth/GLM-5.3-GGUF@346b3591c7f28d1a23716f97a065ecf12ec14771",
+    "file": "Q8_0/GLM-5.3-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 1507988027936,
+    "source": "unsloth/GLM-5.3-GGUF@346b3591c7f28d1a23716f97a065ecf12ec14771",
+    "file": "BF16/GLM-5.3-BF16.gguf"
+   }
+  },
+  "MiniCPM5-2B": {
+   "Q4_K_M": {
+    "bytes": 1615826144,
+    "source": "bartowski/MiniCPM5-2B-GGUF@31fee0334c4ed9f1e079afe586ba30cb83e0f883",
+    "file": "MiniCPM5-2B-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 1920175328,
+    "source": "bartowski/MiniCPM5-2B-GGUF@31fee0334c4ed9f1e079afe586ba30cb83e0f883",
+    "file": "MiniCPM5-2B-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 2107305184,
+    "source": "bartowski/MiniCPM5-2B-GGUF@31fee0334c4ed9f1e079afe586ba30cb83e0f883",
+    "file": "MiniCPM5-2B-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 2679713152,
+    "source": "mradermacher/MiniCPM5-2B-GGUF@1defcfa1437eb604050ce5be06f18b240155545f",
+    "file": "MiniCPM5-2B.Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 5039009152,
+    "source": "mradermacher/MiniCPM5-2B-GGUF@1defcfa1437eb604050ce5be06f18b240155545f",
+    "file": "MiniCPM5-2B.f16.gguf"
+   }
+  },
+  "Nex-N2.5-mini": {
+   "Q4_K_M": {
+    "bytes": 22318512256,
+    "source": "bartowski/nex-agi_Nex-N2.5-mini-GGUF@0048da1ad2ad33fdcf8b24bc12185cdebfe459d6",
+    "file": "nex-agi_Nex-N2.5-mini-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 26984675456,
+    "source": "bartowski/nex-agi_Nex-N2.5-mini-GGUF@0048da1ad2ad33fdcf8b24bc12185cdebfe459d6",
+    "file": "nex-agi_Nex-N2.5-mini-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 29373331584,
+    "source": "bartowski/nex-agi_Nex-N2.5-mini-GGUF@0048da1ad2ad33fdcf8b24bc12185cdebfe459d6",
+    "file": "nex-agi_Nex-N2.5-mini-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 36914690176,
+    "source": "bartowski/nex-agi_Nex-N2.5-mini-GGUF@0048da1ad2ad33fdcf8b24bc12185cdebfe459d6",
+    "file": "nex-agi_Nex-N2.5-mini-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 69376636960,
+    "source": "bartowski/nex-agi_Nex-N2.5-mini-GGUF@0048da1ad2ad33fdcf8b24bc12185cdebfe459d6",
+    "file": "nex-agi_Nex-N2.5-mini-bf16/nex-agi_Nex-N2.5-mini-bf16.gguf"
+   }
+  },
+  "Nex-N2.5-Pro": {
+   "Q4_K_M": {
+    "bytes": 250834941920,
+    "source": "bartowski/Nex-N2.5-Pro-GGUF@f7c3c07945cf420f149226c010e10b1343f5d149",
+    "file": "Nex-N2.5-Pro-Q4_K_M/Nex-N2.5-Pro-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 305612552288,
+    "source": "bartowski/Nex-N2.5-Pro-GGUF@f7c3c07945cf420f149226c010e10b1343f5d149",
+    "file": "Nex-N2.5-Pro-Q5_K_M/Nex-N2.5-Pro-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 349803739360,
+    "source": "bartowski/Nex-N2.5-Pro-GGUF@f7c3c07945cf420f149226c010e10b1343f5d149",
+    "file": "Nex-N2.5-Pro-Q6_K/Nex-N2.5-Pro-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 421576669344,
+    "source": "bartowski/Nex-N2.5-Pro-GGUF@f7c3c07945cf420f149226c010e10b1343f5d149",
+    "file": "Nex-N2.5-Pro-Q8_0/Nex-N2.5-Pro-Q8_0.gguf"
+   }
+  },
+  "Muse Spark Open": {
+   "Q8_0": {
+    "bytes": 871648188873,
+    "source": "ggml-org/Muse-Spark-Open-816B-A42B-GGUF@ada96652107984f184027153a77ec250d67ed271",
+    "file": "Muse-Spark-Open-816B-A42B-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 1640264556374,
+    "source": "ggml-org/Muse-Spark-Open-816B-A42B-GGUF@ada96652107984f184027153a77ec250d67ed271",
+    "file": "Muse-Spark-Open-816B-A42B-BF16.gguf"
+   }
+  }
+ },
+ "pleResidentMax": {
+  "Gemma 4 e2b": {
+   "Q4_K_M": {
+    "bytes": 1535921632,
+    "fileBytes": 3462680032,
+    "perLayerTokenEmbdBytes": 1926758400,
+    "source": "bartowski/google_gemma-4-E2B-it-GGUF@81012ba3538e061d5ee003f11f25335b17f82e2d",
+    "file": "google_gemma-4-E2B-it-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 1741230176,
+    "fileBytes": 3356037216,
+    "perLayerTokenEmbdBytes": 1614807040,
+    "source": "unsloth/gemma-4-E2B-it-GGUF@0314792d7f1f7e229411f620751375812bb9faf2",
+    "file": "gemma-4-E2B-it-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 2006110304,
+    "fileBytes": 4501721184,
+    "perLayerTokenEmbdBytes": 2495610880,
+    "source": "unsloth/gemma-4-E2B-it-GGUF@0314792d7f1f7e229411f620751375812bb9faf2",
+    "file": "gemma-4-E2B-it-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 2552741984,
+    "fileBytes": 5048352864,
+    "perLayerTokenEmbdBytes": 2495610880,
+    "source": "unsloth/gemma-4-E2B-it-GGUF@0314792d7f1f7e229411f620751375812bb9faf2",
+    "file": "gemma-4-E2B-it-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 4613685088,
+    "fileBytes": 9311305568,
+    "perLayerTokenEmbdBytes": 4697620480,
+    "source": "unsloth/gemma-4-E2B-it-GGUF@0314792d7f1f7e229411f620751375812bb9faf2",
+    "file": "gemma-4-E2B-it-BF16.gguf"
+   }
+  },
+  "Gemma 4 e4b": {
+   "Q4_K_M": {
+    "bytes": 3093060064,
+    "fileBytes": 5405170144,
+    "perLayerTokenEmbdBytes": 2312110080,
+    "source": "bartowski/google_gemma-4-E4B-it-GGUF@029e94146666900b08caf49a3b47b413dfa8ec66",
+    "file": "google_gemma-4-E4B-it-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 3544030336,
+    "fileBytes": 5481798784,
+    "perLayerTokenEmbdBytes": 1937768448,
+    "source": "unsloth/gemma-4-E4B-it-GGUF@bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+    "file": "gemma-4-E4B-it-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 4080196736,
+    "fileBytes": 7074929792,
+    "perLayerTokenEmbdBytes": 2994733056,
+    "source": "unsloth/gemma-4-E4B-it-GGUF@bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+    "file": "gemma-4-E4B-it-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 5198220416,
+    "fileBytes": 8192953472,
+    "perLayerTokenEmbdBytes": 2994733056,
+    "source": "unsloth/gemma-4-E4B-it-GGUF@bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+    "file": "gemma-4-E4B-it-Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 9415953280,
+    "fileBytes": 15053097856,
+    "perLayerTokenEmbdBytes": 5637144576,
+    "source": "unsloth/gemma-4-E4B-it-GGUF@bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+    "file": "gemma-4-E4B-it-BF16.gguf"
+   }
+  }
+ },
+ "pleResidentMethod": "file bytes minus the per_layer_token_embd tensor bytes read from the GGUF header (HTTP range), max over the reference files of the tier"
+}

@@ -16,8 +16,9 @@ test('fits case exits 0 with verdict json', () => {
 });
 
 test('--why --json exposes an auditable basis that matches the legacy result', () => {
-  const legacy = JSON.parse(run(['Gemma 4 31b', '--gpu', 'RTX 4090', '--json']).out);
-  const { out, code } = run(['Gemma 4 31b', '--gpu', 'RTX 4090', '--json', '--why']);
+  // 4090 24GB는 공개 GGUF 하한(bartowski Q4_K_M 18.25 GiB) 뒤로 8K에서 24.31/24 — 안 들어가므로 32GB 카드로 본다
+  const legacy = JSON.parse(run(['Gemma 4 31b', '--gpu', 'RTX 5090', '--json']).out);
+  const { out, code } = run(['Gemma 4 31b', '--gpu', 'RTX 5090', '--json', '--why']);
   assert.equal(code, 0);
   const explained = JSON.parse(out);
   assert.deepEqual(Object.keys(explained).sort(), [...Object.keys(legacy), 'basis'].sort());
