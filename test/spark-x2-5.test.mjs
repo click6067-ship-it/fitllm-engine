@@ -251,14 +251,14 @@ test('test_census_contains_spark_rows', () => {
 test('test_release_version_and_readme_counts', () => {
   const pkg = readJson('../package.json');
   const lock = readJson('../package-lock.json');
-  assert.equal(pkg.version, '2.21.4');
-  assert.equal(lock.version, '2.21.4');
-  assert.equal(lock.packages[''].version, '2.21.4');
-  assert.equal(ENGINE_VERSION, '2.21.4');
+  assert.equal(pkg.version, '2.21.5');
+  assert.equal(lock.version, '2.21.5');
+  assert.equal(lock.packages[''].version, '2.21.5');
+  assert.equal(ENGINE_VERSION, '2.21.5');
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   const agents = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
   const verdicts = `${readJson('../census/manifest.json').rows.toLocaleString('en-US')} verdicts`; // 산출물에서 유도
-  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.21.4', 'conformance_vectors-49%2F49', '49 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
+  for (const s of ['uses: click6067-ship-it/fitllm-engine@v2.21.5', 'conformance_vectors-49%2F49', '49 language-neutral', verdicts, `${LOCAL_MODELS.length} models incl. draft tier`]) {
     assert.ok(readme.includes(s), `README missing: ${s}`);
   }
   for (const s of [verdicts, '49 byte-exact anchors']) assert.ok(agents.includes(s), `AGENTS missing: ${s}`);
