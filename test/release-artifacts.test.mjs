@@ -100,7 +100,7 @@ test('census counts, date, schema, URLs, licence boundary and checksums are deri
   const devices = GPUS.length + macConfigs;
   const rowsPerModel = GPUS.length * GPU_QUANTS.length + macConfigs * 3;
   const rows = LOCAL_MODELS.length * rowsPerModel;
-  assert.equal(LOCAL_MODELS.length, 34);
+  assert.equal(LOCAL_MODELS.length, 35);
   assert.equal(devices, 104);
   assert.equal(census.version, 1);
   assert.equal(census.schema_version, 2);

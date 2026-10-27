@@ -167,11 +167,11 @@ test('test_catalog_append_index_and_group_order_stable', () => {
   ];
   // ?m= 공유링크 인덱스 0–25 불변, Granite는 2.14.0 시점 배열 끝 append(MODELS 인덱스 26) — 이후 모델이 뒤에 붙어도 이 인덱스는 불변
   assert.deepEqual(MODELS.slice(0, BASE_NAMES.length).map((m) => m.name), BASE_NAMES);
-  assert.equal(MODELS.length, BASE_NAMES.length + 10); // GLM-5.3(27) + 2026-09-14 배치 4종 + 2.21.0 DeepSeek-V4 3종·Muse
+  assert.equal(MODELS.length, BASE_NAMES.length + 11); // GLM-5.3(27) + 2026-09-14 배치 4종 + 2.21.0 DeepSeek-V4 3종·Muse + Spark-X2.6-4B
   assert.equal(MODELS[BASE_NAMES.length].name, 'Granite-4.2-30B');
   assert.equal(LOCAL_MODELS[25].name, 'Granite-4.2-30B'); // ?m=25
   assert.equal(MODELS.filter((m) => /granite/i.test(m.name)).length, 1); // 3B/8B 형제·base 모델은 이번 변경에 넣지 않는다
-  assert.equal(LOCAL_MODELS.length, 34); // 27(2.15.0) + 2026-09-14 로컬 3종 + 2.21.0 4종 — 앞 27개는 그대로
+  assert.equal(LOCAL_MODELS.length, 35); // 27(2.15.0) + 2026-09-14 로컬 3종 + 2.21.0 4종 + Spark-X2.6-4B — 앞 27개는 그대로
   // 기존 그룹의 상대 순서 불변 + Granite 그룹 등재(신규 그룹은 앞 — Spark 전례)
   const BASE_ORDER = ['Spark', 'Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5', 'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft'];
   assert.deepEqual(MODEL_GROUP_ORDER.filter((g) => !['Granite', 'Nex', 'DeepSeek', 'Muse'].includes(g)), BASE_ORDER);
@@ -249,7 +249,7 @@ test('test_census_contains_granite_rows', () => {
   const manifest = readJson('../census/manifest.json');
   const rows = census.data.filter((r) => r.model === 'Granite-4.2-30B');
   assert.equal(rows.length, 57 * 3 + 47 * 5); // Mac 57구성 × 3 tiers + GPU 47종 × 5 tiers = 406 rows/model (2.19.0: GPU 9행, 2.20.0: GB10 클러스터 2행)
-  const total = LOCAL_MODELS.length * (57 * 3 + 47 * 5); // 34 × 406 = 13,804 (2.21.0: DeepSeek-V4 3종·Muse)
+  const total = LOCAL_MODELS.length * (57 * 3 + 47 * 5); // 35 × 406 = 14,210 (Spark-X2.6-4B)
   assert.equal(census.verdicts, total);
   assert.equal(census.data.length, total);
   assert.equal(manifest.rows, total);

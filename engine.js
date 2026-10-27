@@ -534,8 +534,10 @@ export const MODELS = [
     maxContext: 1048576, // config max_position_embeddings — 모델카드 "native context windows of up to 1M tokens"
     benchmarks: null,    // 카드 표의 "GPQA"는 Diamond 명시·체크포인트 귀속이 없고 MMLU-Pro 미공표 → 미기입(엔진 원칙: 공개·검증된 것만)
     // 공개 GGUF 하한(ggufFileFloorBytes · HF 파일 목록 2026-10-23 조회 · 분할 파일 합) — 공식보다 1% 넘게 큰 단계만:
-    //   Q4_K_M·Q5_K_M mradermacher/Spark-X2.5-4B-i1-GGUF@b4a73b579b524ec744a80ae6eb277d7c40e78ce4
-    ggufFileBytes: { Q4_K_M: 2600224736, Q5_K_M: 2977896416 },
+    //   Q4_K_M·Q5_K_M mradermacher/Spark-X2.5-4B-i1-GGUF@b4a73b579b524ec744a80ae6eb277d7c40e78ce4 (2,600,224,736 · 2,977,896,416)
+    // 2026-10-27: Spark-X2.6-4B와 텐서 목록(ggufFileSource)이 같아 단계마다 두 행의 큰 쪽을 함께 쓴다(Qwen 3.6/3.8 27B와 같은 규칙) —
+    //   세 단계 모두 X2.6 파일이 크다(출처는 그 행 주석: Q4_K_M 공식 XHToken · Q5_K_M·Q6_K bartowski).
+    ggufFileBytes: { Q4_K_M: 3543441312, Q5_K_M: 3164766848, Q6_K: 3611148928 },
     ggufFileSource: { parameters: { BF16: 4112079360 }, config: { num_hidden_layers: 36, hidden_size: 2560, intermediate_size: 10240, num_attention_heads: 16, num_key_value_heads: 4, head_dim: 256, vocab_size: 131072, tie_word_embeddings: true } }, // XHToken/Spark-X2.5-4B@0bcb356
     desc: 'Dense · 4.1B · 36레이어 · GQA(16/4, head_dim 256) · 슬라이딩512(3:1, full 9/36) · 최대 1M · Apache 2.0',
   },
@@ -840,6 +842,44 @@ export const MODELS = [
     slidingWindow: 2048, slidingPattern: '23:8', globalAttnLayers: 16, // layer_types: sliding 46 : full 16
     benchmarks: null,
     desc: 'MoE · 822B(비전·오디오 포함) / 42B active · 256 experts(top-8) · GQA 128/16 · 슬라이딩 2048(full 16/62) · 최대 1M',
+  },
+  // ==========================================================================
+  //  Spark-X2.6-4B (XHToken) — 2026-10-19 공개, Day-0 #173(지시형)·#172(Base). 신규 수학 없음: Spark-X2.5-4B와 구조가 바이트 단위로 같다.
+  //  1차 출처(지시형 pinned 66e3ae7bee54e0a523d692cb8ef841f35409807b · Base pinned e1bd659ae2b1c2263b2fc2544485976c1b516115):
+  //   config.json  https://huggingface.co/XHToken/Spark-X2.6-4B/blob/66e3ae7bee54e0a523d692cb8ef841f35409807b/config.json
+  //   modeling     https://huggingface.co/XHToken/Spark-X2.6-4B/blob/66e3ae7bee54e0a523d692cb8ef841f35409807b/modeling_spark.py
+  //   index        https://huggingface.co/XHToken/Spark-X2.6-4B/blob/66e3ae7bee54e0a523d692cb8ef841f35409807b/model.safetensors.index.json
+  //   HF API       https://huggingface.co/api/models/XHToken/Spark-X2.6-4B/revision/66e3ae7bee54e0a523d692cb8ef841f35409807b
+  //  X2.5@5e10fcc · X2.6@66e3ae7 · X2.6-Base@e1bd659 세 리비전에서 config.json(sha256 767161ec…)과 modeling_spark.py(sha256 9cf0d1ad…)가
+  //  바이트 동일하고, index total_size 8,224,158,720 · total_parameters 4,112,079,360 · HF API safetensors BF16 4,112,079,360도 같다
+  //  → 아래 구조 값과 ggufFileSource는 Spark-X2.5-4B 행과 같다(손계산은 그 행 주석). Base는 같은 텐서 목록이라 별칭으로 이 행에 붙인다.
+  //  라이선스 Apache-2.0(모델카드). 벤치 미기입(X2.5와 같은 이유).
+  // ==========================================================================
+  {
+    name: 'Spark-X2.6-4B',
+    group: 'Spark',
+    added: '2026-10-27',
+    tags: ['dense'],
+    aliases: ['XHToken/Spark-X2.6-4B', 'Spark-X2.6-4B-Base', 'XHToken/Spark-X2.6-4B-Base'],
+    totalParams: 4.112, // 4,112,079,360
+    activeParams: 4.112,
+    layerCount: 36,
+    globalAttnLayers: 9,
+    slidingWindow: 512,
+    slidingPattern: '3:1',
+    kvHeads: 4,
+    kvHeadDim: 256,
+    attnHeads: 16,
+    hiddenSize: 2560,
+    maxContext: 1048576,
+    benchmarks: null,
+    // 공개 GGUF 하한(HF 파일 목록 2026-10-27 조회) — 공식 단계 평균보다 1% 넘게 큰 단계만. X2.5와 텐서 목록은 같지만 배포 파일이 다르다:
+    //   Q4_K_M XHToken/Spark-X2.6-4B-GGUF@83b47fda018fd14f51aa63341f78266f628af5a5 — 헤더 실측 file_type 15(Q4_K_M)인데 token_embd BF16 ·
+    //          output Q8_0 별도 · attn_output Q8_0(공식 X2.5 Q4_K_M 2,600,224,352 B는 표준 레시피). 같은 단계 mradermacher·bartowski는 2.60·2.62 GB.
+    //   Q5_K_M·Q6_K bartowski/Spark-X2.6-4B-GGUF@17682e38297a4510899b12a95ab3d8dcebc674e5
+    ggufFileBytes: { Q4_K_M: 3543441312, Q5_K_M: 3164766848, Q6_K: 3611148928 },
+    ggufFileSource: { parameters: { BF16: 4112079360 }, config: { num_hidden_layers: 36, hidden_size: 2560, intermediate_size: 10240, num_attention_heads: 16, num_key_value_heads: 4, head_dim: 256, vocab_size: 131072, tie_word_embeddings: true } }, // XHToken/Spark-X2.6-4B@66e3ae7
+    desc: 'Dense · 4.1B · 36레이어 · GQA(16/4, head_dim 256) · 슬라이딩512(3:1, full 9/36) · 최대 1M · Apache 2.0',
   },
 ];
 

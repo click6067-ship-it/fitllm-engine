@@ -195,11 +195,11 @@ test('test_catalog_append_index_and_group_order_stable', () => {
   ];
   // ?m= 공유링크 인덱스 0–24 불변, Spark는 배열 끝 append(인덱스 25)
   assert.deepEqual(MODELS.slice(0, BASE_NAMES.length).map((m) => m.name), BASE_NAMES);
-  assert.equal(MODELS.length, BASE_NAMES.length + 11); // Granite(26) + GLM-5.3(27) + 2026-09-14 배치 4종(MiniCPM5-2B · Opus 5 · Nex mini · Nex Pro) + 2.21.0 4종
+  assert.equal(MODELS.length, BASE_NAMES.length + 12); // Granite(26) + GLM-5.3(27) + 2026-09-14 배치 4종(MiniCPM5-2B · Opus 5 · Nex mini · Nex Pro) + 2.21.0 4종 + Spark-X2.6-4B
   assert.equal(MODELS[BASE_NAMES.length].name, 'Spark-X2.5-4B');
   assert.equal(LOCAL_MODELS[24].name, 'Spark-X2.5-4B'); // ?m=24 불변
-  assert.equal(MODELS.filter((m) => m.group === 'Spark').length, 1); // 1.7B sibling은 이번 변경에 넣지 않는다(Muse Spark Open은 다른 계열)
-  assert.equal(LOCAL_MODELS.length, 34); // 27(2.15.0) + 2026-09-14 로컬 3종 + 2.21.0 4종
+  assert.deepEqual(MODELS.filter((m) => m.group === 'Spark').map((m) => m.name), ['Spark-X2.5-4B', 'Spark-X2.6-4B']); // 1.7B sibling은 없다(Muse Spark Open은 다른 계열)
+  assert.equal(LOCAL_MODELS.length, 35); // 27(2.15.0) + 2026-09-14 로컬 3종 + 2.21.0 4종 + Spark-X2.6-4B
   // 기존 그룹의 상대 순서 불변 + Spark 그룹 등재
   const BASE_ORDER = ['Qwen 3.8', 'Laguna', 'GLM', 'gpt-oss', 'Qwen 3.6', 'Qwen3.5', 'Hunyuan', 'Gemma 4', 'Llama', 'MiniCPM', 'Draft'];
   assert.deepEqual(MODEL_GROUP_ORDER.filter((g) => !['Spark', 'Granite', 'Nex', 'DeepSeek', 'Muse'].includes(g)), BASE_ORDER);
@@ -210,7 +210,7 @@ test('test_catalog_append_index_and_group_order_stable', () => {
   // 2.21.0: 'spark' 한 단어는 Muse Spark Open과 갈린다 — 고르지 않고 두 후보를 돌려준다(GLM-5.3 추가 때 'glm 5'와 같은 규칙)
   const spark = resolveLocalModel('spark');
   assert.equal(spark.status, 'ambiguous');
-  assert.deepEqual(spark.candidates.map((c) => c.name).sort(), ['Muse Spark Open', 'Spark-X2.5-4B']);
+  assert.deepEqual(spark.candidates.map((c) => c.name).sort(), ['Muse Spark Open', 'Spark-X2.5-4B', 'Spark-X2.6-4B']);
   assert.equal(resolveLocalModel('spark x2.5').match.name, 'Spark-X2.5-4B');
 });
 
@@ -241,7 +241,7 @@ test('test_census_contains_spark_rows', () => {
   const manifest = readJson('../census/manifest.json');
   const sparkRows = census.data.filter((r) => r.model === 'Spark-X2.5-4B');
   assert.equal(sparkRows.length, 57 * 3 + 47 * 5); // Mac 57구성 × 3 tiers + GPU 47종 × 5 tiers = 406 rows/model
-  const total = LOCAL_MODELS.length * (57 * 3 + 47 * 5); // 34 × 406 = 13,804 (2.21.0: DeepSeek-V4 3종·Muse)
+  const total = LOCAL_MODELS.length * (57 * 3 + 47 * 5); // 35 × 406 = 14,210 (Spark-X2.6-4B)
   assert.equal(census.verdicts, total);
   assert.equal(census.data.length, total);
   assert.equal(manifest.rows, total);

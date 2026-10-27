@@ -1,5 +1,5 @@
 // 공개 GGUF 하한(ggufFileBytes) — 단계 평균 bpw 공식이 실제 공개 파일보다 작아 "들어간다"고 잘못 답하던 부류(2026-10-23 전수 조사).
-// 픽스처 = 카탈로그 34개 × 5단계의 기준 파일 중 가장 큰 것(HF 파일 목록 ?blobs=true, 리비전 고정) + Gemma 4 e2b·e4b GGUF 헤더에서 읽은
+// 픽스처 = 카탈로그 35개 × 5단계의 기준 파일 중 가장 큰 것(HF 파일 목록 ?blobs=true, 리비전 고정) + Gemma 4 e2b·e4b GGUF 헤더에서 읽은
 // per_layer_token_embd 바이트. 기준 배포자·제외 규칙은 픽스처 method와 engine.js ggufFileFloorBytes 주석에 있다.
 // 출시 FP4 전문가 행(gpt-oss · DeepSeek-V4)은 native-fp4.test.mjs가 맡는다.
 import test from 'node:test';
@@ -39,7 +39,7 @@ test('every reference GGUF is at most 1% above the engine weights of its tier (G
       checked++;
     }
   }
-  assert.equal(checked, 128);
+  assert.equal(checked, 133); // 2026-10-27 Spark-X2.6-4B 5단계
 });
 
 test('a floor is stored only where the tier average is more than 1% short, and then the weights equal it exactly', () => {
@@ -55,7 +55,7 @@ test('a floor is stored only where the tier average is more than 1% short, and t
       floors++;
     }
   }
-  assert.equal(floors, 61);
+  assert.equal(floors, 65); // 2026-10-27: Spark-X2.6-4B 3단계 + 같은 텐서 목록인 Spark-X2.5-4B Q6_K
 });
 
 test('rows that share a tensor list share the same floors (Qwen 3.6 27B · Qwen 3.8 27B)', () => {
@@ -65,7 +65,12 @@ test('rows that share a tensor list share the same floors (Qwen 3.6 27B · Qwen 
   assert.deepEqual(a.ggufFileBytes, b.ggufFileBytes);
   const sources = LOCAL_MODELS.filter((m) => m.ggufFileSource).map((m) => JSON.stringify(m.ggufFileSource));
   const dupes = sources.filter((s, i) => sources.indexOf(s) !== i);
-  assert.equal(dupes.length, 1, 'only the Qwen 27B pair shares a tensor list');
+  assert.equal(dupes.length, 2, 'only the Qwen 27B pair and the Spark 4B pair share a tensor list');
+  // Spark X2.5 · X2.6 — 배포 파일은 달라도(X2.6 공식 Q4_K_M은 BF16 임베딩) 텐서 목록이 같아 큰 쪽을 함께 쓴다
+  const x25 = byName('Spark-X2.5-4B');
+  const x26 = byName('Spark-X2.6-4B');
+  assert.deepEqual(x25.ggufFileSource, x26.ggufFileSource);
+  assert.deepEqual(x25.ggufFileBytes, x26.ggufFileBytes);
 });
 
 test('PLE rows: on a discrete GPU the resident weights stay above every reference file minus its per_layer_token_embd', () => {
