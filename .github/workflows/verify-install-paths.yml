@@ -45,16 +45,19 @@ jobs:
       - name: The binary runs and the verdict is the expected one
         run: |
           set -eux
-          out="$(fitllm 'Gemma 4 31b' --gpu 'RTX 4090' || true)"
+          out="$(fitllm 'Granite-4.2-30B' --gpu 'RTX 4090' || true)"
           printf '%s\n' "$out"
-          # 24GB 카드에 31B dense 는 빠듯하다 — 이 판정이 바뀌면 배포된 엔진이 우리 것이 아니다.
+          # 24GB 카드에 30B dense 는 빠듯하다 — 이 판정이 바뀌면 배포된 엔진이 우리 것이 아니다.
+          # 같은 조합을 test/granite-4-2-30b.test.mjs 가 TIGHT·exit 0 으로 고정한다: 판정을 일부러
+          # 바꾸는 릴리스는 거기서 먼저 걸린다(2.21.5 에서 Gemma 4 31b 4090 이 공개 GGUF 크기로
+          # 안 들어감이 된 것을 이 주간 검사가 사흘 뒤에야 잡았다).
           printf '%s' "$out" | grep -q 'TIGHT'
-          printf '%s' "$out" | grep -q 'Gemma 4 31b'
+          printf '%s' "$out" | grep -q 'Granite-4.2-30B'
 
       - name: Exit contract still holds (0 fits/tight, 1 will not fit)
         run: |
           set -eu
-          fitllm 'Gemma 4 31b' --gpu 'RTX 4090' >/dev/null
+          fitllm 'Granite-4.2-30B' --gpu 'RTX 4090' >/dev/null
           echo "tight exited 0"
           if fitllm 'Qwen 3.8 2.4T-A95B' --gpu 'RTX 4090' >/dev/null; then
             echo "expected a non-zero exit for a model that cannot fit" >&2
