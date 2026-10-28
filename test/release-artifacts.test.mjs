@@ -6,8 +6,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { ENGINE_VERSION, GPUS, GPU_QUANTS, LOCAL_MODELS, MACBOOK_RAM_GROUPS } from '../engine.js';
 
-const RELEASE_VERSION = '2.21.5';
-const RELEASE_DATE = '2026-10-23'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — 출시 FP4 전문가 상한(gpt-oss·DeepSeek-V4)으로 재생성(CENSUS_DATE 고정). 버전 올림은 릴리스 단계 몫
+const RELEASE_VERSION = '2.22.0';
+const RELEASE_DATE = '2026-10-28'; // census generate.mjs 는 UTC 기준(new Date().toISOString()) — 2.22.0 출시 UTC 날짜로 재생성(Spark-X2.6-4B 새 행, X2.5 GGUF 하한 공유)
 const url = (rel) => new URL(`../${rel}`, import.meta.url);
 const read = (rel) => readFileSync(url(rel), 'utf8');
 const readJson = (rel) => JSON.parse(read(rel));
@@ -24,7 +24,7 @@ const sha256 = (rel) => createHash('sha256').update(readFileSync(url(rel))).dige
 const VECTORS_JSON_SHA256 = 'df9ae4f06df1055ad8bf66febfea4a795b7b0b7d6cab1619aa7e750e2fafe7f4';
 const VECTORS_RUNNER_SHA256 = '08692a4704ed9fcabdb9cd796568401538c291aaf20f7f7504026181c6e3ef7b';
 
-test('release version surfaces agree on 2.21.5 and the package contract is unchanged', () => {
+test('release version surfaces agree on 2.22.0 and the package contract is unchanged', () => {
   const pkg = readJson('package.json');
   const lock = readJson('package-lock.json');
   assert.equal(pkg.version, RELEASE_VERSION);
