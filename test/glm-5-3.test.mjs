@@ -132,9 +132,9 @@ test('AC1_identity: GLM-5.3 resolves across spellings; GLM-5.2 and ambiguous rul
 
 test('AC2_append_only_index: 0..25 stay exact, GLM-5.3 is last (26/27), and the MODELS cloud slot is unchanged', () => {
   PINNED_INDEX.forEach((name, i) => assert.equal(LOCAL_MODELS[i]?.name, name, `?m=${i}`));
-  assert.equal(LOCAL_MODELS.length, 34); // 2.21.0: DeepSeek-V4 3종 + Muse Spark Open
+  assert.equal(LOCAL_MODELS.length, 35); // 2.21.0: DeepSeek-V4 3종 + Muse Spark Open · Spark-X2.6-4B
   assert.equal(LOCAL_MODELS[26]?.name, 'GLM-5.3');
-  assert.equal(MODELS.length, 36);
+  assert.equal(MODELS.length, 37);
   assert.equal(MODELS[27]?.name, 'GLM-5.3'); // 2026-09-14 배치가 뒤에 붙어 '마지막'은 아니지만 인덱스는 영구 고정
   matchObject(MODELS[19], { name: 'Claude Opus 4.7', isCloud: true });
   assert.equal(MODELS.filter((m) => m.name === 'GLM-5.3').length, 1);
@@ -266,7 +266,7 @@ test('AC9_dropdown_grouping: GLM group = [4.7-Flash, 5.2, 5.3], group order unch
   assert.deepEqual(groups.find((g) => g.group === 'GLM').items.map((m) => m.name), ['GLM-4.7-Flash', 'GLM-5.2', 'GLM-5.3']);
   assert.deepEqual(groups.slice(0, 8).map((g) => g.group), ['DeepSeek', 'Muse', 'Nex', 'Granite', 'Spark', 'Qwen 3.8', 'Laguna', 'GLM']);
   const flat = groups.flatMap((g) => g.items);
-  assert.equal(flat.length, 34);
+  assert.equal(flat.length, 35);
   for (const m of flat) assert.ok(LOCAL_MODELS.indexOf(m) >= 0);
 });
 

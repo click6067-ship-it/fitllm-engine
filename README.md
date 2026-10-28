@@ -125,7 +125,7 @@ permissions:
 steps:
   - name: Check model memory before download
     id: preflight
-    uses: click6067-ship-it/fitllm-engine@v2.21.5
+    uses: click6067-ship-it/fitllm-engine@v2.22.0
     with:
       model: Gemma 4 12b
       gpu: RTX 4090
@@ -302,7 +302,7 @@ All figures are estimates — real usage varies with the runtime (MLX/Ollama/lla
 
 ## The Fit Census — every model × every device, one truth table
 
-[`census/`](census/README.md) holds **13,804 verdicts** (34 models incl. draft tier × 104 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
+[`census/`](census/README.md) holds **14,210 verdicts** (35 models incl. draft tier × 104 GPUs/Macs × quant tiers) computed by this engine — as CSV/JSON you can import, chart or cite, plus a starter matrix ("biggest model that fits comfortably per device"). Regenerate it yourself: `npm run census`. Real-world measurements land next to predictions via [`fixtures/`](fixtures/README.md) PRs — **predicted vs. measured, in public.**
 
 ## Embed a fit badge
 
@@ -340,7 +340,7 @@ curl 'https://fitllm.run/api/check?model=gemma%204%2031b&gpu=4090'
 # multi-GPU rigs: gpu=5090%2B3090 · Mac: ram=64 · usage: curl https://fitllm.run/api/check
 ```
 
-Open data: the full **Fit Census** (13,804 verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
+Open data: the full **Fit Census** (14,210 verdicts, **CC0**) at [fitllm.run/data](https://fitllm.run/data) and on [Hugging Face Datasets](https://huggingface.co/datasets/click6067/fitllm-fit-census). Try the engine in-browser: [HF Space demo](https://huggingface.co/spaces/click6067/fitllm).
 
 ## Principles
 

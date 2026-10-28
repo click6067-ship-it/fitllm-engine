@@ -573,6 +573,33 @@
     "file": "Spark-X2.5-4B.f16.gguf"
    }
   },
+  "Spark-X2.6-4B": {
+   "Q4_K_M": {
+    "bytes": 3543441312,
+    "source": "XHToken/Spark-X2.6-4B-GGUF@83b47fda018fd14f51aa63341f78266f628af5a5",
+    "file": "Spark-X2.6-4B-Q4_K_M.gguf"
+   },
+   "Q5_K_M": {
+    "bytes": 3164766848,
+    "source": "bartowski/Spark-X2.6-4B-GGUF@17682e38297a4510899b12a95ab3d8dcebc674e5",
+    "file": "Spark-X2.6-4B-Q5_K_M.gguf"
+   },
+   "Q6_K": {
+    "bytes": 3611148928,
+    "source": "bartowski/Spark-X2.6-4B-GGUF@17682e38297a4510899b12a95ab3d8dcebc674e5",
+    "file": "Spark-X2.6-4B-Q6_K.gguf"
+   },
+   "Q8_0": {
+    "bytes": 4375022368,
+    "source": "mradermacher/Spark-X2.6-4B-GGUF@e076bdd74f45f3423da117833d7075c7874c017c",
+    "file": "Spark-X2.6-4B.Q8_0.gguf"
+   },
+   "FP16": {
+    "bytes": 8229921568,
+    "source": "mradermacher/Spark-X2.6-4B-GGUF@e076bdd74f45f3423da117833d7075c7874c017c",
+    "file": "Spark-X2.6-4B.f16.gguf"
+   }
+  },
   "Granite-4.2-30B": {
    "Q4_K_M": {
     "bytes": 18027639840,
